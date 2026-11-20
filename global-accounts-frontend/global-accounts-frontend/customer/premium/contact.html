@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en" data-concept="premium">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Contact — Meridian Global Accounts</title>
+  <meta name="description" content="Send the demonstration team a message, or reach the in-app support desk. Design prototype — nothing you submit is sent anywhere.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/theme.css">
+</head>
+<body data-page="contact">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div id="gl-header"></div>
+  <main id="main">
+
+    <!-- ================= INTRO ================= -->
+    <section class="sec" aria-labelledby="contact-title">
+      <div class="wrap">
+        <p class="eyebrow">Contact</p>
+        <h1 class="sec-title" id="contact-title">Talk to the team</h1>
+        <p class="sec-lead">Questions about the prototype, the product concept or this design direction — send them over. The form below is part of the design prototype: submissions are validated and acknowledged on screen, but nothing is transmitted anywhere.</p>
+      </div>
+    </section>
+
+    <!-- ================= FORM + DETAILS ================= -->
+    <section class="sec" aria-label="Contact form and support details">
+      <div class="wrap">
+        <div class="contact-grid">
+
+          <div class="panel" style="margin:0;">
+            <div class="panel-head">
+              <h2 class="panel-title">Send a message</h2>
+              <span class="preview-chip">Validated on screen only</span>
+            </div>
+            <div>
+              <form data-contact-form novalidate>
+                <div class="field">
+                  <label for="cf-name">Full name</label>
+                  <input id="cf-name" name="name" type="text" autocomplete="name" required>
+                  <p class="field-err" hidden>Please enter your name.</p>
+                </div>
+                <div class="field">
+                  <label for="cf-email">Email address</label>
+                  <input id="cf-email" name="email" type="email" autocomplete="email" required>
+                  <p class="field-err" hidden>Enter a valid email address.</p>
+                </div>
+                <div class="field">
+                  <label for="cf-topic">Topic</label>
+                  <select id="cf-topic" name="topic">
+                    <option value="General question" selected>General question</option>
+                    <option value="Opening an account">Opening an account</option>
+                    <option value="Currencies">Currencies</option>
+                    <option value="Deposits">Deposits</option>
+                    <option value="Security">Security</option>
+                    <option value="Design prototype feedback">Design prototype feedback</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="cf-msg">Message</label>
+                  <textarea id="cf-msg" name="message" rows="5" required></textarea>
+                  <p class="field-err" hidden>Please enter a message.</p>
+                </div>
+                <button class="btn btn-primary btn-block" type="submit">Send message</button>
+                <p class="small muted" style="margin-top:12px;">In production this would reach our support desk. In this prototype it validates and confirms on screen only — nothing leaves your browser.</p>
+              </form>
+              <div data-form-success hidden>
+                <div class="callout">
+                  <svg class="gl-ic" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>
+                  <p><b>Message received.</b> Thank you — your message has been acknowledged by the prototype. Nothing was sent anywhere: all data in this demonstration stays in your browser.</p>
+                </div>
+                <a class="btn btn-ghost" href="contact.html" style="margin-top:14px;">Send another message</a>
+              </div>
+            </div>
+          </div>
+
+          <aside class="contact-aside" aria-label="Demonstration support details">
+            <div class="panel" style="margin:0;">
+              <div class="panel-head">
+                <h2 class="panel-title">Demonstration support</h2>
+              </div>
+              <p class="muted" style="font-size:13.5px;"><b class="mono" style="color:var(--ink);">support@meridian.example</b><br>Demo address for the prototype — mail sent here reaches no one.</p>
+              <hr class="rule" style="margin:14px 0;">
+              <p class="muted" style="font-size:13.5px;"><b style="color:var(--ink);">Response time</b><br>Simulated — replies appear as tracked tickets in the in-app support desk.</p>
+              <hr class="rule" style="margin:14px 0;">
+              <p class="muted" style="font-size:13.5px;"><b style="color:var(--ink);">In-app support</b><br>Signed-in customers can open tracked conversations with statuses and replies.</p>
+            </div>
+            <div class="panel" style="margin:0;">
+              <div class="panel-head">
+                <h2 class="panel-title">Prefer the app?</h2>
+              </div>
+              <p class="muted" style="font-size:13.5px; margin-bottom:14px;">Sign in and open a support ticket — threads, statuses and administrator replies are all part of the prototype.</p>
+              <a class="btn btn-primary btn-block" href="app.html#/login">Open the app</a>
+            </div>
+          </aside>
+
+        </div>
+      </div>
+    </section>
+
+  </main>
+  <div id="gl-footer"></div>
+  <script src="../../shared/icons.js"></script>
+  <script src="../../shared/data.js"></script>
+  <script src="../../shared/api.js"></script>
+  <script src="../../shared/site-core.js"></script>
+  <script src="assets/components.js"></script>
+  <script src="../../shared/demo-panel.js"></script>
+</body>
+</html>

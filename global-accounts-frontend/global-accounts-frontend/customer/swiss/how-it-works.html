@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en" data-concept="swiss">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>How It Works — Meridian Global Accounts</title>
+  <meta name="description" content="From registration to a working multi-currency account in five steps. Design prototype — verification codes are simulated and shown on screen.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/theme.css">
+</head>
+<body data-page="how-it-works">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div id="gl-header"></div>
+  <main id="main">
+
+    <!-- ======================= Page hero ======================= -->
+    <section class="page-hero">
+      <div class="page-hero-in">
+        <div class="rule"></div>
+        <p class="eyebrow">How it works</p>
+        <h1>From registration to a working account</h1>
+        <p>Five steps, in order. Each one is fully interactive in this prototype — the account you end up with holds per-currency balances, a complete transaction history and its own security controls.</p>
+      </div>
+    </section>
+
+    <!-- ======================= Timeline ======================= -->
+    <section class="section" aria-labelledby="how-steps">
+      <div class="wrap">
+        <div class="sec-head">
+          <div class="rule"></div>
+          <p class="eyebrow">The five steps</p>
+          <h2 id="how-steps">A considered sequence</h2>
+        </div>
+        <div class="steps">
+          <div class="step">
+            <div class="step-n">1</div>
+            <div>
+              <h3>Create your account</h3>
+              <p>Register with your name, email, country and international phone number, and choose a password.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-n">2</div>
+            <div>
+              <h3>Verify email and phone</h3>
+              <p>Enter the one-time codes sent to your email and phone. In this prototype the codes are simulated and shown on screen — nothing real is sent.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-n">3</div>
+            <div>
+              <h3>Your default currency activates</h3>
+              <p>Based on your country — Nigeria gets NGN, the United States USD, the United Kingdom GBP, Switzerland CHF, eurozone countries EUR. It starts at a zero balance.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-n">4</div>
+            <div>
+              <h3>Add currencies and simulate deposits</h3>
+              <p>Activate any of the five supported currencies. Each keeps its own balance, transaction history, deposit records and status — nothing is converted automatically.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-n">5</div>
+            <div>
+              <h3>Manage everything in one place</h3>
+              <p>Track transactions, preview and download statements, manage security, sessions and notifications, and reach support.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================= Simulation note ======================= -->
+    <section class="section" style="border-bottom:0" aria-labelledby="how-note">
+      <div class="wrap">
+        <div class="callout">
+          <p class="eyebrow" style="margin-bottom:8px">A note on codes and payments</p>
+          <h2 id="how-note" style="font-size:21px">Everything sensitive is simulated</h2>
+          <p>In this prototype the one-time verification codes are simulated and shown on screen — nothing is sent to a real email address or phone number. Deposits run through a mock payment gateway that can return successful, pending, failed, cancelled or duplicate outcomes. No real money moves and no payment provider is contacted.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================= CTA band ======================= -->
+    <section class="cta-band" aria-labelledby="how-cta">
+      <div class="wrap">
+        <div class="rule"></div>
+        <p class="eyebrow">Begin</p>
+        <h2 id="how-cta">Walk the sequence yourself</h2>
+        <p>Register a demo account and follow the five steps end to end — verification, activation, a simulated deposit, and the history it leaves behind.</p>
+        <div class="cta-acts">
+          <a class="btn btn-primary btn-lg" href="app.html#/register">Create your account</a>
+          <a class="btn btn-ghost btn-lg" href="features.html">Review the features</a>
+        </div>
+        <p class="cta-note">Design prototype — not a live financial service. Demo data lives in your browser only.</p>
+      </div>
+    </section>
+
+  </main>
+  <div id="gl-footer"></div>
+  <script src="../../shared/icons.js"></script>
+  <script src="../../shared/data.js"></script>
+  <script src="../../shared/api.js"></script>
+  <script src="../../shared/site-core.js"></script>
+  <script src="assets/components.js"></script>
+  <script src="../../shared/demo-panel.js"></script>
+</body>
+</html>

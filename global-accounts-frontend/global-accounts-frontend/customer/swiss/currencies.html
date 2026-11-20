@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en" data-concept="swiss">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Supported Currencies — Meridian Global Accounts</title>
+  <meta name="description" content="NGN, USD, GBP, EUR and CHF supported today, with JPY shown in its unavailable state. Indicative demo rates and country default-currency mapping. Design prototype.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/theme.css">
+</head>
+<body data-page="currencies">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div id="gl-header"></div>
+  <main id="main">
+
+    <!-- ======================= Page hero ======================= -->
+    <section class="page-hero">
+      <div class="page-hero-in">
+        <div class="rule"></div>
+        <p class="eyebrow">Currencies</p>
+        <h1>Five supported currencies, one account</h1>
+        <p>Each currency is a separate account with its own balance, history, deposit records and status. Activation is self-service, new accounts always start at zero, and nothing is converted automatically. A sixth currency is listed in its unavailable state so the behaviour is visible.</p>
+      </div>
+    </section>
+
+    <!-- ======================= Currency cards ======================= -->
+    <section class="section" aria-labelledby="cur-cards">
+      <div class="wrap">
+        <div class="sec-head">
+          <div class="rule"></div>
+          <p class="eyebrow">The set</p>
+          <h2 id="cur-cards">Six listed, five activatable</h2>
+        </div>
+        <div class="grid-cards g-3">
+          <div class="cell-card">
+            <svg class="gl-ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="9" r="5.5"/><path d="M6.8 13.6A5.5 5.5 0 1 0 15 8.5"/><path d="M9 6.8v4.4M7.2 9h3.6"/></svg>
+            <h3>NGN — Nigerian Naira</h3>
+            <p>Default for Nigeria. Deposits by debit card, payment gateway or bank transfer — credit card is not supported for NGN.</p>
+            <p style="margin-top:12px"><span class="badge b-active">Active</span></p>
+          </div>
+          <div class="cell-card">
+            <svg class="gl-ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="9" r="5.5"/><path d="M6.8 13.6A5.5 5.5 0 1 0 15 8.5"/><path d="M9 6.8v4.4M7.2 9h3.6"/></svg>
+            <h3>USD — US Dollar</h3>
+            <p>Default where a country has no national currency in the supported set. All four deposit methods are available.</p>
+            <p style="margin-top:12px"><span class="badge b-active">Active</span></p>
+          </div>
+          <div class="cell-card">
+            <svg class="gl-ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="9" r="5.5"/><path d="M6.8 13.6A5.5 5.5 0 1 0 15 8.5"/><path d="M9 6.8v4.4M7.2 9h3.6"/></svg>
+            <h3>GBP — British Pound</h3>
+            <p>Default for the United Kingdom. All four deposit methods are available.</p>
+            <p style="margin-top:12px"><span class="badge b-active">Active</span></p>
+          </div>
+          <div class="cell-card">
+            <svg class="gl-ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="9" r="5.5"/><path d="M6.8 13.6A5.5 5.5 0 1 0 15 8.5"/><path d="M9 6.8v4.4M7.2 9h3.6"/></svg>
+            <h3>EUR — Euro</h3>
+            <p>Default for eurozone countries — Germany, France, Italy, Spain, the Netherlands, Belgium, Ireland, Austria, Portugal and Finland.</p>
+            <p style="margin-top:12px"><span class="badge b-active">Active</span></p>
+          </div>
+          <div class="cell-card">
+            <svg class="gl-ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="9" r="5.5"/><path d="M6.8 13.6A5.5 5.5 0 1 0 15 8.5"/><path d="M9 6.8v4.4M7.2 9h3.6"/></svg>
+            <h3>CHF — Swiss Franc</h3>
+            <p>Default for Switzerland. All four deposit methods are available.</p>
+            <p style="margin-top:12px"><span class="badge b-active">Active</span></p>
+          </div>
+          <div class="cell-card" style="background:var(--surface)">
+            <svg class="gl-ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="m6.5 17.5 11-11"/></svg>
+            <h3>JPY — Japanese Yen</h3>
+            <p>Temporarily unavailable for activation while we extend the demo. The state is shown live wherever currencies appear, and activation is disabled until it returns.</p>
+            <p style="margin-top:12px"><span class="badge b-unavailable">Unavailable</span></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================= Rates ======================= -->
+    <section class="section" aria-labelledby="cur-rates">
+      <div class="wrap">
+        <div class="sec-head">
+          <div class="rule"></div>
+          <p class="eyebrow">Rates</p>
+          <h2 id="cur-rates">Indicative rates</h2>
+          <p>Static demonstration values used to compute the USD equivalents shown throughout the prototype.</p>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Currency</th><th>Name</th><th class="ta-r">Indicative rate per US&nbsp;$1</th><th>Status</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><b>NGN</b></td><td>Nigerian Naira</td><td class="ta-r num">₦1,550.00</td><td><span class="badge b-active">Active</span></td></tr>
+              <tr><td><b>USD</b></td><td>US Dollar</td><td class="ta-r num">$1.00</td><td><span class="badge b-active">Active</span></td></tr>
+              <tr><td><b>GBP</b></td><td>British Pound</td><td class="ta-r num">£0.79</td><td><span class="badge b-active">Active</span></td></tr>
+              <tr><td><b>EUR</b></td><td>Euro</td><td class="ta-r num">€0.93</td><td><span class="badge b-active">Active</span></td></tr>
+              <tr><td><b>CHF</b></td><td>Swiss Franc</td><td class="ta-r num">CHF&nbsp;0.89</td><td><span class="badge b-active">Active</span></td></tr>
+              <tr><td><b>JPY</b></td><td>Japanese Yen</td><td class="ta-r num">¥151.52</td><td><span class="badge b-unavailable">Unavailable</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="hint" style="margin-top:12px">Indicative demo rates — no real exchange is performed in this prototype. The currency in which you hold a balance is the currency you keep; the platform never converts automatically.</p>
+      </div>
+    </section>
+
+    <!-- ======================= Country defaults ======================= -->
+    <section class="section" style="border-bottom:0" aria-labelledby="cur-countries">
+      <div class="wrap">
+        <div class="sec-head">
+          <div class="rule"></div>
+          <p class="eyebrow">Country defaults</p>
+          <h2 id="cur-countries">Country to default currency</h2>
+          <p>The country you select at registration determines the currency activated automatically after verification.</p>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Country</th><th>Code</th><th>Default currency</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Nigeria</td><td>NG</td><td><b>NGN</b></td></tr>
+              <tr><td>United States</td><td>US</td><td><b>USD</b></td></tr>
+              <tr><td>United Kingdom</td><td>GB</td><td><b>GBP</b></td></tr>
+              <tr><td>Switzerland</td><td>CH</td><td><b>CHF</b></td></tr>
+              <tr><td>Germany</td><td>DE</td><td><b>EUR</b></td></tr>
+              <tr><td>France</td><td>FR</td><td><b>EUR</b></td></tr>
+              <tr><td>Italy</td><td>IT</td><td><b>EUR</b></td></tr>
+              <tr><td>Spain</td><td>ES</td><td><b>EUR</b></td></tr>
+              <tr><td>Netherlands</td><td>NL</td><td><b>EUR</b></td></tr>
+              <tr><td>Belgium</td><td>BE</td><td><b>EUR</b></td></tr>
+              <tr><td>Ireland</td><td>IE</td><td><b>EUR</b></td></tr>
+              <tr><td>Austria</td><td>AT</td><td><b>EUR</b></td></tr>
+              <tr><td>Portugal</td><td>PT</td><td><b>EUR</b></td></tr>
+              <tr><td>Finland</td><td>FI</td><td><b>EUR</b></td></tr>
+              <tr><td>Canada</td><td>CA</td><td><b>USD</b></td></tr>
+              <tr><td>Australia</td><td>AU</td><td><b>USD</b></td></tr>
+              <tr><td>South Africa</td><td>ZA</td><td><b>USD</b></td></tr>
+              <tr><td>United Arab Emirates</td><td>AE</td><td><b>USD</b></td></tr>
+              <tr><td>Singapore</td><td>SG</td><td><b>USD</b></td></tr>
+              <tr><td>Hong Kong SAR</td><td>HK</td><td><b>USD</b></td></tr>
+              <tr><td>Japan</td><td>JP</td><td><b>USD</b></td></tr>
+              <tr><td>Kenya</td><td>KE</td><td><b>USD</b></td></tr>
+              <tr><td>Ghana</td><td>GH</td><td><b>USD</b></td></tr>
+              <tr><td>Brazil</td><td>BR</td><td><b>USD</b></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="hint" style="margin-top:12px">Countries without a national currency in our supported set default to USD. The mapping is configurable.</p>
+      </div>
+    </section>
+
+  </main>
+  <div id="gl-footer"></div>
+  <script src="../../shared/icons.js"></script>
+  <script src="../../shared/data.js"></script>
+  <script src="../../shared/api.js"></script>
+  <script src="../../shared/site-core.js"></script>
+  <script src="assets/components.js"></script>
+  <script src="../../shared/demo-panel.js"></script>
+</body>
+</html>
