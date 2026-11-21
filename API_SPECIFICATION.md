@@ -20,8 +20,9 @@ Stable error codes: `VALIDATION_ERROR` (400), `UNAUTHENTICATED` (401),
 `FORBIDDEN` (403), `NOT_FOUND` (404), `CONFLICT` (409), `INVALID_STATE`
 (422), `RATE_LIMITED` (429), `INTERNAL` (500).
 
-**Auth**: `Authorization: Bearer <Clerk session JWT>` — verified against
-Clerk JWKS on every protected route. **Idempotency**: POST endpoints that
+**Auth**: `Authorization: Bearer <Supabase Auth access token>` — verified with
+Supabase Auth `getUser()` on every protected route. The verified Auth UUID is
+resolved to a canonical `profiles.id`; profile status is checked on every request. **Idempotency**: POST endpoints that
 create records accept `Idempotency-Key`; replays return the original result.
 
 **Pagination**: `?page=1&pageSize=20` → `meta: { page, pageSize, total, pages }`.
@@ -38,8 +39,6 @@ create records accept `Idempotency-Key`; replays return the original result.
 |---|---|---|---|
 | GET | `/profile` | customer | own profile + default currency + status |
 | PATCH | `/profile` | customer | permitted fields: `firstName`, `lastName`, `phone` (E.164), `prefs` |
-| GET | `/profile/sessions` | customer | active Clerk sessions (via Clerk API) |
-| DELETE | `/profile/sessions/:sessionId` | customer | revoke one session |
 
 ## Accounts & currencies
 
@@ -89,10 +88,10 @@ Deposit state machine: `pending → cancelled` (customer) | `pending → complet
 | GET | `/admin/users` | `users.read` — search `q`, filters `status`, `country`, pagination |
 | GET | `/admin/users/:id` | `users.read` — profile, accounts, recent transactions, deposits, security events |
 | PATCH | `/admin/users/:id` | `users.edit` — permitted fields only (names, phone); **validated server-side against a whitelist** |
-| POST | `/admin/users/:id/suspend` | `users.ban` — Clerk ban + `profiles.status='suspended'` |
-| POST | `/admin/users/:id/ban` | `users.ban` — Clerk ban + `profiles.status='banned'` + security event + audit |
-| POST | `/admin/users/:id/unban` | `users.ban` — Clerk unban + status restore + audit |
-| DELETE | `/admin/users/:id` | `users.delete` — Clerk deletion + profile anonymization (financial records retained) |
+| POST | `/admin/users/:id/suspend` | `users.ban` — Supabase Auth ban + `profiles.status='suspended'` |
+| POST | `/admin/users/:id/ban` | `users.ban` — Supabase Auth ban + `profiles.status='banned'` + security event + audit |
+| POST | `/admin/users/:id/unban` | `users.ban` — Supabase Auth unban + status restore + audit |
+| DELETE | `/admin/users/:id` | `users.delete` — Supabase Auth identity deletion + profile anonymization (financial records retained) |
 | POST | `/admin/users/:id/notify` | `users.edit` — manual in-app notification (explicitly manual) |
 | GET | `/admin/currencies` | `currencies.manage` or read |
 | PATCH | `/admin/currencies/:code` | `currencies.manage` — availability changes (audit) |
@@ -106,8 +105,8 @@ Deposit state machine: `pending → cancelled` (customer) | `pending → complet
 | POST | `/admin/support/tickets/:id/reply` | `support.manage` |
 | POST | `/admin/support/tickets/:id/resolve` | `support.manage` |
 | GET | `/admin/roles` | `roles.manage` — roles + permission matrix + holders |
-| POST | `/admin/roles/assign` | `roles.manage` — `{ clerkUserId, roleId }` |
-| POST | `/admin/roles/revoke` | `roles.manage` — `{ clerkUserId }` |
+| POST | `/admin/roles/assign` | `roles.manage` — `{ email, roleId }` (confirmed Supabase Auth user already linked to a profile) |
+| POST | `/admin/roles/revoke` | `roles.manage` — `{ profileId }` |
 | GET | `/admin/audit` | `audit.read` — search, result filter, pagination |
 | GET | `/admin/settings` | `settings.manage` (read: any admin) |
 | PATCH | `/admin/settings` | `settings.manage` — maintenance mode, support email |
@@ -116,7 +115,6 @@ Deposit state machine: `pending → cancelled` (customer) | `pending → complet
 
 | Method | Path | Protection |
 |---|---|---|
-| POST | `/webhooks/clerk` | svix signature (`svix-id`, `svix-timestamp`, `svix-signature`) — user.created / user.updated / user.deleted |
 | POST | `/webhooks/payments/:provider` | per-provider secret (HMAC or static token) |
 
 ## Rate limits (defaults)
