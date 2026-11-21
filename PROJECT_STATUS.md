@@ -1,6 +1,6 @@
 # PROJECT STATUS — Meridian Global Accounts
 
-Last updated: 2026-11-21 (Supabase Auth migration prepared; deployment pending)
+Last updated: 2026-11-21 (Meridian domain connected; Supabase Auth migration prepared)
 
 ## Current state
 
@@ -14,8 +14,8 @@ complete node:http flags are included in this authentication branch.
 
 | Component | Platform / status |
 |---|---|
-| Frontend | Cloudflare Pages, static frontend/ directory |
-| Backend API | Cloudflare Worker named global |
+| Frontend | Cloudflare Pages, custom domain https://meridian.uk.com |
+| Backend API | Cloudflare Worker named global, custom domain https://api.meridian.uk.com |
 | Database | Supabase PostgreSQL |
 | Authentication | Supabase Auth (email/password; email confirmation required) |
 | Email notifications | Resend; Auth confirmation/recovery SMTP configured separately in Supabase |
@@ -54,13 +54,14 @@ Worker secrets required:
 - SUPABASE_SERVICE_ROLE_KEY
 
 Frontend public configuration required:
-- MG_API_BASE_URL (defaults to the Worker API base below)
+- MG_API_BASE_URL (production default: https://api.meridian.uk.com/api/v1)
 - MG_SUPABASE_URL
 - MG_SUPABASE_ANON_KEY
 
 Configure Supabase Auth Email provider, require email confirmation, SMTP for
-confirmation/recovery, and exact redirect URLs for the Cloudflare Pages
-app.html/admin.html origins. Never expose the service-role key in the frontend.
+confirmation/recovery, and exact redirect URLs for
+https://meridian.uk.com/app.html and https://meridian.uk.com/admin.html.
+Never expose the service-role key in the frontend.
 
 ## Cloudflare Worker incident
 
@@ -73,15 +74,16 @@ app.html/admin.html origins. Never expose the service-role key in the frontend.
   complete node:http implementation used by the adapter. This configuration
   is not deployed.
 - API base configured in frontend/js/config.js:
-  https://global.primeage.workers.dev/api/v1
+  https://api.meridian.uk.com/api/v1
 - The earlier production log also reported missing Clerk and Supabase secrets.
   Clerk secrets are obsolete after this migration; the Supabase trio above
   remain required.
-- Set CORS_ORIGIN to the exact deployed Pages origin(s).
+- Production CORS_ORIGIN is set to https://meridian.uk.com and https://www.meridian.uk.com.
 
 ## Changes on the feature branch
 
-- Worker compatibility flag and API base URL.
+- Worker compatibility flags and branded API base URL https://api.meridian.uk.com/api/v1.
+- Production domain meridian.uk.com connected to Cloudflare Pages; api.meridian.uk.com attached as the global Worker custom domain.
 - Supabase Auth browser client, customer/admin login, signup and recovery.
 - Backend Supabase Auth token verification and canonical profile mapping.
 - Supabase user-scoped database client forwarding the verified bearer JWT.
@@ -108,7 +110,7 @@ app.html/admin.html origins. Never expose the service-role key in the frontend.
 4. Rehearse migrations 0001–0007 against a production-like database backup.
    Verify every existing admin holder maps to a profiles.id before migration.
 5. Configure Supabase Auth SMTP and redirect URLs, Worker secrets, frontend
-   public config and exact CORS origins.
+   public config and exact CORS origins for meridian.uk.com.
 6. Deploy to a preview Worker and verify /api/v1/health returns HTTP 200.
    Test real Supabase Auth and two-user RLS isolation before production.
 7. Only after explicit owner approval, merge/deploy and apply migration 0007
