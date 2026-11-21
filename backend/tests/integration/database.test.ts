@@ -116,6 +116,25 @@ async function asUser(supabaseUserId: string): Promise<Client> {
   return c;
 }
 
+async function bootstrapTestUser(
+  userId: string,
+  email: string,
+  firstName: string,
+  lastName: string,
+  countryCode = 'DE',
+): Promise<void> {
+  await svc!.query(
+    `INSERT INTO auth.users (id, email, email_confirmed_at, raw_user_meta_data)
+     VALUES ($1::uuid, $2, now(), $3::jsonb)`,
+    [userId, email, JSON.stringify({
+      first_name: firstName,
+      last_name: lastName,
+      country_code: countryCode,
+    })],
+  );
+  await svc!.query('SELECT public.bootstrap_supabase_profile($1::uuid)', [userId]);
+}
+
 describe('migrations + seed', () => {
   it('applies the European currency set with EUR default and no NGN', async () => {
     const { rows } = await svc!.query('SELECT code FROM currencies ORDER BY display_order');
@@ -356,8 +375,6 @@ describe('deposit state machine', () => {
     expect(cancelled.rows[0].cancel_deposit.status).toBe('cancelled');
 
     // Another user's deposit cannot be cancelled.
-    await svc!.query('SELECT bootstrap_profile($1,$2,$3,$4,$5)',
-      [USER_B, 'b@example.com', 'Ben Brown', '', 'GB']);
     await expect(svc!.query('SELECT cancel_deposit($1,$2)', [USER_B, reference2]))
       .rejects.toThrow('DEPOSIT_NOT_FOUND');
   });
@@ -421,7 +438,7 @@ describe('Row Level Security (two-user isolation)', () => {
   });
 });
 
-describe('profile anonymization (Clerk user.deleted)', () => {
+describe('profile anonymization (Supabase Auth identity deletion)', () => {
   it('clears PII but retains financial records', async () => {
     const txBefore = await svc!.query('SELECT count(*)::int AS n FROM transactions WHERE profile_id = $1', [USER_A]);
     expect(txBefore.rows[0].n).toBeGreaterThan(0);
@@ -483,16 +500,14 @@ describe('receiving bank accounts seed', () => {
 });
 
 describe('admin_credit_deposit_payment RPC', () => {
-  const DEP_USER = 'user_dep_test_a';
+  const DEP_USER = '00000000-0000-4000-8000-000000000004';
   let accountId: string;
   let bankId: string;
   let depositId: string;
 
   beforeAll(async () => {
-    // Bootstrap a test customer with an EUR account
-    await svc!.query(`SELECT bootstrap_profile($1, $2, $3, $4, $5)`, [
-      DEP_USER, 'dep-a@example.com', 'Deposit', 'Tester', 'DE',
-    ]);
+    // Bootstrap a verified Supabase Auth customer with an EUR account
+    await bootstrapTestUser(DEP_USER, 'dep-a@example.com', 'Deposit', 'Tester', 'DE');
     // bootstrap may already create EUR; ensure active
     const acc = await svc!.query(
       `SELECT id FROM accounts WHERE profile_id = $1 AND currency_code = 'EUR' LIMIT 1`,
@@ -618,15 +633,13 @@ describe('admin_credit_deposit_payment RPC', () => {
 });
 
 describe('process_internal_refund RPC', () => {
-  const REF_USER = 'user_ref_test_a';
+  const REF_USER = '00000000-0000-4000-8000-000000000005';
   let accountId: string;
   let originalTxnId: string;
   let originalRef: string;
 
   beforeAll(async () => {
-    await svc!.query(`SELECT bootstrap_profile($1, $2, $3, $4, $5)`, [
-      REF_USER, 'ref-a@example.com', 'Refund', 'Tester', 'DE',
-    ]);
+    await bootstrapTestUser(REF_USER, 'ref-a@example.com', 'Refund', 'Tester', 'DE');
     const acc = await svc!.query(
       `SELECT id FROM accounts WHERE profile_id = $1 AND currency_code = 'EUR' LIMIT 1`,
       [REF_USER],
@@ -705,10 +718,10 @@ describe('process_internal_refund RPC', () => {
 
 describe('customer isolation on deposits', () => {
   it('customer A cannot read customer B deposit rows via RLS', async () => {
-    const USER_X = 'user_iso_x';
-    const USER_Y = 'user_iso_y';
-    await svc!.query(`SELECT bootstrap_profile($1, $2, $3, $4, $5)`, [USER_X, 'x@example.com', 'X', 'User', 'DE']);
-    await svc!.query(`SELECT bootstrap_profile($1, $2, $3, $4, $5)`, [USER_Y, 'y@example.com', 'Y', 'User', 'DE']);
+    const USER_X = '00000000-0000-4000-8000-000000000006';
+    const USER_Y = '00000000-0000-4000-8000-000000000007';
+    await bootstrapTestUser(USER_X, 'x@example.com', 'X', 'User', 'DE');
+    await bootstrapTestUser(USER_Y, 'y@example.com', 'Y', 'User', 'DE');
 
     const accX = await svc!.query(`SELECT id FROM accounts WHERE profile_id = $1 AND currency_code = 'EUR'`, [USER_X]);
     await svc!.query(
@@ -720,8 +733,9 @@ describe('customer isolation on deposits', () => {
     // Simulate JWT claims for USER_Y
     const y = await connect();
     try {
-      await y.query(`SELECT set_config('request.jwt.claim.sub', $1, true)`, [USER_Y]);
       await y.query(`SET ROLE authenticated`);
+      await y.query(`SELECT set_config('request.jwt.claims', $1, true)`,
+        [JSON.stringify({ sub: USER_Y, role: 'authenticated' })]);
       // Depending on RLS policies, either 0 rows or error — never USER_X data
       const rows = await y.query(`SELECT * FROM deposits WHERE profile_id = $1`, [USER_X]);
       expect(rows.rows).toHaveLength(0);
