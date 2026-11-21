@@ -39,7 +39,7 @@ AS $$
 $$;
 
 REVOKE ALL ON FUNCTION public.app_current_user_id() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.app_current_user_id() TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.app_current_user_id() TO anon, authenticated, service_role;
 
 -- This is called only by the backend using the service-role client after it
 -- has independently verified the bearer token with Supabase Auth getUser().
@@ -172,7 +172,14 @@ BEGIN
          deleted_at = now()
    WHERE id = p_profile_id;
 END;
-$$;
+$;
+
+-- This SECURITY DEFINER function can clear customer PII and unlink an Auth
+-- identity. It must be callable only by the trusted backend service role.
+-- CREATE OR REPLACE preserves the legacy function's existing grants, so
+-- explicitly remove PUBLIC/client execution inherited from migration 0004.
+REVOKE ALL ON FUNCTION public.anonymize_profile(text) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.anonymize_profile(text) TO service_role;
 
 -- Remove the Clerk-only bootstrap function; historical rows remain untouched.
 DROP FUNCTION IF EXISTS public.bootstrap_profile(text, text, text, text, text);
