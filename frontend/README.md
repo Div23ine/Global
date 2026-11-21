@@ -16,7 +16,7 @@ cd frontend && python3 -m http.server 4173
 Edit `js/config.js` (or create gitignored `js/config.local.js` defining
 `window.MG_LOCAL_CONFIG`) and set:
 - `API_BASE_URL` — backend base, e.g. `https://api.example.com/api/v1`
-- `CLERK_PUBLISHABLE_KEY` — public Clerk key (`pk_...`)
+- `SUPABASE_URL` and `SUPABASE_ANON_KEY` — public browser configuration values
 
 Without configuration, `app.html` and `admin.html` render an explicit
 configuration screen — they never fall back to simulated data.
@@ -30,7 +30,7 @@ assets/theme.css       the approved design system
 js/config.js           non-secret configuration
 js/util.js             formatting / toast / download helpers
 js/site.js             public-site chrome + behaviours
-js/services/           clerk.js (ClerkJS), http.js (fetch+envelope), api.js (resources)
+js/services/           supabase-auth.js (Supabase Auth), http.js (fetch+envelope), api.js (resources)
 js/components/ui.jsx   shared React UI atoms (badge, card, table, modal, skeleton...)
 js/app/                customer views (banking, records, account)
 js/admin/              admin views (core, ops)
