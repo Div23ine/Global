@@ -1,5 +1,5 @@
 /* Customer application bootstrap + shell (Design 02 preserved).
-   Flow: configuration check -> ClerkJS load -> auth gate -> hash router. */
+   Flow: configuration check -> Supabase Auth load -> auth gate -> hash router. */
 (function () {
   var React = window.React;
   var ReactDOM = window.ReactDOM;
@@ -15,39 +15,157 @@
           h('span', { className: 'brand-text' }, 'Meridian ', h('small', null, 'GLOBAL ACCOUNTS'))),
         h('h1', null, 'Configuration required'),
         h('p', { className: 'muted' },
-          'This deployment has not been connected to a Clerk instance and an API endpoint yet. ',
-          'Set ', h('code', null, 'CLERK_PUBLISHABLE_KEY'), ' and ', h('code', null, 'API_BASE_URL'),
-          ' in ', h('code', null, 'js/config.js'), ' (or js/config.local.js).'),
+          'This deployment has not been connected to Supabase Auth and the Meridian API yet. ',
+          'Set ', h('code', null, 'SUPABASE_URL'), ', ', h('code', null, 'SUPABASE_ANON_KEY'),
+          ' and ', h('code', null, 'API_BASE_URL'), ' in ', h('code', null, 'js/config.js'), '.'),
         h('p', { className: 'muted' },
           'For security reasons the application never runs on simulated data: without real services ',
           'it stops here instead of showing fake accounts.')));
   }
 
-  /* ------------------------------------------------------------ ClerkGate */
-  var CLERK_MOUNT_STYLES = { width: '100%', maxWidth: '420px', margin: '0 auto' };
+  /* --------------------------------------------------------- Supabase Auth */
+  function AuthInput(props) {
+    return h('label', { className: 'field' },
+      h('span', null, props.label),
+      h('input', {
+        className: 'input', type: props.type || 'text', value: props.value,
+        placeholder: props.placeholder || '', autoComplete: props.autoComplete,
+        required: Boolean(props.required), minLength: props.minLength,
+        maxLength: props.maxLength, onChange: props.onChange,
+      }));
+  }
 
   function SignInView() {
-    var ref = useRef(null);
-    useEffect(function () {
-      if (ref.current) MG.clerk.mountSignIn(ref.current, { fallbackRedirectUrl: 'app.html' });
-    }, []);
+    var _f = useState({ email: '', password: '' }); var form = _f[0]; var setForm = _f[1];
+    var _b = useState(false); var busy = _b[0]; var setBusy = _b[1];
+    var _e = useState(''); var error = _e[0]; var setError = _e[1];
+    function submit(event) {
+      event.preventDefault(); setError(''); setBusy(true);
+      MG.auth.signIn(form.email, form.password).then(function (result) {
+        if (result.error) throw result.error;
+        location.hash = '#/overview';
+      }).catch(function (err) { setError(err.message || 'Sign in failed.'); })
+        .finally(function () { setBusy(false); });
+    }
     return h('div', { className: 'auth-wrap' },
       h('div', { className: 'auth-card' },
         h('p', { className: 'auth-brand' }, 'Meridian Global Accounts'),
-        h('div', { ref: ref, style: CLERK_MOUNT_STYLES })));
+        h('h1', null, 'Welcome back'),
+        h('p', { className: 'muted' }, 'Sign in securely to your Meridian account.'),
+        h('form', { onSubmit: submit },
+          h(AuthInput, { label: 'Email address', type: 'email', autoComplete: 'email',
+            value: form.email, required: true,
+            onChange: function (event) { setForm(Object.assign({}, form, { email: event.target.value })); } }),
+          h(AuthInput, { label: 'Password', type: 'password', autoComplete: 'current-password',
+            value: form.password, required: true,
+            onChange: function (event) { setForm(Object.assign({}, form, { password: event.target.value })); } }),
+          error ? h('p', { className: 'form-error', role: 'alert' }, error) : null,
+          h('button', { className: 'btn btn-primary btn-block', type: 'submit', disabled: busy },
+            busy ? 'Signing in…' : 'Sign in')),
+        h('p', { className: 'muted auth-links' },
+          h('a', { href: '#/forgot-password' }, 'Forgot password?'), ' · ',
+          h('a', { href: '#/register' }, 'Create an account'))));
   }
 
   function SignUpView() {
-    var ref = useRef(null);
-    useEffect(function () {
-      if (ref.current) MG.clerk.mountSignUp(ref.current, { fallbackRedirectUrl: 'app.html' });
-    }, []);
+    var _f = useState({ firstName: '', lastName: '', email: '', phone: '', countryCode: '', password: '' });
+    var form = _f[0]; var setForm = _f[1];
+    var _b = useState(false); var busy = _b[0]; var setBusy = _b[1];
+    var _e = useState(''); var error = _e[0]; var setError = _e[1];
+    var _m = useState(''); var message = _m[0]; var setMessage = _m[1];
+    function submit(event) {
+      event.preventDefault(); setError(''); setMessage(''); setBusy(true);
+      MG.auth.signUp(form).then(function (result) {
+        if (result.error) throw result.error;
+        if (result.data && result.data.session) location.hash = '#/overview';
+        else setMessage('Account created. Check your email and confirm your address before signing in.');
+      }).catch(function (err) { setError(err.message || 'Registration failed.'); })
+        .finally(function () { setBusy(false); });
+    }
     return h('div', { className: 'auth-wrap' },
       h('div', { className: 'auth-card' },
-        h('p', { className: 'auth-brand' }, 'Create your account'),
-        h('p', { className: 'muted' },
-          'Email and phone verification codes are sent automatically. Your country determines the default currency account.'),
-        h('div', { ref: ref, style: CLERK_MOUNT_STYLES })));
+        h('p', { className: 'auth-brand' }, 'Meridian Global Accounts'),
+        h('h1', null, 'Create your account'),
+        h('p', { className: 'muted' }, 'Confirm your email to activate your account. Your country sets the default currency.'),
+        h('form', { onSubmit: submit },
+          h('div', { className: 'grid-2' },
+            h(AuthInput, { label: 'First name', value: form.firstName, required: true,
+              onChange: function (event) { setForm(Object.assign({}, form, { firstName: event.target.value })); } }),
+            h(AuthInput, { label: 'Last name', value: form.lastName, required: true,
+              onChange: function (event) { setForm(Object.assign({}, form, { lastName: event.target.value })); } })),
+          h(AuthInput, { label: 'Email address', type: 'email', autoComplete: 'email', value: form.email, required: true,
+            onChange: function (event) { setForm(Object.assign({}, form, { email: event.target.value })); } }),
+          h(AuthInput, { label: 'Password (minimum 8 characters)', type: 'password', autoComplete: 'new-password',
+            minLength: 8, value: form.password, required: true,
+            onChange: function (event) { setForm(Object.assign({}, form, { password: event.target.value })); } }),
+          h('div', { className: 'grid-2' },
+            h(AuthInput, { label: 'Country code (2 letters)', placeholder: 'e.g. DE', maxLength: 2,
+              value: form.countryCode,
+              onChange: function (event) { setForm(Object.assign({}, form, { countryCode: event.target.value.toUpperCase() })); } }),
+            h(AuthInput, { label: 'Phone (optional)', type: 'tel', placeholder: '+49123456789',
+              value: form.phone,
+              onChange: function (event) { setForm(Object.assign({}, form, { phone: event.target.value })); } })),
+          error ? h('p', { className: 'form-error', role: 'alert' }, error) : null,
+          message ? h('p', { className: 'form-success', role: 'status' }, message) : null,
+          h('button', { className: 'btn btn-primary btn-block', type: 'submit', disabled: busy },
+            busy ? 'Creating account…' : 'Create account')),
+        h('p', { className: 'muted auth-links' }, 'Already registered? ', h('a', { href: '#/login' }, 'Sign in'))));
+  }
+
+  function ForgotPasswordView() {
+    var _e = useState(''); var email = _e[0]; var setEmail = _e[1];
+    var _b = useState(false); var busy = _b[0]; var setBusy = _b[1];
+    var _m = useState(''); var message = _m[0]; var setMessage = _m[1];
+    var _x = useState(''); var error = _x[0]; var setError = _x[1];
+    function submit(event) {
+      event.preventDefault(); setBusy(true); setError(''); setMessage('');
+      MG.auth.resetPassword(email).then(function (result) {
+        if (result.error) throw result.error;
+        setMessage('If the address is registered, a password-reset link will arrive by email.');
+      }).catch(function (err) { setError(err.message || 'Could not send the reset email.'); })
+        .finally(function () { setBusy(false); });
+    }
+    return h('div', { className: 'auth-wrap' },
+      h('div', { className: 'auth-card' },
+        h('p', { className: 'auth-brand' }, 'Meridian Global Accounts'),
+        h('h1', null, 'Reset your password'),
+        h('form', { onSubmit: submit },
+          h(AuthInput, { label: 'Email address', type: 'email', value: email, required: true,
+            onChange: function (event) { setEmail(event.target.value); } }),
+          error ? h('p', { className: 'form-error', role: 'alert' }, error) : null,
+          message ? h('p', { className: 'form-success', role: 'status' }, message) : null,
+          h('button', { className: 'btn btn-primary btn-block', type: 'submit', disabled: busy },
+            busy ? 'Sending…' : 'Send reset link')),
+        h('p', { className: 'muted auth-links' }, h('a', { href: '#/login' }, 'Back to sign in'))));
+  }
+
+  function UpdatePasswordView() {
+    var _p = useState(''); var password = _p[0]; var setPassword = _p[1];
+    var _b = useState(false); var busy = _b[0]; var setBusy = _b[1];
+    var _e = useState(''); var error = _e[0]; var setError = _e[1];
+    var _m = useState(''); var message = _m[0]; var setMessage = _m[1];
+    function submit(event) {
+      event.preventDefault(); setBusy(true); setError(''); setMessage('');
+      MG.auth.updatePassword(password).then(function (result) {
+        if (result.error) throw result.error;
+        setMessage('Password updated successfully.');
+        setPassword('');
+        setTimeout(function () { location.hash = '#/overview'; }, 900);
+      }).catch(function (err) { setError(err.message || 'Could not update the password.'); })
+        .finally(function () { setBusy(false); });
+    }
+    return h('div', { className: 'auth-wrap' },
+      h('div', { className: 'auth-card' },
+        h('p', { className: 'auth-brand' }, 'Meridian Global Accounts'),
+        h('h1', null, 'Choose a new password'),
+        h('form', { onSubmit: submit },
+          h(AuthInput, { label: 'New password (minimum 8 characters)', type: 'password',
+            autoComplete: 'new-password', minLength: 8, value: password, required: true,
+            onChange: function (event) { setPassword(event.target.value); } }),
+          error ? h('p', { className: 'form-error', role: 'alert' }, error) : null,
+          message ? h('p', { className: 'form-success', role: 'status' }, message) : null,
+          h('button', { className: 'btn btn-primary btn-block', type: 'submit', disabled: busy },
+            busy ? 'Updating…' : 'Update password'))));
   }
 
   /* ------------------------------------------------------------------ shell */
@@ -140,7 +258,7 @@
             h('button', {
               className: 'btn btn-outline btn-sm sidenav-out',
               type: 'button',
-              onClick: function () { MG.clerk.signOut(); },
+              onClick: function () { MG.auth.signOut({ scope: 'local' }); },
             }, MG.icon ? MG.icon('logout', 15) : null, ' Sign out'))),
 
         h('div', { className: 'shell-main' },
@@ -186,12 +304,12 @@
 
     useEffect(function () {
       MG.api.init();
-      MG.clerk.load().then(function () {
+      MG.auth.load().then(function () {
         setAuth({ ready: true, error: null });
       }).catch(function (err) {
         setAuth({ ready: true, error: err });
       });
-      var off = MG.clerk.onChange(function () { force(function (x) { return x + 1; }); });
+      var off = MG.auth.onChange(function () { force(function (x) { return x + 1; }); });
       var onHash = function () { setRoute(parseHash()); };
       window.addEventListener('hashchange', onHash);
       return function () { off(); window.removeEventListener('hashchange', onHash); };
@@ -206,16 +324,26 @@
       return h('div', { className: 'auth-wrap' },
         h('div', { className: 'auth-card' },
           h('h1', null, 'Authentication unavailable'),
-          h('p', { className: 'muted' }, 'The identity service could not be loaded. Check your connection and the Clerk configuration.'),
+          h('p', { className: 'muted' }, 'The identity service could not be loaded. Check your connection and the Supabase configuration.'),
           h('button', {
             className: 'btn btn-primary', onClick: function () { location.reload(); },
           }, 'Retry')));
     }
 
-    var st = MG.clerk.state;
+    var st = MG.auth.state;
     if (!st.signedIn || !st.user) {
-      return route.view === 'register' ? h(SignUpView) : h(SignInView);
+      if (route.view === 'register') return h(SignUpView);
+      if (route.view === 'forgot-password') return h(ForgotPasswordView);
+      if (route.view === 'reset-password') {
+        return h('div', { className: 'auth-wrap' },
+          h('div', { className: 'auth-card' },
+            h('h1', null, 'Password reset link unavailable'),
+            h('p', { className: 'muted' }, 'Open the reset link from your email on this device, or request a new one.'),
+            h('a', { className: 'btn btn-primary', href: '#/forgot-password' }, 'Request another link')));
+      }
+      return h(SignInView);
     }
+    if (route.view === 'reset-password') return h(UpdatePasswordView);
 
     // Resolve view lazily so each view module registers itself.
     function resolveView(r) {
