@@ -41,7 +41,7 @@
             if (res.ok && payload && payload.success) {
               return { data: payload.data, meta: payload.meta || {}, message: payload.message || '' };
             }
-            if (res.status === 401 && !opts.noRetryOn401) {
+            if (res.status === 401 && attempt > 0 && !opts.noRetryOn401) {
               // Refresh the Supabase Auth access token once, then retry once.
               return MG.auth.refresh().then(function (token) {
                 if (token) headers.Authorization = 'Bearer ' + token;
