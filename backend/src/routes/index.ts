@@ -7,7 +7,6 @@ import { depositsRouter, paymentsWebhookRouter } from './deposits.routes';
 import { transactionsRouter } from './transactions.routes';
 import { statementsRouter } from './statements.routes';
 import { notificationsRouter, supportRouter } from './notifications.routes';
-import { clerkWebhookRouter } from './webhooks.routes';
 import { adminRouter } from './admin.routes';
 
 export const api = Router();
@@ -24,4 +23,4 @@ api.use('/', adminRouter);
 
 // Webhooks are mounted at the app level with raw-body capture (see app.ts):
 // they are re-exported for the assembler.
-export { paymentsWebhookRouter, clerkWebhookRouter };
+export { paymentsWebhookRouter };

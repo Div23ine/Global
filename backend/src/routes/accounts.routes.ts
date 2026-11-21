@@ -32,7 +32,7 @@ accountsRouter.get('/currencies', async (req, res, next) => {
 
 accountsRouter.get('/accounts', async (req, res, next) => {
   try {
-    const db = getUserClient(req.auth!.clerkJwt); // RLS-scoped read
+    const db = getUserClient(req.auth!.supabaseJwt); // RLS-scoped read
     const { data, error } = await db
       .from('accounts')
       .select('*, transactions(count)')
@@ -47,7 +47,7 @@ accountsRouter.get('/accounts/:currency', async (req, res, next) => {
   try {
     const code = String(req.params.currency).toUpperCase();
     if (!/^[A-Z]{3}$/.test(code)) throw badRequest('Invalid currency code.');
-    const db = getUserClient(req.auth!.clerkJwt);
+    const db = getUserClient(req.auth!.supabaseJwt);
     const { data: account, error } = await db
       .from('accounts')
       .select('*')

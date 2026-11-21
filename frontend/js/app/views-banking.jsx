@@ -90,7 +90,7 @@
             h('div', null,
               h('p', { className: 'stat-label' }, 'Security'),
               h('p', { className: 'stat-val' }, 'Protected'),
-              h('p', { className: 'stat-sub' }, 'Clerk session active'))))),
+              h('p', { className: 'stat-sub' }, 'Supabase Auth session active'))))),
 
       /* Currency cards */
       h('section', { 'aria-label': 'Currency accounts' },

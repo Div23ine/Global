@@ -1,5 +1,5 @@
 /* HTTP layer — the ONLY module allowed to call fetch.
-   - attaches the Clerk session JWT as a bearer token
+   - attaches the Supabase Auth access JWT as a bearer token
    - normalizes the API envelope {success, message, data, meta}
    - surfaces stable error codes from API_SPECIFICATION.md
    - 40,000-character body cap guard, timeout, single retry on network error */
@@ -17,7 +17,7 @@
 
   function request(method, path, body, opts) {
     opts = opts || {};
-    return MG.clerk.token().then(function (token) {
+    return MG.auth.token().then(function (token) {
       var url = MG.config.API_BASE_URL + path;
       var headers = { Accept: 'application/json' };
       if (token) headers.Authorization = 'Bearer ' + token;
@@ -41,10 +41,10 @@
             if (res.ok && payload && payload.success) {
               return { data: payload.data, meta: payload.meta || {}, message: payload.message || '' };
             }
-            if (res.status === 401 && !opts.noRetryOn401) {
-              // Token may have rotated; refresh once.
-              return window.Clerk.session.getToken().then(function (t) {
-                if (t) headers.Authorization = 'Bearer ' + t;
+            if (res.status === 401 && attempt > 0 && !opts.noRetryOn401) {
+              // Refresh the Supabase Auth access token once, then retry once.
+              return MG.auth.refresh().then(function (token) {
+                if (token) headers.Authorization = 'Bearer ' + token;
                 return doFetch(0);
               }).catch(function () {
                 throw ApiError(
@@ -80,7 +80,7 @@
     patch: function (path, body) { return request('PATCH', path, body); },
     del: function (path) { return request('DELETE', path, undefined); },
     download: function (path) {
-      return MG.clerk.token().then(function (token) {
+      return MG.auth.token().then(function (token) {
         return fetch(MG.config.API_BASE_URL + path, {
           headers: token ? { Authorization: 'Bearer ' + token } : {},
         }).then(function (res) {

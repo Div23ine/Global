@@ -17,7 +17,7 @@ notificationsRouter.use(requireAuth);
 notificationsRouter.get('/notifications', async (req, res, next) => {
   try {
     const p = parsePagination(req.query as Record<string, unknown>);
-    const db = getUserClient(req.auth!.clerkJwt);
+    const db = getUserClient(req.auth!.supabaseJwt);
     const [list, unread] = await Promise.all([
       db.from('notifications').select('*', { count: 'exact' })
         .eq('profile_id', req.auth!.userId)
@@ -44,7 +44,7 @@ supportRouter.use(requireAuth);
 
 supportRouter.get('/support/tickets', async (req, res, next) => {
   try {
-    const db = getUserClient(req.auth!.clerkJwt);
+    const db = getUserClient(req.auth!.supabaseJwt);
     const { data, error } = await db
       .from('support_tickets')
       .select('*, support_messages(*)')

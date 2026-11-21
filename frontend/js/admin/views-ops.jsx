@@ -380,7 +380,7 @@
       h('div', { className: 'stat-row' },
         h(MG.ui.StatCard, { icon: 'shield', tone: 'info', label: 'Events in view', value: MG.util.num(events.length), sub: 'All security events' }),
         h(MG.ui.StatCard, { icon: 'alert', tone: 'danger', label: 'Critical', value: MG.util.num(suspiciousCount), sub: 'Highlighted in the feed' }),
-        h(MG.ui.StatCard, { icon: 'snowflake', tone: 'warn', label: 'Freeze tool', value: 'Ready', sub: 'Suspend via Clerk' })),
+        h(MG.ui.StatCard, { icon: 'snowflake', tone: 'warn', label: 'Freeze tool', value: 'Ready', sub: 'Suspend via Supabase Auth' })),
 
       h('div', { className: 'grid-side' },
         h('div', { className: 'grid-side-main' },
@@ -404,10 +404,10 @@
                     })))),
         h('div', { className: 'grid-side-aside' },
           h(MG.ui.Card, { title: h('h3', { className: 'panel-title' }, h(MG.ui.Icon, { name: 'snowflake', size: 15 }), ' Freeze an account') },
-            h('p', { className: 'muted' }, 'Freezing suspends the customer via Clerk (sessions end immediately) and records a security event with your reason.'),
+            h('p', { className: 'muted' }, 'Freezing marks the Meridian profile as suspended, applies a Supabase Auth ban when linked, and records a security event with your reason.'),
             h('div', { className: 'field' },
-              h('label', { htmlFor: 'frz-user' }, 'Clerk user id'),
-              h('input', { id: 'frz-user', placeholder: 'user_\u2026', value: freezeUser,
+              h('label', { htmlFor: 'frz-user' }, 'Meridian profile ID'),
+              h('input', { id: 'frz-user', placeholder: 'profile ID', value: freezeUser,
                 onChange: function (e) { setFreezeUser(e.target.value); } })),
             h('div', { className: 'field' },
               h('label', { htmlFor: 'frz-reason' }, 'Reason (recorded)'),
@@ -541,7 +541,7 @@
   MGA.views.roles = function () {
     var _r = React.useState(0); var reload = _r[1];
     var state = MG.ui.useAsync(function () { return MGA.api.roles(); }, [_r[0]]);
-    var _a = React.useState({ clerkUserId: '', roleId: 'support', displayName: '' }); var assign = _a[0]; var setAssign = _a[1];
+    var _a = React.useState({ email: '', roleId: 'support', displayName: '' }); var assign = _a[0]; var setAssign = _a[1];
     if (state.loading) return h(MG.ui.PageSkeleton, { variant: 'page' });
     if (state.error) return h(MG.ui.ErrorPanel, { error: state.error, onRetry: function () { location.reload(); } });
     var d = state.data || {};
@@ -558,32 +558,32 @@
           ' \u2014 not merely hidden from the UI. Every role, including Super Administrator, is rejected with HTTP 403 when attempting a financial mutation.')),
 
       h(MG.ui.Card, { title: h('h3', { className: 'panel-title' }, h(MG.ui.Icon, { name: 'key', size: 15 }), ' Assign a role') },
-        h('p', { className: 'muted' }, 'Requires the Clerk user id (user_\u2026). The backend verifies the identity exists in Clerk before granting administrative power.'),
+        h('p', { className: 'muted' }, 'Enter the email of an active Supabase Auth user who has signed in to Meridian at least once. The backend verifies the linked profile before granting administrator access.'),
         h('div', { className: 'filter-bar' },
           h('div', { className: 'field', style: { flex: 1 } },
-            h('label', null, 'Clerk user id'),
-            h('input', { placeholder: 'user_\u2026', value: assign.clerkUserId,
-              onChange: function (e) { setAssign(Object.assign({}, assign, { clerkUserId: e.target.value })); } })),
+            h('label', null, 'Supabase Auth email'),
+            h('input', { placeholder: 'person@example.com', value: assign.email,
+              onChange: function (e) { setAssign(Object.assign({}, assign, { email: e.target.value })); } })),
           h('div', { className: 'field' },
             h('label', null, 'Role'),
             h('select', { value: assign.roleId, onChange: function (e) { setAssign(Object.assign({}, assign, { roleId: e.target.value })); } },
               (d.roles || []).map(function (r) { return h('option', { key: r.id, value: r.id }, r.id); }))),
           h('button', { className: 'btn btn-primary', onClick: function () {
-            MGA.api.assignRole(assign.clerkUserId, assign.roleId, assign.displayName || undefined).then(function () {
+            MGA.api.assignRole(assign.email, assign.roleId, assign.displayName || undefined).then(function () {
               MG.ui.toast('Role assigned.', 'ok');
               reload(function (x) { return x + 1; });
             }).catch(function (e) { MG.ui.toast(MG.util.errMessage(e), 'err'); });
           } }, 'Assign')),
         h(MG.ui.DataTable, {
-          compact: true, rows: d.holders || [], rowKey: function (u) { return u.clerk_user_id; },
+          compact: true, rows: d.holders || [], rowKey: function (u) { return u.profile_id; },
           empty: h(MG.ui.Empty, { icon: 'key', title: 'No administrators assigned yet', note: 'Assigned roles will appear here.' }),
           columns: [
-            { th: 'Holder', td: function (u) { return h('div', null, h('b', null, u.display_name || ''), h('small', { className: 'muted', style: { display: 'block' } }, u.clerk_user_id)); } },
+            { th: 'Holder', td: function (u) { return h('div', null, h('b', null, u.display_name || ''), h('small', { className: 'muted', style: { display: 'block' } }, u.profile_id)); } },
             { th: 'Role', td: function (u) { return h('span', { className: 'chip chip-currency' }, u.role_id); } },
             { th: 'Assigned', td: function (u) { return h('span', { className: 'td-date' }, MG.util.date(u.assigned_at)); } },
             { th: '', align: 'right', td: function (u) {
               return h('button', { className: 'btn btn-ghost btn-sm', onClick: function () {
-                MGA.api.revokeRole(u.clerk_user_id).then(function () {
+                MGA.api.revokeRole(u.profile_id).then(function () {
                   MG.ui.toast('Role revoked.', 'ok');
                   reload(function (x) { return x + 1; });
                 }).catch(function (e) { MG.ui.toast(MG.util.errMessage(e), 'err'); });

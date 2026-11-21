@@ -12,7 +12,7 @@ transactionsRouter.use(requireAuth);
 transactionsRouter.get('/transactions', async (req, res, next) => {
   try {
     const p = parsePagination(req.query as Record<string, unknown>);
-    const db = getUserClient(req.auth!.clerkJwt); // RLS-scoped read
+    const db = getUserClient(req.auth!.supabaseJwt); // RLS-scoped read
 
     let query = db.from('transactions').select('*', { count: 'exact' }).eq('profile_id', req.auth!.userId);
     const q = req.query as Record<string, string>;
@@ -40,7 +40,7 @@ transactionsRouter.get('/transactions/:reference', async (req, res, next) => {
   try {
     const reference = String(req.params.reference);
     if (!/^TXN-\d{4}-\d{6}$/.test(reference)) throw badRequest('Invalid transaction reference.');
-    const db = getUserClient(req.auth!.clerkJwt);
+    const db = getUserClient(req.auth!.supabaseJwt);
     const { data, error } = await db
       .from('transactions')
       .select('*')

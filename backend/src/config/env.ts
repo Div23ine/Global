@@ -41,12 +41,6 @@ function buildEnv() {
       .map((s) => s.trim())
       .filter(Boolean),
 
-    clerk: {
-      secretKey: str(get('CLERK_SECRET_KEY')),
-      publishableKey: str(get('CLERK_PUBLISHABLE_KEY')),
-      webhookSigningSecret: str(get('CLERK_WEBHOOK_SIGNING_SECRET')),
-    },
-
     supabase: {
       url: str(get('SUPABASE_URL')),
       anonKey: str(get('SUPABASE_ANON_KEY')),
@@ -122,12 +116,10 @@ export function applyWorkerEnv(bindings: Record<string, unknown>): void {
   env = buildEnv();
 }
 
-/** Called at boot: refuse to start in production with missing secrets. */
+/** Called at boot: refuse to start in production with missing Supabase credentials. */
 export function assertProductionReadiness(): void {
   if (!env.isProduction) return;
   const missing: string[] = [];
-  if (!env.clerk.secretKey) missing.push('CLERK_SECRET_KEY');
-  if (!env.clerk.webhookSigningSecret) missing.push('CLERK_WEBHOOK_SIGNING_SECRET');
   if (!env.supabase.url) missing.push('SUPABASE_URL');
   if (!env.supabase.anonKey) missing.push('SUPABASE_ANON_KEY');
   if (!env.supabase.serviceRoleKey) missing.push('SUPABASE_SERVICE_ROLE_KEY');

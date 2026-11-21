@@ -1,6 +1,6 @@
 # IMPLEMENTATION PLAN — Meridian Global Accounts upgrade
 
-Status: v1.0 · Branch: `development` · Ordered phases; each phase ends with a
+Status: v1.1 · Branch: `fix/worker-http-server-compat` · Ordered phases; each phase ends with a
 verification checkpoint and a commit.
 
 ## Phase 0 — Repository and methodology (DONE)
@@ -19,8 +19,9 @@ verification checkpoint and a commit.
       transactions (ledger), deposits, payment_attempts, statements,
       notifications, support_tickets, support_messages, admin_roles,
       admin_users, audit_logs, security_events, app_settings.
-- [x] `backend/migrations/0003_rls.sql` — Row Level Security keyed on Clerk
-      `sub` claim; audit append-only; service-role-only writes on money tables.
+- [x] `backend/migrations/0003_rls.sql` — original RLS helper used the Clerk `sub`
+      claim; migration 0007 replaces the helper with a Supabase Auth UUID-to-
+      canonical-profile mapping. Audit append-only; service-role-only writes remain.
 - [x] `backend/migrations/0004_functions_triggers.sql` — balance projection
       trigger, updated_at triggers, reference generation, deposit state guard.
 - [x] `backend/migrations/0005_seed.sql` — EUR/GBP/USD/CHF/PLN currency set,
@@ -39,7 +40,7 @@ verification checkpoint and a commit.
 - [x] `GET /api/v1/health` — liveness + dependency checks.
 - Verification: `npm run typecheck`, `npm run lint`, boot test (L2).
 
-## Phase 3 — Identity integration (Clerk)
+## Phase 3 — Original identity integration (Clerk; retired in Phase 10)
 
 - [x] `clerk.service.ts` — Backend API client wrapper (users, ban/unban,
       delete, metadata).
@@ -55,7 +56,7 @@ verification checkpoint and a commit.
 
 ## Phase 4 — Customer data domain (Supabase)
 
-- [x] `supabase.service.ts` — user-scoped client (forwards Clerk JWT → RLS)
+- [x] `supabase.service.ts` — user-scoped client (forwards verified Supabase Auth JWT → RLS)
       and service client (system operations).
 - [x] `accounts` endpoints: list with balances, single account, activate
       currency (guards: availability, already-active, duplicates).
@@ -87,8 +88,8 @@ verification checkpoint and a commit.
 ## Phase 6 — Administrator surface
 
 - [x] Admin endpoints: dashboard metrics, users (search/filter/paginate),
-      user detail, permitted profile edits, suspend/ban/unban (Clerk + DB),
-      delete (Clerk + anonymize), currency availability management,
+      user detail, permitted profile edits, suspend/ban/unban (Supabase Auth + DB),
+      delete (Supabase Auth + anonymize), currency availability management,
       deposits/transactions/payments monitoring, security events, reports,
       support management, roles, audit log query, settings.
 - [x] **Financial restriction enforcement**: no admin endpoint can modify
@@ -104,12 +105,12 @@ verification checkpoint and a commit.
       (European adjustments: EUR default, remove NGN, remove demo-forced
       markers in production copy).
 - [x] Public site: 10 static pages in Design 02 language.
-- [x] `js/config.js`, `js/services/clerk.js` (ClerkJS loader), `http.js`
-      (envelope + auth), `api.js` (all REST resources).
-- [x] `app.html` customer SPA: Clerk-mounted auth; shell (sidenav, topbar);
+- [x] `js/config.js`, `js/services/supabase-auth.js` (Supabase Auth browser client),
+      `http.js` (envelope + Supabase bearer token), `api.js` (REST resources).
+- [x] `app.html` customer SPA: Supabase Auth sign-in/sign-up/recovery; shell (sidenav, topbar);
       views: overview, accounts, account detail, activate, deposits wizard,
       transactions + filters + detail, statements, profile, security,
-      sessions (Clerk), notifications, support, settings; four states each.
+      Supabase Auth password/session controls, notifications, support, settings; four states each.
 - [x] `admin.html` admin SPA: role gate; views: dashboard, users, user detail
       (permitted edits, ban/unban/delete, audit), currencies, deposits,
       transactions, payments, security, reports, support, roles, audit,
@@ -129,8 +130,8 @@ verification checkpoint and a commit.
 ## Phase 9 — Security and deployment readiness
 
 - [x] `SECURITY_REVIEW.md` — STRIDE per surface, never-log list, findings.
-- [x] `DEPLOYMENT_GUIDE.md` — Cloudflare Pages, Oracle VM (systemd + reverse
-      proxy), Supabase, Clerk, Twilio setup runbooks; rollback procedures.
+- [x] `DEPLOYMENT_GUIDE.md` — Cloudflare Pages/Workers, Supabase Auth/PostgreSQL,
+      Resend and Twilio setup runbooks; rollback procedures.
 - [x] `CHANGELOG.md`, final `PROJECT_STATUS.md`.
 
 ## Out of scope for this stage (documented, not silently dropped)
@@ -138,5 +139,40 @@ verification checkpoint and a commit.
 - Vite migration of the frontend (path prepared — `ARCHITECTURE.md` §8).
 - Real payment partner integration (interface + webhook seam ready).
 - Kubernetes/microservices (explicitly not justified by current scale).
-- Production DNS changes or any deployment to the live VM (requires owner
-  authorization and credentials).
+- Production DNS, Pages or Worker changes and production database migrations
+  (require owner authorization and credentials).
+
+
+## Phase 10 — Supabase Auth migration and Worker runtime fix (IN PROGRESS)
+
+- [x] Add Supabase Auth browser client and replace customer/admin Clerk widgets
+      with email/password sign-in, signup, email confirmation, password recovery
+      and password update.
+- [x] Change frontend API requests to use Supabase Auth access tokens and refresh
+      the Supabase session on an API 401.
+- [x] Verify tokens in the backend with Supabase Auth getUser(accessToken).
+- [x] Map Supabase Auth UUIDs to canonical profiles.id values; add migration
+      0007_supabase_auth.sql to preserve legacy profile and financial ownership.
+- [x] Change admin role mapping to admin_users.profile_id and use Supabase Auth
+      admin operations for ban, unban and identity deletion.
+- [x] Remove active Clerk backend/browser services, Clerk lifecycle webhook and
+      Clerk/Svix runtime dependencies.
+- [x] Update security, deployment, architecture and database documentation.
+- [x] Enable the Node.js HTTP server compatibility flag required by the current
+      Worker entry point, and set the frontend API base to the confirmed Worker.
+- [x] Add integration-test coverage for confirmed email bootstrap, legacy
+      profile linking and canonical-ID RLS mapping.
+- [ ] Run npm ci, typecheck, lint and full backend tests; current execution
+      environment has not run these checks.
+- [ ] Run frontend/check.sh and real-browser customer/admin Auth flows.
+- [ ] Rehearse migration 0007 with a production-like backup; inspect all
+      existing admin identities before applying the admin_users rename.
+- [ ] Configure Supabase Auth SMTP, allowed redirects, Worker secrets, frontend
+      public keys and exact CORS origins.
+- [ ] Deploy to a preview Worker and verify /api/v1/health, login, profile
+      bootstrap and two-user RLS isolation.
+- [ ] Obtain explicit owner approval before merge, production deployment or
+      applying migration 0007 to the production database.
+
+Verification checkpoint: code is prepared on the feature branch only. No
+production deployment or database migration has been performed.

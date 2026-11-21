@@ -1,16 +1,16 @@
 /**
  * Express application assembly.
- * Order: security headers -> CORS -> request id -> raw-body webhooks ->
+ * Order: security headers -> CORS -> request id -> raw-body payment webhook ->
  * JSON parsing (with size caps) -> rate limit -> /api/v1 routes -> 404 ->
- * error handler. Webhooks mount BEFORE express.json() so signatures are
- * computed over the exact raw bytes.
+ * error handler. Payment webhooks mount before JSON parsing so their
+ * signature checks can use the exact raw request body.
  */
 import express, { type Express, type NextFunction, type Request, type Response } from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import { randomUUID } from 'node:crypto';
 import { env } from './config/env';
-import { api, clerkWebhookRouter, paymentsWebhookRouter } from './routes';
+import { api, paymentsWebhookRouter } from './routes';
 import { globalLimiter, type RateLimitBindings } from './middleware/rateLimit';
 import { errorHandler, notFoundHandler } from './middleware/error';
 import { logger } from './utils/logger';
@@ -34,7 +34,7 @@ export function createApp(rateLimitBindings?: RateLimitBindings): Express {
       },
       methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
       allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key', 'x-meridian-signature',
-        'svix-id', 'svix-timestamp', 'svix-signature'],
+],
       maxAge: 600,
     }),
   );
@@ -56,7 +56,6 @@ export function createApp(rateLimitBindings?: RateLimitBindings): Express {
         Buffer.isBuffer(req.body) ? req.body.toString('utf8') : '';
       next();
     },
-    clerkWebhookRouter,
     paymentsWebhookRouter,
   );
 

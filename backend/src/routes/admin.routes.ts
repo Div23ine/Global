@@ -13,7 +13,11 @@ import { z } from 'zod';
 import { requireAdmin, requireAuth } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { getServiceClient } from '../services/supabase.service';
-import { banUser, deleteUser, unbanUser, getUser as getClerkUser } from '../services/clerk.service';
+import {
+  deleteSupabaseUserForProfile,
+  getLinkedProfileByEmail,
+  setSupabaseUserBan,
+} from '../services/supabase-auth.service';
 import { auditAllowed } from '../services/audit.service';
 import { notify, notifyWithSms } from '../services/notifications.service';
 import { parsePagination, pageMeta } from '../utils/pagination';
@@ -146,9 +150,9 @@ const reasonSchema = z.object({ reason: z.string().min(3).max(500) }).strict();
 adminRouter.post('/admin/users/:id/suspend', requireAdmin('users.ban'), validate(reasonSchema), async (req, res, next) => {
   try {
     const db = getServiceClient();
-    await banUser(String(req.params.id)); // Clerk ban kills active sessions immediately
     const { error } = await db.from('profiles').update({ status: 'suspended' }).eq('id', String(req.params.id));
     if (error) throw new Error(error.message);
+    await setSupabaseUserBan(String(req.params.id), true);
     await db.from('security_events').insert({
       profile_id: String(req.params.id), type: 'suspend', severity: 'warning',
       detail: { reason: req.body.reason, by: req.auth!.userId },
@@ -157,30 +161,30 @@ adminRouter.post('/admin/users/:id/suspend', requireAdmin('users.ban'), validate
       `Your account has been suspended: ${req.body.reason}`);
     await auditAllowed(req.auth!.userId, 'admin.user_suspend', { type: 'profile', id: String(req.params.id) },
       { reason: req.body.reason }, ctxOf(req));
-    ok(res, { id: String(req.params.id), status: 'suspended' }, 'User suspended (Clerk ban applied)');
+    ok(res, { id: String(req.params.id), status: 'suspended' }, 'User suspended');
   } catch (err) { next(err); }
 });
 
 adminRouter.post('/admin/users/:id/ban', requireAdmin('users.ban'), validate(reasonSchema), async (req, res, next) => {
   try {
     const db = getServiceClient();
-    await banUser(String(req.params.id));
     const { error } = await db.from('profiles').update({ status: 'banned' }).eq('id', String(req.params.id));
     if (error) throw new Error(error.message);
+    await setSupabaseUserBan(String(req.params.id), true);
     await db.from('security_events').insert({
       profile_id: String(req.params.id), type: 'ban', severity: 'critical',
       detail: { reason: req.body.reason, by: req.auth!.userId },
     });
     await auditAllowed(req.auth!.userId, 'admin.user_ban', { type: 'profile', id: String(req.params.id) },
       { reason: req.body.reason }, ctxOf(req));
-    ok(res, { id: String(req.params.id), status: 'banned' }, 'User banned (Clerk ban applied)');
+    ok(res, { id: String(req.params.id), status: 'banned' }, 'User banned');
   } catch (err) { next(err); }
 });
 
 adminRouter.post('/admin/users/:id/unban', requireAdmin('users.ban'), async (req, res, next) => {
   try {
     const db = getServiceClient();
-    await unbanUser(String(req.params.id));
+    await setSupabaseUserBan(String(req.params.id), false);
     const { error } = await db.from('profiles').update({ status: 'active' }).eq('id', String(req.params.id));
     if (error) throw new Error(error.message);
     await db.from('security_events').insert({
@@ -196,12 +200,19 @@ adminRouter.post('/admin/users/:id/unban', requireAdmin('users.ban'), async (req
 adminRouter.delete('/admin/users/:id', requireAdmin('users.delete'), async (req, res, next) => {
   try {
     const db = getServiceClient();
-    // Clerk identity deletion + profile anonymization (financial records retained).
-    await deleteUser(String(req.params.id));
+    // Block the account first; then delete the Auth identity and anonymize PII.
+    const { error: statusError } = await db.from('profiles')
+      .update({ status: 'deleted' }).eq('id', String(req.params.id));
+    if (statusError) throw new Error(statusError.message);
+    // A deleted identity must not retain an administrator role.
+    const { error: roleError } = await db.from('admin_users')
+      .delete().eq('profile_id', String(req.params.id));
+    if (roleError) throw new Error(roleError.message);
+    await deleteSupabaseUserForProfile(String(req.params.id));
     const { error } = await db.rpc('anonymize_profile', { p_profile_id: String(req.params.id) });
     if (error) throw new Error(error.message);
     await auditAllowed(req.auth!.userId, 'admin.user_delete', { type: 'profile', id: String(req.params.id) },
-      { note: 'identity deleted in Clerk; profile anonymized; financial records retained' }, ctxOf(req));
+      { note: 'Supabase Auth identity deleted; profile anonymized; financial records retained' }, ctxOf(req));
     ok(res, { id: String(req.params.id), anonymized: true },
       'Identity deleted; profile anonymized; financial records retained per policy');
   } catch (err) { next(err); }
@@ -325,14 +336,14 @@ adminRouter.get('/admin/security/events', requireAdmin('security.read'), async (
   } catch (err) { next(err); }
 });
 
-const freezeSchema = z.object({ userId: z.string().min(3).max(64), reason: z.string().min(3).max(500) }).strict();
+const freezeSchema = z.object({ userId: z.string().min(1).max(128), reason: z.string().min(3).max(500) }).strict();
 
 adminRouter.post('/admin/security/freeze', requireAdmin('security.freeze'), validate(freezeSchema), async (req, res, next) => {
   try {
     const db = getServiceClient();
-    await banUser(req.body.userId);
     const { error } = await db.from('profiles').update({ status: 'suspended' }).eq('id', req.body.userId);
     if (error) throw new Error(error.message);
+    await setSupabaseUserBan(req.body.userId, true);
     await db.from('security_events').insert({
       profile_id: req.body.userId, type: 'freeze', severity: 'warning',
       detail: { reason: req.body.reason, by: req.auth!.userId },
@@ -430,19 +441,20 @@ adminRouter.get('/admin/roles', requireAdmin('roles.manage'), async (_req, res, 
 });
 
 const assignSchema = z.object({
-  clerkUserId: z.string().regex(/^user_[A-Za-z0-9]+$/),
+  email: z.string().email().max(254),
   roleId: z.enum(['super_admin', 'support', 'compliance', 'finance_readonly']),
   displayName: z.string().max(120).optional(),
 }).strict();
 
 adminRouter.post('/admin/roles/assign', requireAdmin('roles.manage'), validate(assignSchema), async (req, res, next) => {
   try {
-    // Verify the Clerk user exists before granting administrative power.
-    const user = await getClerkUser(req.body.clerkUserId);
+    // The user must already have a confirmed Supabase Auth identity linked
+    // to a profile before an administrator can grant a role.
+    const user = await getLinkedProfileByEmail(req.body.email);
     const db = getServiceClient();
     const { data, error } = await db.from('admin_users').upsert({
-      clerk_user_id: user.id,
-      display_name: req.body.displayName ?? `${user.firstName} ${user.lastName}`.trim(),
+      profile_id: user.id,
+      display_name: req.body.displayName ?? `${user.first_name} ${user.last_name}`.trim(),
       role_id: req.body.roleId,
       assigned_by: req.auth!.userId,
       assigned_at: new Date().toISOString(),
@@ -456,15 +468,15 @@ adminRouter.post('/admin/roles/assign', requireAdmin('roles.manage'), validate(a
 
 adminRouter.post('/admin/roles/revoke', requireAdmin('roles.manage'), async (req, res, next) => {
   try {
-    const body = z.object({ clerkUserId: z.string().regex(/^user_[A-Za-z0-9]+$/) }).parse(req.body);
-    if (body.clerkUserId === req.auth!.userId) {
+    const body = z.object({ profileId: z.string().min(1).max(128) }).parse(req.body);
+    if (body.profileId === req.auth!.userId) {
       throw invalidState('You cannot revoke your own admin role.');
     }
     const db = getServiceClient();
-    const { error } = await db.from('admin_users').delete().eq('clerk_user_id', body.clerkUserId);
+    const { error } = await db.from('admin_users').delete().eq('profile_id', body.profileId);
     if (error) throw new Error(error.message);
-    await auditAllowed(req.auth!.userId, 'admin.role_revoke', { type: 'admin_user', id: body.clerkUserId }, undefined, ctxOf(req));
-    ok(res, { revoked: body.clerkUserId }, 'Role revoked');
+    await auditAllowed(req.auth!.userId, 'admin.role_revoke', { type: 'admin_user', id: body.profileId }, undefined, ctxOf(req));
+    ok(res, { revoked: body.profileId }, 'Role revoked');
   } catch (err) { next(err); }
 });
 

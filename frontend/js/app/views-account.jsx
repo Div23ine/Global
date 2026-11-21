@@ -62,47 +62,69 @@
 
   /* -------------------------------------------------------------- security */
   MG.views.security = function () {
+    var _p = React.useState(''); var password = _p[0]; var setPassword = _p[1];
+    var _b = React.useState(false); var busy = _b[0]; var setBusy = _b[1];
+
+    function updatePassword(event) {
+      event.preventDefault();
+      if (password.length < 8) {
+        MG.util.toast('Use a password with at least 8 characters.', 'err');
+        return;
+      }
+      setBusy(true);
+      MG.auth.updatePassword(password).then(function (result) {
+        if (result.error) throw result.error;
+        setPassword('');
+        MG.util.toast('Password updated.', 'ok');
+      }).catch(function (error) {
+        MG.util.toast(error.message || 'Could not update your password.', 'err');
+      }).finally(function () { setBusy(false); });
+    }
+
     return h('div', { className: 'view-stack' },
-      h(MG.ui.Card, { title: 'Sign-in & verification (managed by Clerk)' },
+      h(MG.ui.Card, { title: 'Password & sign-in security (Supabase Auth)' },
         h('p', { className: 'muted' },
-          'Password changes, multi-factor authentication and recovery live in your identity profile. ',
-          'The button below opens the secure profile managed by our identity provider.'),
-        h(MG.ui.Button, { variant: 'primary', onClick: function () { MG.clerk.openUserProfile(); } },
-          'Manage sign-in & MFA')),
+          'Your password, email confirmation and recovery are managed securely by Supabase Auth.'),
+        h('form', { onSubmit: updatePassword },
+          h(MG.ui.Field, { id: 'security-new-password', label: 'New password' },
+            h(MG.ui.Input, { id: 'security-new-password', type: 'password',
+              autoComplete: 'new-password', value: password, required: true, minLength: 8,
+              onChange: function (event) { setPassword(event.target.value); } })),
+          h(MG.ui.Button, { type: 'submit', variant: 'primary', busy: busy }, 'Update password')),
+        h('p', { className: 'muted' },
+          'Multi-factor enrollment and challenge screens are not yet exposed in Meridian. Do not treat MFA as enabled until it is configured in Supabase and implemented in the application.')),
       h(MG.ui.Card, { title: 'Security events' },
         h('p', { className: 'muted' },
-          'Sign-in events, freezes and administrative actions on your account are recorded in the security event history ',
-          'maintained by the platform. Contact support for a full report at any time.')));
+          'Sign-in events, account suspensions and administrative actions are recorded in the platform security history. Contact support for a full report at any time.')));
   };
 
   /* -------------------------------------------------------------- sessions */
   MG.views.sessions = function () {
-    var state = MG.ui.useAsync(function () { return MG.api.sessions(); }, []);
-    if (state.loading) return h(MG.ui.LoadingPanel);
-    if (state.error) return h(MG.ui.ErrorPanel, { error: state.error, onRetry: function () { location.reload(); } });
-    return h(MG.ui.Card, { title: 'Active sessions' },
-      (state.data || []).length === 0
-        ? h(MG.ui.Empty, { title: 'No other sessions', hint: 'Only this device appears to be signed in.' })
-        : h(MG.ui.Table, {
-            columns: [{ label: 'Session' }, { label: 'Status' }, { label: 'Last active' }, { label: '' }],
-            rows: state.data || [],
-            renderRow: function (s) {
-              return h('tr', { key: s.id },
-                h('td', null, 'Session ' + s.id.slice(0, 12) + '…'),
-                h('td', null, h(MG.ui.Badge, { status: s.status === 'active' ? 'active' : 'cancelled' })),
-                h('td', null, s.lastActiveAt ? MG.util.timeAgo(new Date(s.lastActiveAt).toISOString()) : '—'),
-                h('td', null, s.status === 'active'
-                  ? h('button', {
-                      className: 'btn btn-danger btn-sm',
-                      onClick: function () {
-                        MG.api.revokeSession(s.id).then(function () {
-                          MG.util.toast('Session revoked.', 'ok');
-                          location.reload();
-                        }).catch(function (e) { MG.util.toast(MG.util.errMessage(e), 'err'); });
-                      },
-                    }, 'Revoke') : null));
-            },
-          }));
+    var _b = React.useState(false); var busy = _b[0]; var setBusy = _b[1];
+
+    function signOut(scope, label) {
+      setBusy(true);
+      MG.auth.signOut({ scope: scope }).then(function (result) {
+        if (result.error) throw result.error;
+        MG.util.toast(label, 'ok');
+      }).catch(function (error) {
+        MG.util.toast(error.message || 'Could not update sessions.', 'err');
+      }).finally(function () { setBusy(false); });
+    }
+
+    return h(MG.ui.Card, { title: 'Session controls' },
+      h('p', { className: 'muted' },
+        'Supabase Auth lets you sign out this device, other active sessions, or every session. Individual session inventories are not available in this screen.'),
+      h('div', { className: 'cta-actions' },
+        h(MG.ui.Button, { variant: 'primary', disabled: busy,
+          onClick: function () { signOut('local', 'This device has been signed out.'); } },
+          'Sign out this device'),
+        h(MG.ui.Button, { variant: 'secondary', disabled: busy,
+          onClick: function () { signOut('others', 'Other sessions have been signed out.'); } },
+          'Sign out other devices'),
+        h(MG.ui.Button, { variant: 'danger', disabled: busy,
+          onClick: function () { signOut('global', 'All sessions have been signed out.'); } },
+          'Sign out everywhere')));
   };
 
   /* --------------------------------------------------------- notifications */

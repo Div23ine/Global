@@ -4,7 +4,7 @@
  * Boots a genuine PostgreSQL 18 instance (embedded-postgres, unprivileged),
  * applies the production migrations in order, then verifies:
  *   - schema + European seed (no NGN anywhere),
- *   - profile bootstrap (country -> default currency, idempotency),
+ *   - Supabase Auth profile bootstrap + legacy profile linking (idempotency),
  *   - currency activation guards,
  *   - ledger posting + balance projection + insufficient-funds guard,
  *   - the deposit state machine (confirm/fail/cancel/idempotency/immutability),
@@ -57,23 +57,57 @@ beforeAll(async () => {
   svc = await connect();
   t('connected');
 
-  // Apply production migrations in order (simple query protocol: multi-statement).
-  const dir = join(__dirname, '../../migrations');
-  for (const file of readdirSync(dir).filter((f) => f.endsWith('.sql')).sort()) {
-    const sql = readFileSync(join(dir, file), 'utf8');
-    await svc.query(sql);
-  }
+  // Minimal Supabase Auth schema double for the real PostgreSQL/RLS tests.
+  await svc.query(`CREATE SCHEMA auth;
+    CREATE TABLE auth.users (
+      id uuid PRIMARY KEY,
+      email text,
+      email_confirmed_at timestamptz,
+      phone text,
+      phone_confirmed_at timestamptz,
+      raw_user_meta_data jsonb NOT NULL DEFAULT '{}'::jsonb
+    );
+    CREATE FUNCTION auth.uid() RETURNS uuid
+    LANGUAGE sql STABLE AS $auth$
+      SELECT (NULLIF(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub')::uuid;
+    $auth$;`);
 
-  // Simulate the Supabase role model for RLS tests: authenticated + anon.
-  await svc.query(`DO $$ BEGIN
+  // Create Supabase's API roles before migrations that grant function access.
+  await svc.query(`DO $roles$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
       CREATE ROLE authenticated NOLOGIN;
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
       CREATE ROLE anon NOLOGIN;
     END IF;
-  END $$;`);
-  await svc.query('GRANT USAGE ON SCHEMA public TO authenticated, anon');
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
+      CREATE ROLE service_role NOLOGIN;
+    END IF;
+  END $roles$;`);
+  await svc.query('GRANT USAGE ON SCHEMA auth TO authenticated, anon, service_role');
+  await svc.query('GRANT EXECUTE ON FUNCTION auth.uid() TO authenticated, anon, service_role');
+
+  // Apply production migrations in order (simple query protocol: multi-statement).
+  const dir = join(__dirname, '../../migrations');
+  for (const file of readdirSync(dir).filter((f) => f.endsWith('.sql')).sort()) {
+    // Seed a representative pre-Supabase-Auth administrator before migration
+    // 0007 renames the old identity key and installs its profile FK.
+    if (file === '0007_supabase_auth.sql') {
+      await svc.query(
+        `INSERT INTO profiles (id, email, full_name, first_name, last_name)
+         VALUES ('legacy_admin_profile', 'legacy-admin@example.com',
+                 'Legacy Admin', 'Legacy', 'Admin')`,
+      );
+      await svc.query(
+        `INSERT INTO admin_users (clerk_user_id, display_name, role_id)
+         VALUES ('legacy_admin_profile', 'Legacy Admin', 'super_admin')`,
+      );
+    }
+    const sql = readFileSync(join(dir, file), 'utf8');
+    await svc.query(sql);
+  }
+
+  await svc.query('GRANT USAGE ON SCHEMA public TO authenticated, anon, service_role');
   await svc.query('GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO authenticated');
   await svc.query('GRANT SELECT ON ALL TABLES IN SCHEMA public TO anon');
 }, 300_000);
@@ -83,17 +117,51 @@ afterAll(async () => {
   if (postgres) await postgres.stop().catch(() => undefined);
 });
 
-const USER_A = 'user_test0000000000000000001';
-const USER_B = 'user_test0000000000000000002';
+const USER_A = '00000000-0000-4000-8000-000000000001';
+const USER_B = '00000000-0000-4000-8000-000000000002';
+const LEGACY_PROFILE = 'legacy_profile_001';
+const LEGACY_AUTH_USER = '00000000-0000-4000-8000-000000000003';
 
-async function asUser(clerkUserId: string): Promise<Client> {
+async function asUser(supabaseUserId: string): Promise<Client> {
   const c = await connect();
   await c.query(`SET ROLE authenticated`);
-  await c.query(`SET request.jwt.claims = '${JSON.stringify({ sub: clerkUserId })}'`);
+  await c.query(`SET request.jwt.claims = '${JSON.stringify({ sub: supabaseUserId, role: 'authenticated' })}'`);
   return c;
 }
 
+async function bootstrapTestUser(
+  userId: string,
+  email: string,
+  firstName: string,
+  lastName: string,
+  countryCode = 'DE',
+): Promise<void> {
+  await svc!.query(
+    `INSERT INTO auth.users (id, email, email_confirmed_at, raw_user_meta_data)
+     VALUES ($1::uuid, $2, now(), $3::jsonb)`,
+    [userId, email, JSON.stringify({
+      first_name: firstName,
+      last_name: lastName,
+      country_code: countryCode,
+    })],
+  );
+  await svc!.query('SELECT public.bootstrap_supabase_profile($1::uuid)', [userId]);
+}
+
 describe('migrations + seed', () => {
+  it('preserves legacy admin assignments using canonical profile IDs', async () => {
+    const { rows } = await svc!.query(
+      'SELECT profile_id, role_id FROM admin_users WHERE profile_id = $1',
+      ['legacy_admin_profile'],
+    );
+    expect(rows).toEqual([{ profile_id: 'legacy_admin_profile', role_id: 'super_admin' }]);
+    const constraint = await svc!.query(
+      `SELECT COUNT(*)::int AS n FROM pg_constraint
+       WHERE conname = 'admin_users_profile_id_fkey'`,
+    );
+    expect(constraint.rows[0].n).toBe(1);
+  });
+
   it('applies the European currency set with EUR default and no NGN', async () => {
     const { rows } = await svc!.query('SELECT code FROM currencies ORDER BY display_order');
     expect(rows.map((r) => r.code)).toEqual(['EUR', 'GBP', 'USD', 'CHF', 'PLN']);
@@ -118,21 +186,95 @@ describe('migrations + seed', () => {
   });
 });
 
-describe('profile bootstrap (Clerk user.created)', () => {
-  it('creates the profile and the default-currency account, idempotently', async () => {
-    await svc!.query('SELECT bootstrap_profile($1,$2,$3,$4,$5)',
-      [USER_A, 'a@example.com', 'Anna Schmidt', '+4917000000', 'DE']);
-    await svc!.query('SELECT bootstrap_profile($1,$2,$3,$4,$5)',
-      [USER_A, 'a@example.com', 'Anna Schmidt', '+4917000000', 'DE']);
+describe('Supabase Auth profile bootstrap', () => {
+  it('creates a new profile and default account from a confirmed Auth user, idempotently', async () => {
+    await svc!.query(
+      `INSERT INTO auth.users (id, email, email_confirmed_at, raw_user_meta_data)
+       VALUES ($1::uuid, $2, now(), $3::jsonb)`,
+      [USER_A, 'a@example.com', JSON.stringify({ first_name: 'Anna', last_name: 'Schmidt', country_code: 'DE' })],
+    );
+    await svc!.query(
+      `INSERT INTO auth.users (id, email, email_confirmed_at, raw_user_meta_data)
+       VALUES ($1::uuid, $2, now(), $3::jsonb)`,
+      [USER_B, 'b@example.com', JSON.stringify({ first_name: 'Ben', last_name: 'Brown', country_code: 'GB' })],
+    );
 
-    const profile = await svc!.query('SELECT default_currency, status FROM profiles WHERE id = $1', [USER_A]);
-    expect(profile.rows[0].default_currency).toBe('EUR');
-    expect(profile.rows[0].status).toBe('active');
+    const first = await svc!.query('SELECT public.bootstrap_supabase_profile($1::uuid) AS id', [USER_A]);
+    const second = await svc!.query('SELECT public.bootstrap_supabase_profile($1::uuid) AS id', [USER_A]);
+    expect(first.rows[0].id).toBe(USER_A);
+    expect(second.rows[0].id).toBe(USER_A);
+
+    const profile = await svc!.query(
+      'SELECT default_currency, status, supabase_user_id FROM profiles WHERE id = $1', [USER_A],
+    );
+    expect(profile.rows[0]).toMatchObject({
+      default_currency: 'EUR',
+      status: 'active',
+      supabase_user_id: USER_A,
+    });
 
     const accounts = await svc!.query('SELECT currency_code, balance FROM accounts WHERE profile_id = $1', [USER_A]);
     expect(accounts.rows).toHaveLength(1);
     expect(accounts.rows[0]).toMatchObject({ currency_code: 'EUR' });
     expect(Number(accounts.rows[0].balance)).toBe(0);
+
+    const userB = await svc!.query('SELECT public.bootstrap_supabase_profile($1::uuid) AS id', [USER_B]);
+    expect(userB.rows[0].id).toBe(USER_B);
+    const gb = await svc!.query('SELECT default_currency FROM profiles WHERE id = $1', [USER_B]);
+    expect(gb.rows[0].default_currency).toBe('GBP');
+  });
+
+  it('links a confirmed Auth user to the existing legacy profile without changing its financial ownership', async () => {
+    await svc!.query(
+      `INSERT INTO profiles (id, email, full_name, first_name, last_name, country_code, default_currency)
+       VALUES ($1, 'legacy@example.com', 'Legacy Customer', 'Legacy', 'Customer', 'DE', 'EUR')`,
+      [LEGACY_PROFILE],
+    );
+    await svc!.query(
+      `INSERT INTO accounts (profile_id, currency_code) VALUES ($1, 'EUR')`,
+      [LEGACY_PROFILE],
+    );
+    await svc!.query(
+      `INSERT INTO auth.users (id, email, email_confirmed_at)
+       VALUES ($1::uuid, 'legacy@example.com', now())`,
+      [LEGACY_AUTH_USER],
+    );
+
+    const linked = await svc!.query(
+      'SELECT public.bootstrap_supabase_profile($1::uuid) AS id', [LEGACY_AUTH_USER],
+    );
+    expect(linked.rows[0].id).toBe(LEGACY_PROFILE);
+
+    const profile = await svc!.query(
+      'SELECT id, supabase_user_id FROM profiles WHERE email = $1', ['legacy@example.com'],
+    );
+    expect(profile.rows[0]).toMatchObject({ id: LEGACY_PROFILE, supabase_user_id: LEGACY_AUTH_USER });
+
+    const accounts = await svc!.query('SELECT profile_id FROM accounts WHERE profile_id = $1', [LEGACY_PROFILE]);
+    expect(accounts.rows).toHaveLength(1);
+
+    // The Auth UUID must resolve to the legacy canonical profile id inside RLS.
+    const legacyUser = await asUser(LEGACY_AUTH_USER);
+    try {
+      const visibleProfile = await legacyUser.query('SELECT id FROM profiles');
+      expect(visibleProfile.rows).toEqual([{ id: LEGACY_PROFILE }]);
+    } finally {
+      await legacyUser.end().catch(() => undefined);
+    }
+  });
+
+  it('refuses to bootstrap an Auth identity until its email is confirmed', async () => {
+    const unverifiedId = '00000000-0000-4000-8000-000000000008';
+    await svc!.query(
+      `INSERT INTO auth.users (id, email, raw_user_meta_data)
+       VALUES ($1::uuid, 'unverified@example.com', '{}'::jsonb)`,
+      [unverifiedId],
+    );
+    await expect(
+      svc!.query('SELECT public.bootstrap_supabase_profile($1::uuid)', [unverifiedId]),
+    ).rejects.toThrow('AUTH_EMAIL_NOT_VERIFIED');
+    const profile = await svc!.query('SELECT id FROM profiles WHERE email = $1', ['unverified@example.com']);
+    expect(profile.rows).toHaveLength(0);
   });
 });
 
@@ -282,8 +424,6 @@ describe('deposit state machine', () => {
     expect(cancelled.rows[0].cancel_deposit.status).toBe('cancelled');
 
     // Another user's deposit cannot be cancelled.
-    await svc!.query('SELECT bootstrap_profile($1,$2,$3,$4,$5)',
-      [USER_B, 'b@example.com', 'Ben Brown', '', 'GB']);
     await expect(svc!.query('SELECT cancel_deposit($1,$2)', [USER_B, reference2]))
       .rejects.toThrow('DEPOSIT_NOT_FOUND');
   });
@@ -347,7 +487,7 @@ describe('Row Level Security (two-user isolation)', () => {
   });
 });
 
-describe('profile anonymization (Clerk user.deleted)', () => {
+describe('profile anonymization (Supabase Auth identity deletion)', () => {
   it('clears PII but retains financial records', async () => {
     const txBefore = await svc!.query('SELECT count(*)::int AS n FROM transactions WHERE profile_id = $1', [USER_A]);
     expect(txBefore.rows[0].n).toBeGreaterThan(0);
@@ -409,16 +549,14 @@ describe('receiving bank accounts seed', () => {
 });
 
 describe('admin_credit_deposit_payment RPC', () => {
-  const DEP_USER = 'user_dep_test_a';
+  const DEP_USER = '00000000-0000-4000-8000-000000000004';
   let accountId: string;
   let bankId: string;
   let depositId: string;
 
   beforeAll(async () => {
-    // Bootstrap a test customer with an EUR account
-    await svc!.query(`SELECT bootstrap_profile($1, $2, $3, $4, $5)`, [
-      DEP_USER, 'dep-a@example.com', 'Deposit', 'Tester', 'DE',
-    ]);
+    // Bootstrap a verified Supabase Auth customer with an EUR account
+    await bootstrapTestUser(DEP_USER, 'dep-a@example.com', 'Deposit', 'Tester', 'DE');
     // bootstrap may already create EUR; ensure active
     const acc = await svc!.query(
       `SELECT id FROM accounts WHERE profile_id = $1 AND currency_code = 'EUR' LIMIT 1`,
@@ -544,15 +682,13 @@ describe('admin_credit_deposit_payment RPC', () => {
 });
 
 describe('process_internal_refund RPC', () => {
-  const REF_USER = 'user_ref_test_a';
+  const REF_USER = '00000000-0000-4000-8000-000000000005';
   let accountId: string;
   let originalTxnId: string;
   let originalRef: string;
 
   beforeAll(async () => {
-    await svc!.query(`SELECT bootstrap_profile($1, $2, $3, $4, $5)`, [
-      REF_USER, 'ref-a@example.com', 'Refund', 'Tester', 'DE',
-    ]);
+    await bootstrapTestUser(REF_USER, 'ref-a@example.com', 'Refund', 'Tester', 'DE');
     const acc = await svc!.query(
       `SELECT id FROM accounts WHERE profile_id = $1 AND currency_code = 'EUR' LIMIT 1`,
       [REF_USER],
@@ -631,10 +767,10 @@ describe('process_internal_refund RPC', () => {
 
 describe('customer isolation on deposits', () => {
   it('customer A cannot read customer B deposit rows via RLS', async () => {
-    const USER_X = 'user_iso_x';
-    const USER_Y = 'user_iso_y';
-    await svc!.query(`SELECT bootstrap_profile($1, $2, $3, $4, $5)`, [USER_X, 'x@example.com', 'X', 'User', 'DE']);
-    await svc!.query(`SELECT bootstrap_profile($1, $2, $3, $4, $5)`, [USER_Y, 'y@example.com', 'Y', 'User', 'DE']);
+    const USER_X = '00000000-0000-4000-8000-000000000006';
+    const USER_Y = '00000000-0000-4000-8000-000000000007';
+    await bootstrapTestUser(USER_X, 'x@example.com', 'X', 'User', 'DE');
+    await bootstrapTestUser(USER_Y, 'y@example.com', 'Y', 'User', 'DE');
 
     const accX = await svc!.query(`SELECT id FROM accounts WHERE profile_id = $1 AND currency_code = 'EUR'`, [USER_X]);
     await svc!.query(
@@ -646,8 +782,9 @@ describe('customer isolation on deposits', () => {
     // Simulate JWT claims for USER_Y
     const y = await connect();
     try {
-      await y.query(`SELECT set_config('request.jwt.claim.sub', $1, true)`, [USER_Y]);
       await y.query(`SET ROLE authenticated`);
+      await y.query(`SELECT set_config('request.jwt.claims', $1, true)`,
+        [JSON.stringify({ sub: USER_Y, role: 'authenticated' })]);
       // Depending on RLS policies, either 0 rows or error — never USER_X data
       const rows = await y.query(`SELECT * FROM deposits WHERE profile_id = $1`, [USER_X]);
       expect(rows.rows).toHaveLength(0);
