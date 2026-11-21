@@ -1,12 +1,11 @@
-/** Customer profile endpoints (permitted-field patch, sessions via Clerk). */
+/** Customer profile endpoints (permitted-field patch and preferences). */
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireAuth } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { getServiceClient, getUserClient } from '../services/supabase.service';
-import { listSessions, revokeSession } from '../services/clerk.service';
 import { auditAllowed } from '../services/audit.service';
-import { badRequest, notFound, ok } from '../utils/httpError';
+import { notFound, ok } from '../utils/httpError';
 
 export const profileRouter = Router();
 
@@ -15,7 +14,7 @@ profileRouter.use(requireAuth);
 profileRouter.get('/profile', async (req, res, next) => {
   try {
     // Read through the user-scoped client: RLS enforces row ownership.
-    const db = getUserClient(req.auth!.clerkJwt);
+    const db = getUserClient(req.auth!.supabaseJwt);
     const { data, error } = await db.from('profiles').select('*').eq('id', req.auth!.userId).maybeSingle();
     if (error) throw new Error(error.message);
     if (!data) throw notFound('Profile not found — please contact support.');
@@ -60,19 +59,3 @@ profileRouter.patch('/profile', validate(patchSchema), async (req, res, next) =>
   } catch (err) { next(err); }
 });
 
-profileRouter.get('/profile/sessions', async (req, res, next) => {
-  try {
-    const sessions = await listSessions(req.auth!.userId);
-    ok(res, sessions, 'Active sessions');
-  } catch (err) { next(err); }
-});
-
-profileRouter.delete('/profile/sessions/:sessionId', async (req, res, next) => {
-  try {
-    if (!/^[a-zA-Z0-9_]+$/.test(req.params.sessionId)) throw badRequest('Invalid session id.');
-    await revokeSession(req.auth!.userId, req.params.sessionId);
-    await auditAllowed(req.auth!.userId, 'session.revoke', { type: 'session', id: req.params.sessionId },
-      undefined, { ip: req.ip, userAgent: req.get('user-agent') });
-    ok(res, { revoked: req.params.sessionId }, 'Session revoked');
-  } catch (err) { next(err); }
-});
