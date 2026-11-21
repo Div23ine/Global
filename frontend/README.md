@@ -13,13 +13,14 @@ cd frontend && python3 -m http.server 4173
 ```
 
 ## Configure
-Edit `js/config.js` (or create gitignored `js/config.local.js` defining
-`window.MG_LOCAL_CONFIG`) and set:
-- `API_BASE_URL` — backend base, e.g. `https://api.example.com/api/v1`
+Inject these public values before `js/config.js` loads in both `app.html` and
+`admin.html` (or use the deployment's build-time config injection step):
+- `API_BASE_URL` — backend base, e.g. `https://global.primeage.workers.dev/api/v1`
 - `SUPABASE_URL` and `SUPABASE_ANON_KEY` — public browser configuration values
 
-Without configuration, `app.html` and `admin.html` render an explicit
-configuration screen — they never fall back to simulated data.
+The Supabase anon/publishable key is intended for browser use. The Supabase
+service-role key must never appear in frontend code. Without configuration,
+`app.html` and `admin.html` render an explicit screen and never use simulated data.
 
 ## Structure
 ```
