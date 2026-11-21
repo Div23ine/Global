@@ -5,6 +5,14 @@ this project follows semantic versioning at release time.
 
 ## [Unreleased]
 
+### Changed
+- Authentication provider: replace Clerk with Supabase Auth for customer and admin identity.
+- API bearer-token validation now uses Supabase Auth getUser; authorization maps Auth UUIDs to canonical Meridian profile IDs.
+- Migration 0007 preserves existing financial ownership while linking confirmed Supabase Auth identities and migrating admin role IDs.
+- Replace Clerk session/password controls with Supabase Auth password recovery and scoped session sign-out.
+- Remove Clerk lifecycle webhooks, browser/backend clients and Clerk/Svix runtime dependencies.
+- Enable the Cloudflare Node.js HTTP server compatibility flag used by the Express Worker; deployment remains pending.
+
 ### Added
 - Cloudflare Workers deployment for the API (`backend/src/worker.ts`, `wrangler.toml`)
 - Resend email service: bank-details assignment, deposit credited, refund completed
