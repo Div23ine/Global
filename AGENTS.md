@@ -32,7 +32,7 @@ deposits stay `PENDING` and **no payment may ever be manufactured as successful*
 - Architecture: React 18 via CDN + Babel Standalone in HTML entry files (no
   Next.js, no frontend build step for the initial implementation); Node.js +
   TypeScript + Express backend on Oracle Cloud VM; Supabase PostgreSQL;
-  Clerk authentication; Twilio SMS; Cloudflare Pages + Cloudflare DNS.
+  Supabase Auth; Twilio SMS; Cloudflare Pages + Cloudflare DNS.
 
 ## 2. Repository map
 
@@ -210,15 +210,14 @@ cd prototype && python3 -m http.server 4174
 ## 9. Environment variables
 
 Backend (`backend/.env`, never committed; see `backend/.env.example`):
-`PORT`, `NODE_ENV`, `CORS_ORIGIN`, `CLERK_SECRET_KEY`, `CLERK_PUBLISHABLE_KEY`,
-`CLERK_WEBHOOK_SIGNING_SECRET`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`,
+`PORT`, `NODE_ENV`, `CORS_ORIGIN`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`,
 `SUPABASE_SERVICE_ROLE_KEY`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`,
 `TWILIO_FROM_NUMBER`, `RATE_LIMIT_*`, `LOG_LEVEL`.
 
 Frontend (`frontend/js/config.js`, non-secret values only):
-`API_BASE_URL`, `CLERK_PUBLISHABLE_KEY`. Clerk publishable keys are public by
-design; Clerk secret keys and Supabase service-role keys are server-side only
-and must never appear in `frontend/`.
+`API_BASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`. The Supabase anon/publishable
+key is public by design; the Supabase service-role key is server-side only and
+must never appear in `frontend/`.
 
 ## 10. Continuity contract
 
