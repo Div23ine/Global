@@ -110,9 +110,10 @@ or comma-separated list of origins. Confirm the Cloudflare rate-limit bindings
 are configured for the Worker.
 
 The Worker entry point uses node:http.createServer() through
-cloudflare:node/httpServerHandler. Keep both nodejs_compat and
-enable_nodejs_http_server_modules in compatibility_flags. The latter is part
-of the pending Worker 1101 fix on the current feature branch.
+cloudflare:node/httpServerHandler. Keep nodejs_compat,
+enable_nodejs_http_modules and enable_nodejs_http_server_modules in
+compatibility_flags. The two HTTP flags enable the client and server APIs
+used by the Node HTTP adapter; the server flag was part of the Worker 1101 fix.
 
 After review and explicit deployment approval:
 
