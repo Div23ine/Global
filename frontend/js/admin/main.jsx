@@ -76,14 +76,14 @@
         if (profile) setProfile(null);
         return;
       }
-      if (!profile) {
+      if (!profile && route.view !== 'reset-password') {
         MGA.api.overview().then(function () {
           setProfile({ admin: true });
         }).catch(function (err) {
           setProfile({ admin: false, error: err });
         });
       }
-    }, [MG.auth.state.signedIn, profile]);
+    }, [MG.auth.state.signedIn, profile, route.view]);
 
     /* close drawer + reset scroll on every route change */
     useEffect(function () {
@@ -125,6 +125,7 @@
         h(SignInInline),
         h(MG.ui.ToastHost));
     }
+    if (route.view === 'reset-password') return h(UpdatePasswordInline);
     if (!profile) {
       return h('div', { className: 'auth-viewport' },
         h('div', { className: 'auth-wrap' },
@@ -282,6 +283,45 @@
                 busy ? 'Signing in…' : 'Sign in')),
             h('button', { type: 'button', className: 'btn btn-ghost btn-block',
               disabled: busy, onClick: recover }, 'Forgot password?')))));
+  }
+
+  function UpdatePasswordInline() {
+    var _p = React.useState(''); var password = _p[0]; var setPassword = _p[1];
+    var _b = React.useState(false); var busy = _b[0]; var setBusy = _b[1];
+    var _e = React.useState(''); var error = _e[0]; var setError = _e[1];
+    var _m = React.useState(''); var message = _m[0]; var setMessage = _m[1];
+
+    function submit(event) {
+      event.preventDefault(); setBusy(true); setError(''); setMessage('');
+      MG.auth.updatePassword(password).then(function (result) {
+        if (result.error) throw result.error;
+        setMessage('Password updated. You can continue to the administration console.');
+        setPassword('');
+        setTimeout(function () { location.hash = '#/dashboard'; }, 900);
+      }).catch(function (err) { setError(err.message || 'Could not update your password.'); })
+        .finally(function () { setBusy(false); });
+    }
+
+    return h('div', { className: 'auth-viewport' },
+      h('div', { className: 'auth-wrap' },
+        h('div', { className: 'auth-card' },
+          h('div', { className: 'auth-head' },
+            h('span', { className: 'auth-ic', 'aria-hidden': 'true',
+              dangerouslySetInnerHTML: { __html: MG.ui.icon('shield-check', 26) } }),
+            h('h2', null, 'Choose a new password'),
+            h('p', null, 'Set a new password for your Meridian administrator account.')),
+          h('form', { onSubmit: submit },
+            h('div', { className: 'field' },
+              h('label', { htmlFor: 'admin-new-password' }, 'New password (minimum 8 characters)'),
+              h('input', { id: 'admin-new-password', className: 'input', type: 'password',
+                autoComplete: 'new-password', minLength: 8, required: true, value: password,
+                onChange: function (event) { setPassword(event.target.value); } })),
+            error ? h('p', { className: 'form-error', role: 'alert' }, error) : null,
+            message ? h('p', { className: 'form-success', role: 'status' }, message) : null,
+            h('button', { className: 'btn btn-primary btn-block', type: 'submit', disabled: busy },
+              busy ? 'Updating…' : 'Update password')),
+          h('p', { className: 'muted' },
+            'Your new password is managed by Supabase Auth; Meridian does not store it.'))));
   }
 
   ReactDOM.createRoot(document.getElementById('gl-app')).render(h(AdminApp));
