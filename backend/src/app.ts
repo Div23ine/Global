@@ -11,12 +11,17 @@ import cors from 'cors';
 import { randomUUID } from 'node:crypto';
 import { env } from './config/env';
 import { api, clerkWebhookRouter, paymentsWebhookRouter } from './routes';
-import { globalLimiter } from './middleware/rateLimit';
+import { globalLimiter, type RateLimitBindings } from './middleware/rateLimit';
 import { errorHandler, notFoundHandler } from './middleware/error';
 import { logger } from './utils/logger';
 
-export function createApp(): Express {
+export function createApp(rateLimitBindings?: RateLimitBindings): Express {
   const app = express();
+  app.locals.rateLimitBindings = rateLimitBindings ?? {};
+  // When called by the Worker, missing bindings must fail closed rather than
+  // silently falling back to per-isolate in-memory counters.
+  app.locals.requireCloudflareRateLimits = rateLimitBindings !== undefined;
+
   app.set('trust proxy', 1);
   app.disable('x-powered-by');
 
