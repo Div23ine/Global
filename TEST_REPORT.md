@@ -1,6 +1,6 @@
 # TEST REPORT — Meridian Global Accounts
 
-Date: 2026-11-20 · Branch: `development` · Runner: Vitest 2.1.9 on Node 24
+Historical baseline: 2026-11-20 · Branch: `development` · Runner: Vitest 2.1.9 on Node 24
 · Database: genuine PostgreSQL 18.7 (embedded-postgres) with the production
 migrations applied.
 
@@ -23,8 +23,8 @@ migrations applied.
 
 ## Backend integration tests — real PostgreSQL (L3)
 
-`tests/integration/database.test.ts` (12 tests). The suite boots a real
-PostgreSQL 18 server, applies the five production migrations, and exercises
+`tests/integration/database.test.ts` (12 tests). The pre-migration baseline suite booted a real
+PostgreSQL 18 server, applied the five migrations present at that time, and exercised
 the actual schema, triggers, RPCs and RLS:
 
 | Area | Tests | Verified behaviour |
@@ -63,9 +63,10 @@ Per AGENTS.md verification-ladder rules, the following are **not verified**
 because they require credentials or external services not present in this
 environment:
 
-1. **Live Clerk integration** — JWT verification, mounted sign-in, lifecycle
-   webhooks: unit-mocked only. Requires a Clerk instance (sandbox keys are an
-   external requirement).
+1. **Live Supabase Auth integration** — the current Supabase Auth migration has
+   not yet been tested against a live Supabase project. Token verification,
+   customer/admin sign-in, email confirmation, recovery, bans and deletion still
+   require real Supabase credentials and browser verification.
 2. **Live Supabase round-trips via supabase-js** — the SQL layer is verified
    against real PostgreSQL with the identical migrations; the PostgREST
    transport path is not.
@@ -76,8 +77,8 @@ environment:
    an external requirement.
 5. **Production build of the frontend** — none exists by design (no build
    step); the check.sh + browser verification covers the shipped artefacts.
-6. **Deployment** — no production DNS/VM operations were performed (owner
-   authorization required).
+6. **Deployment** — no production Worker or Pages deployment was performed
+   (owner authorization required).
 
 ## Reproduction commands
 
@@ -90,3 +91,34 @@ cd ../frontend && ./check.sh
 # Browser check: node /home/z/my-project/scripts/verify-frontend.cjs
 # (serves frontend/ on :4188, renders 12 pages, asserts 0 console errors)
 ```
+
+
+## Supabase Auth migration verification — 2026-11-21 (NOT RUN)
+
+The earlier PASS results above are historical baseline evidence from before the
+Supabase Auth migration. They do not verify the current feature branch.
+
+Changes prepared on fix/worker-http-server-compat:
+- Supabase Auth bearer tokens are checked using the Auth service getUser call.
+- Customer and admin login/signup/recovery/password update use Supabase Auth.
+- Legacy profile linking preserves profiles.id and existing financial ownership.
+- RLS maps auth.uid() through profiles.supabase_user_id.
+- Existing admin role assignments are renamed to canonical profile IDs and the
+  migration integration test seeds a legacy administrator before migration 0007.
+- The integration tests now cover confirmed-email bootstrap, legacy profile
+  linking, canonical profile ID visibility through RLS, unconfirmed-email denial
+  and preservation of an existing admin assignment.
+- Clerk browser/backend services, webhook route and package dependencies have
+  been removed from active production source.
+
+No current-branch check has been executed in this environment:
+- npm ci: NOT RUN
+- npm run typecheck: NOT RUN
+- npm run lint: NOT RUN
+- npm test: NOT RUN
+- frontend/check.sh: NOT RUN
+- browser/customer/admin Auth flows: NOT RUN
+- migration 0007 rehearsal on real Supabase: NOT RUN
+- preview or production deployment: NOT PERFORMED
+
+Do not reuse the historical test counts as a release gate for this branch.
