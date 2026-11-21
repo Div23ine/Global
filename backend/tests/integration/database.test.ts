@@ -90,6 +90,19 @@ beforeAll(async () => {
   // Apply production migrations in order (simple query protocol: multi-statement).
   const dir = join(__dirname, '../../migrations');
   for (const file of readdirSync(dir).filter((f) => f.endsWith('.sql')).sort()) {
+    // Seed a representative pre-Supabase-Auth administrator before migration
+    // 0007 renames the old identity key and installs its profile FK.
+    if (file === '0007_supabase_auth.sql') {
+      await svc.query(
+        `INSERT INTO profiles (id, email, full_name, first_name, last_name)
+         VALUES ('legacy_admin_profile', 'legacy-admin@example.com',
+                 'Legacy Admin', 'Legacy', 'Admin')`,
+      );
+      await svc.query(
+        `INSERT INTO admin_users (clerk_user_id, display_name, role_id)
+         VALUES ('legacy_admin_profile', 'Legacy Admin', 'super_admin')`,
+      );
+    }
     const sql = readFileSync(join(dir, file), 'utf8');
     await svc.query(sql);
   }
@@ -136,6 +149,19 @@ async function bootstrapTestUser(
 }
 
 describe('migrations + seed', () => {
+  it('preserves legacy admin assignments using canonical profile IDs', async () => {
+    const { rows } = await svc!.query(
+      'SELECT profile_id, role_id FROM admin_users WHERE profile_id = $1',
+      ['legacy_admin_profile'],
+    );
+    expect(rows).toEqual([{ profile_id: 'legacy_admin_profile', role_id: 'super_admin' }]);
+    const constraint = await svc!.query(
+      `SELECT COUNT(*)::int AS n FROM pg_constraint
+       WHERE conname = 'admin_users_profile_id_fkey'`,
+    );
+    expect(constraint.rows[0].n).toBe(1);
+  });
+
   it('applies the European currency set with EUR default and no NGN', async () => {
     const { rows } = await svc!.query('SELECT code FROM currencies ORDER BY display_order');
     expect(rows.map((r) => r.code)).toEqual(['EUR', 'GBP', 'USD', 'CHF', 'PLN']);
