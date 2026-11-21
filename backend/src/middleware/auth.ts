@@ -46,7 +46,7 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
   try {
     const header = req.headers.authorization;
     if (!header) throw unauthenticated();
-    const bearer = /^Bearer\\s+([^\\s]+)$/i.exec(header);
+    const bearer = /^Bearer\s+([^\s]+)$/i.exec(header);
     if (!bearer) throw unauthenticated();
 
     let claims: { sub: string; email?: string };
