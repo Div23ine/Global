@@ -21,7 +21,6 @@
     "cf:tail": "npx --yes wrangler@4.166.0 tail"
   },
   "dependencies": {
-    "@clerk/backend": "^1.20.0",
     "@supabase/supabase-js": "^2.45.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
@@ -29,7 +28,6 @@
     "express-rate-limit": "^7.4.0",
     "helmet": "^8.0.0",
     "pino": "^9.4.0",
-    "svix": "^1.40.0",
     "twilio": "^5.4.0",
     "zod": "^3.23.8"
   },
