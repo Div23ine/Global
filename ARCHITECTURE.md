@@ -1,235 +1,136 @@
 # ARCHITECTURE — Meridian Global Accounts
 
-Status: v1.0 (development branch) · Scope: full-stack upgrade of the approved
-frontend prototype into a production platform.
+Status: Supabase Auth migration prepared on fix/worker-http-server-compat; typecheck,
+integration tests, browser tests, migration rehearsal and live verification pending.
 
 ## 1. System overview
 
-```
-                        Cloudflare DNS + CDN/TLS
-                                  |
-             +--------------------+---------------------+
-             |                                          |
-     Cloudflare Pages                          Cloudflare Workers
-     (static frontend)                         (dedicated backend host)
-     frontend/                                 backend/ (Node.js + TS + Express)
-        index.html  (public site)                 REST API  /api/v1/*
-        app.html   (customer SPA)                 - Clerk JWT verification
-        admin.html (admin SPA)                    - Supabase access (user + service)
-        js/ + assets/                             - Twilio SMS notifications
-             |                                    - Clerk webhooks
-             |  fetch() + Bearer <Clerk JWT>       - Payment partner webhooks
-             +----------------------------------> |
-                                                        |
-                                               Supabase PostgreSQL
-                                               (managed database, RLS)
-                                                        |
-                                              Clerk (identity)  Twilio (SMS)
+```text
+Cloudflare Pages (static frontend)          Cloudflare Worker (Express API)
+  index.html / app.html / admin.html  --->  /api/v1/*
+  React 18 + Babel Standalone                - Supabase Auth token validation
+  Supabase JS browser client                 - canonical profile mapping
+              |                              - server-side admin permissions
+              | Bearer Supabase Auth JWT     - Supabase service/user-scoped access
+              v                              - signed payment-provider webhooks
+       Supabase Auth + PostgreSQL (RLS)       Resend / Twilio
 ```
 
-Key decisions and their rationale:
-
-| Decision | Choice | Why |
+| Decision | Choice | Rationale |
 |---|---|---|
-| Frontend framework | React 18 via CDN + Babel Standalone, HTML entry files | Client requirement: no build step for the initial implementation; simple to run and to deploy on Cloudflare Pages; preserves the prototype's no-tooling philosophy while giving a real component model. Migration path to Vite is prepared (section 8). |
-| Backend framework | Express 5 + TypeScript | Massive ecosystem, one framework only (no competing frameworks), mature middleware model for rate limiting / validation / error handling. |
-| Database | Supabase PostgreSQL (managed) | Client requirement. No database on the Worker; the API connects to Supabase over HTTPS. |
-| Auth | Clerk (system of record for identity) | Client requirement. Clerk owns registration, login, sessions, password recovery, email/phone verification, banning, deletion. The application never stores passwords. |
-| Auth-to-data link | Clerk JWT (Supabase JWT template) verified by backend; RLS keyed on `sub` claim | Defense in depth: the backend authorizes every request in code, and the database additionally enforces row ownership via RLS. |
-| SMS | Twilio (via Clerk for OTP, via backend for notifications) | Client requirement. One OTP system only (Clerk's); the backend sends transactional notifications. |
-| Public site | Static HTML pages (Design 02 visual language) | Marketing pages need no interactivity beyond the prototype's; static = fastest, SEO-friendly, zero JS runtime cost. |
-| Admin console | React CDN SPA (`admin.html`) | Same no-build philosophy; role-gated by backend `admin:*` endpoints. |
-| Design preservation | `theme.css` carried over from `prototype/customer/hongkong/assets/theme.css` | The approved design is the contract; production components reproduce the same classes and tokens. |
+| Frontend | React 18 via CDN + Babel Standalone | Static deployment and preservation of the approved Design 02 experience. |
+| Backend | Express 5 + TypeScript on Cloudflare Workers | One typed API surface and Cloudflare-native hosting. |
+| Database | Supabase PostgreSQL | Managed relational database, migrations, RLS and transactional money functions. |
+| Authentication | Supabase Auth | Email/password registration and sign-in, email confirmation, password recovery, password updates and Auth user administration. |
+| Auth-to-data link | Supabase Auth UUID → profiles.supabase_user_id → canonical profiles.id | Preserves existing financial foreign keys while allowing RLS to use auth.uid(). |
+| Notifications | Resend and Twilio | Supabase Auth SMTP handles verification/recovery mail separately from platform notifications. Twilio is transactional only in this design. |
+| Admin | React SPA with API-enforced role checks | UI gating is cosmetic; every privileged endpoint checks the profile role and permissions on the server. |
 
-## 2. Frontend architecture (`frontend/`)
+## 2. Frontend architecture
 
-```
+```text
 frontend/
-├── index.html                 public site home
-├── about.html ... privacy.html   public pages (10 total, static)
-├── app.html                   customer application (React CDN SPA)
-├── admin.html                 administrator console (React CDN SPA)
-├── assets/
-│   ├── theme.css              design system (Design 02, European adjustments)
-│   └── admin.css              admin console styles (Design 02 admin language)
-└── js/
-    ├── config.js              API_BASE_URL, CLERK_PUBLISHABLE_KEY (non-secret)
-    ├── services/
-    │   ├── clerk.js           ClerkJS loader, auth state, token provider
-    │   ├── http.js            fetch wrapper: envelopes, auth header, errors
-    │   └── api.js             typed-by-contract client for every REST resource
-    ├── components/
-    │   └── ui.jsx             Badge, Card, Table, Modal, Toast, Skeleton, Stat…
-    ├── app/
-    │   ├── shell.jsx          authed shell (sidenav, topbar, takeover-free)
-    │   └── views-*.jsx        customer views (overview, accounts, deposits…)
-    └── admin/
-        ├── shell.jsx          admin shell (sidebar, topbar, role gate)
-        └── views-*.jsx        admin views (users, deposits, audit…)
+  app.html / admin.html
+  js/config.js                 API_BASE_URL, SUPABASE_URL, SUPABASE_ANON_KEY
+  js/services/supabase-auth.js Supabase JS client, state, token, sign-in/up
+  js/services/http.js          bearer token, refresh, API envelope/errors
+  js/services/api.js           customer and admin API clients
+  js/app/                      customer views
+  js/admin/                    administrator views
 ```
 
-Rules:
-- Classic scripts (no ES modules) so Babel Standalone can transform them in
-  order; each file attaches to a single global namespace (`MG` for the app,
-  `MGA` for admin) — mirroring the prototype's `GL` pattern.
-- Views are React function components rendering the same DOM structure and
-  CSS classes as the prototype views, so `theme.css` continues to apply.
-- Auth views (sign-in / sign-up / profile management) mount Clerk's own
-  components via ClerkJS (`mountSignIn`, `mountSignUp`, `mountUserButton`).
-  The application does not reimplement credential flows.
-- Every data view implements: loading skeleton, empty state, error state,
-  populated state.
-- `js/services/http.js` is the only module allowed to call `fetch`. It attaches
-  the Clerk session token and normalizes the API envelope
-  (`{success, message, data, meta}`) and error codes.
-- Without configuration (missing `CLERK_PUBLISHABLE_KEY` or unreachable API),
-  `app.html` renders an explicit configuration screen — never fake data.
+The Supabase browser SDK is loaded before supabase-auth.js. Browser configuration
+contains only the Supabase project URL and anon/publishable key. The service-role
+key is backend-only and must never be placed in HTML, JavaScript, or public Pages
+configuration.
 
-## 3. Backend architecture (`backend/`)
+Customer and administrator sign-in use Supabase Auth email/password. Registration
+requires email confirmation. Password recovery and password changes use Supabase
+Auth. The API client obtains the current access token from Supabase Auth and sends
+it as an Authorization: Bearer token.
 
-```
-backend/src/
-├── server.ts                 bootstrap: env validation, HTTP server, graceful shutdown
-├── app.ts                    Express app assembly (order: security → parsing →
-│                             rate limit → routes → 404 → error handler)
-├── config/env.ts             typed environment, fails fast in production
-├── middleware/
-│   ├── auth.ts               requireAuth (Clerk JWT), requireAdmin(role…)
-│   ├── validate.ts           Zod schema validation per route
-│   ├── rateLimit.ts          per-IP and per-user limits
-│   ├── audit.ts              audit context attachment
-│   └── error.ts              uniform error envelope, no stack leaks
-├── routes/
-│   ├── health.routes.ts      GET /api/v1/health (liveness + readiness)
-│   ├── profile.routes.ts     GET/PATCH /api/v1/profile
-│   ├── accounts.routes.ts    GET /accounts, /accounts/:currency, POST activate
-│   ├── deposits.routes.ts    POST /deposits, GET /deposits
-│   ├── transactions.routes.ts GET /transactions, /transactions/:reference
-│   ├── statements.routes.ts  GET /statements, /statements/:id
-│   ├── notifications.routes.ts GET/PATCH /notifications
-│   ├── support.routes.ts     tickets + messages
-│   ├── webhooks.routes.ts    POST /webhooks/clerk, /webhooks/payments/:provider
-│   └── admin.routes.ts       admin surface (users, currencies, deposits,
-│                             transactions, security, reports, roles, audit,
-│                             settings, notifications)
-├── services/
-│   ├── clerk.service.ts      Clerk Backend API client (users, bans, deletion)
-│   ├── supabase.service.ts   user-scoped client (RLS) + service client (system)
-│   ├── twilio.service.ts     SMS with rate limit, retry, logging (no codes logged)
-│   ├── deposits.service.ts   deposit lifecycle + ledger posting (transactional)
-│   ├── statement.service.ts  statement generation over ledger entries
-│   ├── notifications.service.ts in-app notifications + optional SMS fan-out
-│   └── audit.service.ts      append-only audit log writer
-└── utils/                    logger (structured JSON), pagination, money, time
-```
+Session controls support local sign-out, sign-out of other sessions, and global
+sign-out. A detailed device/session inventory and per-session revocation screen
+are not implemented. MFA enrollment and challenge screens are not implemented
+and must not be represented as enabled in Meridian.
 
-Cross-cutting concerns:
-- **API envelope**: success `{success:true, message, data, meta}` — carried over
-  from the prototype contract so the frontend response handling stays familiar;
-  errors `{success:false, code, message}` with stable codes
-  (`INVALID_CREDENTIALS`, `FORBIDDEN`, `VALIDATION_ERROR`, `CURRENCY_UNAVAILABLE`,
-  `NON_ZERO_BALANCE`, `RATE_LIMITED`, …).
-- **Idempotency**: all POST endpoints that create money-adjacent records accept
-  an `Idempotency-Key` header; deposit creation is idempotent by reference.
-- **Pagination**: cursor-free page/page-size with totals (matches the prototype
-  UI); the schema supports migrating to cursors later.
-- **Rate limiting**: in-memory buckets per IP+route, with a Redis-ready interface.
-- **Audit**: every administrative action, every denied attempt, every webhook
-  event → `audit_logs` (append-only; RLS denies client writes).
-- **Webhook signature verification**: Clerk (svix) and payment providers
-  (per-provider secret) verified before any processing; unverified → 401 + log.
-- **Background jobs**: minimal in-process scheduler (statement generation,
-  SMS retries); designed to move to a worker when load justifies it.
+Without API_BASE_URL, SUPABASE_URL or SUPABASE_ANON_KEY, the app displays an
+explicit configuration screen; it never falls back to simulated account data.
 
-## 4. Identity architecture (Clerk)
+## 3. Backend authentication and authorization
 
-- Clerk is the **only** credential authority. The backend never sees passwords.
-- **JWT verification**: every protected route verifies the Clerk session JWT
-  (`@clerk/backend` `verifyToken` with the Clerk JWKS). The token's `sub` is
-  the user's primary key across the system (`profiles.id`).
-- **Roles**: `admin_users` (Supabase) maps Clerk user ids to admin roles
-  (`super_admin`, `support`, `compliance`, `finance_readonly`). The backend
-  resolves the role per request after JWT verification. Clerk `publicMetadata`
-  mirrors the role for quick UI hints only — never as the authorization source.
-- **Lifecycle webhooks** (`/webhooks/clerk`):
-  - `user.created` → seed `profiles` row (idempotent upsert) + default-currency
-    account per country mapping.
-  - `user.updated` → sync email/name/phone fields.
-  - `user.deleted` → **anonymize** the profile (retain the row and its id) and
-    keep financial/audit records under the pseudonymized id; mark
-    `deleted_at`. Financial audit records are never auto-erased.
-- **Ban/unban**: enforced through Clerk's Backend API (`ban`/`unban`), mirrored
-  to `profiles.status` by the admin endpoint in the same operation. A banned
-  user loses their Clerk session immediately.
-- **Sessions / MFA / password flows**: owned by Clerk; the customer app embeds
-  Clerk components; the backend treats a valid JWT as proof of session.
+Each protected API request follows this sequence:
 
-## 5. Data architecture (Supabase)
+1. Read the Authorization Bearer access token.
+2. Call Supabase Auth getUser(accessToken) so the token is checked by the Auth
+   service; do not authorize from locally decoded JWT claims alone.
+3. Resolve the Auth UUID against profiles.supabase_user_id. If no mapping exists,
+   call the service-role-only bootstrap_supabase_profile(uuid) RPC.
+4. Require a confirmed email at bootstrap and require the linked profile to have
+   status = active on every request.
+5. Attach the canonical profiles.id, Supabase Auth UUID, verified email and
+   verified JWT to the Express request context.
+6. For admin routes, resolve admin_users.profile_id and the associated
+   admin_roles.permissions on the server. Deny by default.
 
-See `DATABASE_DESIGN.md` for the full schema. Core invariants:
+The verified Supabase JWT is forwarded by the user-scoped Supabase client, so
+PostgreSQL RLS applies to customer-facing reads. The service-role client is
+confined to backend code and privileged operations after code-level
+authorization.
 
-1. **Ledger is the source of truth.** `transactions` rows are immutable ledger
-   entries. `accounts.balance` is a cached projection maintained in the same
-   database transaction as the ledger entry (trigger + service-level double
-   posting under `SELECT ... FOR UPDATE`).
-2. **Money**: `numeric(19,4)`; no floats anywhere in the money path.
-3. **Ownership**: every user-facing row carries `profile_id uuid` referencing
-   `profiles(id)` (= Clerk `sub`). RLS policies compare
-   `auth.jwt() ->> 'sub'`.
-4. **Deposits never auto-succeed.** `deposits.status` transitions:
-   `PENDING → COMPLETED | FAILED | CANCELLED` only via a signed payment
-   partner webhook (or an explicit provider SDK callback). There is no admin
-   endpoint that confirms a deposit.
-5. **Audit append-only**: `audit_logs` has INSERT granted only to the service
-   role; no UPDATE/DELETE policies exist; RLS denies client reads except for
-   administrators.
+## 4. Identity mapping and legacy customer continuity
 
-## 6. Security architecture
+- auth.users.id is the Supabase Auth UUID.
+- profiles.supabase_user_id is a unique nullable FK to auth.users(id).
+- profiles.id remains the canonical Meridian profile key. Existing values
+  are preserved exactly; new profiles use the Supabase Auth UUID as text.
+- Migration 0007_supabase_auth.sql links an Auth user to an unlinked legacy
+  profile only when the Auth email is confirmed and matches the profile email.
+- A link does not change profiles.id or any account, transaction, deposit,
+  statement, notification, support, security-event or audit ownership key.
+- If there is no legacy profile, the service-only bootstrap RPC creates a new
+  profile and its zero-balance default-currency account.
+- admin_users.profile_id identifies the canonical Meridian profile, not the
+  provider-specific Auth UUID.
+- public.app_current_user_id() maps auth.uid() to an active canonical profile
+  ID. Existing RLS policies call this helper.
+- Deletion removes the Auth identity, clears the mapping, anonymizes profile
+  PII and retains financial records attached to the canonical profile.
 
-- TLS everywhere (Cloudflare edge for frontend and Workers API).
-- Security headers (helmet), strict CORS (single origin), body size caps,
-  request timeouts.
-- Deny-by-default authorization; every route declares its policy.
-- Secrets only in the VM environment; `.env.example` documents every variable.
-- Rate limits on auth-adjacent, SMS and mutation endpoints.
-- Structured logs with request ids; the never-log list: passwords, tokens,
-  keys, full card/account numbers, session cookies, authorization headers.
-- See `SECURITY_REVIEW.md` for the STRIDE analysis of each surface.
+Clerk passwords are not imported. Existing customers must establish and confirm
+a Supabase Auth identity using the same verified email address so that the
+backend can link it to their existing Meridian profile. Accounts with changed,
+duplicated or inaccessible email addresses need a controlled support recovery
+process; they must not be linked by an unverified email or by a browser-supplied
+profile ID.
 
-## 7. Deployment architecture
+## 5. Domain invariants
 
-- **Frontend** → Cloudflare Pages (project linked to the GitHub repository,
-  build: none, output dir `frontend`). Environment variables:
-  `API_BASE_URL`, `CLERK_PUBLISHABLE_KEY`.
-- **Backend** → Oracle Cloud VM: Node 20 LTS, `npm ci && npm run build`,
-  systemd unit (`meridian-api.service`), reverse proxy (Caddy or nginx) with
-  TLS, `/api/v1/*` only; VM firewall limited to 80/443 + SSH.
-- **Database** → Supabase project with point-in-time recovery enabled;
-  migrations applied in order via Supabase's SQL tooling; backups per
-  `DEPLOYMENT_GUIDE.md`.
-- Detailed runbook: `DEPLOYMENT_GUIDE.md`.
+1. Meridian is a platform account product, not a bank. Real money movement
+   requires an appropriately licensed financial partner.
+2. Money uses numeric(19,4); balances are derived from posted ledger entries.
+3. Deposits never auto-succeed. Only a signed provider webhook may complete
+   a deposit and post its ledger transaction.
+4. Audit logs are append-only and written through the service-role backend.
+5. Profile status is checked on every authenticated API request, so suspensions,
+   bans and deletions block requests even while an access JWT remains unexpired.
+6. Admin authorization is checked server-side on every privileged request.
 
-## 8. Prepared migration path (not performed in this stage)
+## 6. Deployment and external requirements
 
-The frontend keeps all logic in framework-agnostic modules
-(`js/services/*.js` have zero React imports). Migration to Vite:
+- Frontend: Cloudflare Pages, static directory frontend/.
+- Backend: Cloudflare Worker named global, configured from backend/wrangler.toml.
+- Database and identity: Supabase PostgreSQL and Supabase Auth.
+- Worker secrets: SUPABASE_URL, SUPABASE_ANON_KEY and
+  SUPABASE_SERVICE_ROLE_KEY. Optional Resend, Twilio and payment secrets are
+  configured only when those integrations are enabled.
+- Frontend public config: API_BASE_URL, SUPABASE_URL and SUPABASE_ANON_KEY.
+- Auth email confirmation and password-recovery SMTP are configured in Supabase
+  Auth; Resend remains for Meridian platform notification messages.
+- Migration 0007 must be rehearsed against a production-like backup and reviewed
+  before production application because it changes the admin identity column and
+  installs the Supabase Auth profile link.
+- Supabase Auth MFA UI, detailed session inventory, live email delivery,
+  production migration rehearsal and live deployment verification remain open.
 
-1. `npm create vite@latest` with the React template;
-2. copy `js/**` as-is; convert `MG.App` root into `src/main.jsx`;
-3. replace Babel Standalone script tags with an entry bundling the same files
-   in the same order;
-4. swap `type="text/babel"` for `.jsx` modules with explicit imports.
-
-No application logic changes are required by design.
-
-## 9. External requirements (to be confirmed — not invented)
-
-| Item | Status |
-|---|---|
-| European operating jurisdiction (license, entity, regulator) | **OPEN** — required before any real money movement; product is configurable by country |
-| Licensed payment partner for deposits/settlement | **OPEN** — `PaymentProvider` interface implemented; partner contract required |
-| Clerk production instance + SMTP/SMS providers | Configurable via environment; sandbox keys needed for E2E tests |
-| Supabase production project | Migrations ready; project provisioning required |
-| Twilio production numbers + messaging service | Credentials required |
-| Cloudflare account/zone + Pages project | DNS migration is a change-controlled operation |
-| Cloudflare API token + account ID | Workers + Pages deploy |
+See SECURITY_REVIEW.md, DATABASE_DESIGN.md and DEPLOYMENT_GUIDE.md.
