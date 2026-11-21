@@ -11,68 +11,162 @@
     var txns = MG.ui.useAsync(function () { return MG.api.transactions({ pageSize: 6 }); }, []);
     var notifs = MG.ui.useAsync(function () { return MG.api.notifications(); }, []);
 
-    // Track unread for the sidebar badge.
     React.useEffect(function () {
-      if (notifs.data) MG.app.unreadCount = notifs.meta && notifs.meta.unread ? notifs.meta.unread : 0;
+      if (notifs.data) {
+        var unread = (notifs.meta && notifs.meta.unread != null)
+          ? notifs.meta.unread
+          : (notifs.data || []).filter(function (n) { return !n.read_at; }).length;
+        MG.app.unreadCount = unread;
+      }
     }, [notifs.data]);
 
-    if (accounts.loading) return h('div', { className: 'view-stack' },
-      h(MG.ui.LoadingPanel), h(MG.ui.LoadingPanel));
-    if (accounts.error) return h(MG.ui.ErrorPanel, { error: accounts.error, onRetry: function () { location.reload(); } });
+    if (accounts.loading) {
+      return h('div', { className: 'view-stack' },
+        h('div', { className: 'ov-hero skeleton-block', style: { minHeight: 160 } }),
+        h(MG.ui.LoadingPanel), h(MG.ui.LoadingPanel));
+    }
+    if (accounts.error) {
+      return h(MG.ui.ErrorPanel, { error: accounts.error, onRetry: function () { location.reload(); } });
+    }
 
     var list = accounts.data || [];
-    var totalEur = list.reduce(function (acc, a) { return acc + (Number(a.equivalent_eur) || 0); }, 0);
+    var totalEur = list.reduce(function (acc, a) {
+      return acc + (Number(a.equivalent_eur) || Number(a.balance) || 0);
+    }, 0);
+    var activeCount = list.filter(function (a) { return a.status === 'active'; }).length;
+    var recent = txns.data || [];
+    var notifPreview = (notifs.data || []).slice(0, 4);
+
+    var chips = list.map(function (a) {
+      return h('a', { key: a.id, className: 'ov-chip', href: '#/account/' + a.currency_code },
+        h('b', { 'aria-hidden': 'true' }, (a.currency_symbol || a.currency_code || '').slice(0, 2)),
+        a.currency_code);
+    });
 
     return h('div', { className: 'view-stack' },
-      h('div', { className: 'panel hero-panel' },
-        h('small', null, 'TOTAL BALANCE · EUR EQUIVALENT (INDICATIVE)'),
-        h('b', { className: 'hero-balance' }, MG.util.money(totalEur, 'EUR')),
-        h('div', { className: 'hero-actions' },
-          h('a', { className: 'btn btn-primary', href: '#/deposits' }, 'Deposit'),
-          h('a', { className: 'btn btn-ghost', href: '#/activate' }, 'Activate currency'))),
-      h('div', { className: 'grid-3' },
+      /* Hero */
+      h('section', { className: 'ov-hero', 'aria-label': 'Total balance' },
+        h('div', { className: 'ov-hero-glow', 'aria-hidden': 'true' }),
+        h('div', { className: 'ov-hero-main' },
+          h('p', { className: 'ov-label' },
+            MG.icon ? MG.icon('wallet', 15) : null, ' Total balance · EUR equivalent (indicative)'),
+          h('p', { className: 'ov-total' }, MG.util.money(totalEur, 'EUR')),
+          h('p', { className: 'ov-sub' },
+            'Across ' + list.length + ' currency account' + (list.length === 1 ? '' : 's') +
+            (activeCount ? ' · ' + activeCount + ' active' : '')),
+          chips.length ? h('div', { className: 'ov-chips' }, chips) : null),
+        h('div', { className: 'ov-hero-side' },
+          h('a', { className: 'btn btn-primary', href: '#/deposits' },
+            MG.icon ? MG.icon('arrow-up', 15) : null, ' Deposit'),
+          h('a', { className: 'btn btn-outline', href: '#/activate' },
+            MG.icon ? MG.icon('plus', 15) : null, ' Activate currency'))),
+
+      /* Stats row */
+      h('div', { className: 'stat-row' },
+        h('div', { className: 'stat-card' },
+          h('div', { className: 'stat-info' },
+            h('span', { className: 'stat-ic', 'aria-hidden': 'true' }, MG.icon ? MG.icon('wallet', 17) : null),
+            h('div', null,
+              h('p', { className: 'stat-label' }, 'Active currencies'),
+              h('p', { className: 'stat-val' }, String(activeCount)),
+              h('p', { className: 'stat-sub' }, 'of ' + list.length + ' opened')))),
+        h('div', { className: 'stat-card' },
+          h('div', { className: 'stat-info' },
+            h('span', { className: 'stat-ic', 'aria-hidden': 'true' }, MG.icon ? MG.icon('receipt', 17) : null),
+            h('div', null,
+              h('p', { className: 'stat-label' }, 'Recent activity'),
+              h('p', { className: 'stat-val' }, String(recent.length)),
+              h('p', { className: 'stat-sub' }, 'latest ledger entries')))),
+        h('div', { className: 'stat-card' },
+          h('div', { className: 'stat-info' },
+            h('span', { className: 'stat-ic', 'aria-hidden': 'true' }, MG.icon ? MG.icon('bell', 17) : null),
+            h('div', null,
+              h('p', { className: 'stat-label' }, 'Notifications'),
+              h('p', { className: 'stat-val' }, String(MG.app.unreadCount || 0)),
+              h('p', { className: 'stat-sub' }, 'unread')))),
+        h('div', { className: 'stat-card' },
+          h('div', { className: 'stat-info' },
+            h('span', { className: 'stat-ic', 'aria-hidden': 'true' }, MG.icon ? MG.icon('shield', 17) : null),
+            h('div', null,
+              h('p', { className: 'stat-label' }, 'Security'),
+              h('p', { className: 'stat-val' }, 'Protected'),
+              h('p', { className: 'stat-sub' }, 'Clerk session active'))))),
+
+      /* Currency cards */
+      h('section', { 'aria-label': 'Currency accounts' },
+        h('div', { className: 'section-head' },
+          h('h2', { className: 'section-title' }, 'Your currencies'),
+          h('a', { className: 'text-link', href: '#/accounts' }, 'View all →')),
         list.length === 0
-          ? h('div', { className: 'panel', style: { gridColumn: '1/-1' } },
-              h(MG.ui.Empty, {
-                title: 'No currency accounts yet',
-                hint: 'Your default currency account is created during registration. If it is missing, contact support.',
-                action: h('a', { className: 'btn btn-primary', href: '#/activate' }, 'Activate a currency') }))
-          : list.map(function (a) {
-              return h('div', { key: a.id, className: 'stat-card cur-stat' },
-                h('small', null, a.currency_code + ' · ' + (a.currency_name || '')),
-                h('b', null, MG.util.money(a.balance, a.currency_code)),
-                h('span', { className: 'stat-hint' },
-                  (a.txn_count || 0) + ' transactions · opened ' + MG.util.date(a.opened_at)));
-            })),
-      h(MG.ui.Card, { title: 'Recent transactions', action: h('a', { className: 'text-link', href: '#/transactions' }, 'View all →') },
-        txns.loading ? h(MG.ui.Skeleton, { lines: 4 })
-          : (txns.data || []).length === 0
-            ? h(MG.ui.Empty, { title: 'No transactions yet',
-                hint: 'Your ledger entries will appear here after your first confirmed deposit.' })
-            : h(MG.ui.Table, {
-                columns: [{ label: 'Reference' }, { label: 'Description' }, { label: 'Amount', right: true }, { label: 'Status' }, { label: 'Date' }],
-                rows: txns.data || [],
-                renderRow: function (t) {
-                  return h('tr', { key: t.id },
-                    h('td', null, h('a', { href: '#/txn/' + t.reference }, t.reference)),
-                    h('td', null, t.description || '—'),
-                    h('td', { style: { textAlign: 'right' } },
-                      (t.direction === 'credit' ? '+' : '-') + MG.util.money(t.amount, t.currency_code)),
-                    h('td', null, h(MG.ui.Badge, { status: t.status })),
-                    h('td', null, MG.util.date(t.created_at)));
-                },
-              })),
-      h(MG.ui.Card, { title: 'Notifications preview', action: h('a', { className: 'text-link', href: '#/notifications' }, 'All notifications →') },
-        notifs.loading ? h(MG.ui.Skeleton, { lines: 3 })
-          : (notifs.data || []).length === 0
-            ? h(MG.ui.Empty, { title: 'Nothing yet', hint: 'Deposit and security updates will appear here.' })
-            : h('ul', { className: 'mini-list' },
-                (notifs.data || []).slice(0, 3).map(function (n) {
-                  return h('li', { key: n.id, className: n.read_at ? '' : 'unread' },
-                    h('b', null, n.title),
-                    h('span', null, n.body),
-                    h('small', null, MG.util.timeAgo(n.created_at)));
-                }))));
+          ? h(MG.ui.Empty, {
+              title: 'No currencies yet',
+              hint: 'Activate your first currency to get started.',
+              action: h('a', { className: 'btn btn-primary', href: '#/activate' }, 'Activate a currency'),
+            })
+          : h('div', { className: 'curcards' }, list.map(function (a) {
+              return h('a', { key: a.id, className: 'curcard', href: '#/account/' + a.currency_code },
+                h('div', { className: 'curcard-head' },
+                  h('span', { className: 'curcard-sym', 'aria-hidden': 'true' },
+                    a.currency_symbol || a.currency_code),
+                  h('div', null,
+                    h('b', null, a.currency_code),
+                    h('small', null, a.currency_name || '')),
+                  h(MG.ui.Badge, { status: a.status })),
+                h('p', { className: 'curcard-bal' }, MG.util.money(a.balance, a.currency_code)),
+                a.equivalent_eur != null
+                  ? h('p', { className: 'curcard-eq' }, '≈ ' + MG.util.money(a.equivalent_eur, 'EUR'))
+                  : null,
+                h('span', { className: 'curcard-link' },
+                  MG.icon ? MG.icon('arrow-r', 14) : null, ' View account'));
+            }))),
+
+      /* Two-column: recent txns + notifications */
+      h('div', { className: 'ov-grid' },
+        h(MG.ui.Card, {
+          title: 'Recent transactions',
+          action: h('a', { className: 'text-link', href: '#/transactions' }, 'View all →'),
+        },
+          txns.loading ? h(MG.ui.Skeleton, { lines: 4 })
+            : recent.length === 0
+              ? h(MG.ui.Empty, { title: 'No transactions yet', hint: 'Confirmed deposits appear here as ledger entries.' })
+              : h(MG.ui.Table, {
+                  columns: [
+                    { label: 'Reference' },
+                    { label: 'Amount', right: true },
+                    { label: 'Status' },
+                    { label: 'Date' },
+                  ],
+                  rows: recent,
+                  renderRow: function (t) {
+                    var neg = t.direction === 'debit';
+                    return h('tr', { key: t.id },
+                      h('td', null,
+                        h('a', { href: '#/txn/' + encodeURIComponent(t.reference) }, t.reference)),
+                      h('td', {
+                        className: 'td-amount ' + (neg ? 'neg' : 'pos'),
+                        style: { textAlign: 'right' },
+                      }, (neg ? '−' : '+') + MG.util.money(t.amount, t.currency_code)),
+                      h('td', null, h(MG.ui.Badge, { status: t.status })),
+                      h('td', null, MG.util.date(t.created_at || t.value_date)));
+                  },
+                })),
+        h(MG.ui.Card, {
+          title: 'Notifications',
+          action: h('a', { className: 'text-link', href: '#/notifications' }, 'Open centre →'),
+        },
+          notifs.loading ? h(MG.ui.Skeleton, { lines: 3 })
+            : notifPreview.length === 0
+              ? h(MG.ui.Empty, { title: 'All clear', hint: 'Deposit and security updates will appear here.' })
+              : h('ul', { className: 'notif-list' }, notifPreview.map(function (n) {
+                  return h('li', {
+                    key: n.id,
+                    className: 'notif-item' + (n.read_at ? '' : ' is-unread'),
+                  },
+                    h('div', { className: 'notif-body' },
+                      h('b', null, n.title),
+                      h('p', null, n.body),
+                      h('small', { className: 'muted' }, MG.util.date(n.created_at))));
+                })))));
   };
 
   /* -------------------------------------------------------------- accounts */
@@ -82,20 +176,31 @@
     if (state.error) return h(MG.ui.ErrorPanel, { error: state.error, onRetry: function () { location.hash = '#/accounts'; location.reload(); } });
     var list = state.data || [];
     return h('div', { className: 'view-stack' },
+      h('div', { className: 'section-head' },
+        h('div', null,
+          h('h2', { className: 'section-title' }, 'Currency accounts'),
+          h('p', { className: 'muted' }, 'Each currency has its own balance and transaction history.')),
+        h('a', { className: 'btn btn-primary btn-sm', href: '#/activate' },
+          MG.icon ? MG.icon('plus', 14) : null, ' Activate currency')),
       list.length === 0
         ? h(MG.ui.Card, null, h(MG.ui.Empty, {
             title: 'No accounts yet', hint: 'Activate your first currency to get started.',
             action: h('a', { className: 'btn btn-primary', href: '#/activate' }, 'Activate a currency') }))
-        : h('div', { className: 'grid-2' }, list.map(function (a) {
-            return h(MG.ui.Card, { key: a.id, className: 'acc-card' },
-              h('div', { className: 'acc-head' },
+        : h('div', { className: 'curcards' }, list.map(function (a) {
+            return h('a', { key: a.id, className: 'curcard', href: '#/account/' + a.currency_code },
+              h('div', { className: 'curcard-head' },
+                h('span', { className: 'curcard-sym', 'aria-hidden': 'true' }, a.currency_symbol || a.currency_code),
                 h('div', null,
-                  h('h3', null, a.currency_code, ' ', h('small', { className: 'muted' }, a.currency_name || '')),
-                  h(MG.ui.Badge, { status: a.status })),
-                h('b', { className: 'acc-balance' }, MG.util.money(a.balance, a.currency_code))),
-              h('p', { className: 'muted' },
-                (a.txn_count || 0) + ' transactions · opened ' + MG.util.date(a.opened_at)),
-              h('a', { className: 'btn btn-ghost btn-sm', href: '#/account/' + a.currency_code }, 'View account →'));
+                  h('b', null, a.currency_code),
+                  h('small', null, a.currency_name || '')),
+                h(MG.ui.Badge, { status: a.status })),
+              h('p', { className: 'curcard-bal' }, MG.util.money(a.balance, a.currency_code)),
+              a.equivalent_eur != null
+                ? h('p', { className: 'curcard-eq' }, '≈ ' + MG.util.money(a.equivalent_eur, 'EUR'))
+                : h('p', { className: 'curcard-eq muted' },
+                    (a.txn_count || 0) + ' transactions · opened ' + MG.util.date(a.opened_at)),
+              h('span', { className: 'curcard-link' },
+                MG.icon ? MG.icon('arrow-r', 14) : null, ' View account'));
           })));
   };
 

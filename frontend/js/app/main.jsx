@@ -53,20 +53,20 @@
   /* ------------------------------------------------------------------ shell */
   var NAV = [
     { group: 'Banking', items: [
-      { id: 'overview', label: 'Overview', icon: '◧' },
-      { id: 'accounts', label: 'My Accounts', icon: '◎' },
-      { id: 'activate', label: 'Activate Currency', icon: '⚡' },
-      { id: 'deposits', label: 'Deposits', icon: '⇄' },
-      { id: 'transactions', label: 'Transactions', icon: '≡' },
-      { id: 'statements', label: 'Statements', icon: '🗂' },
+      { id: 'overview', label: 'Overview', icon: 'dashboard' },
+      { id: 'accounts', label: 'Accounts', icon: 'wallet' },
+      { id: 'activate', label: 'Activate currency', icon: 'plus' },
+      { id: 'deposits', label: 'Deposits', icon: 'arrow-up' },
+      { id: 'transactions', label: 'Transactions', icon: 'receipt' },
+      { id: 'statements', label: 'Statements', icon: 'doc' },
     ] },
     { group: 'Account', items: [
-      { id: 'notifications', label: 'Notifications', icon: '🔔' },
-      { id: 'profile', label: 'Profile', icon: '👤' },
-      { id: 'security', label: 'Security', icon: '🛡' },
-      { id: 'sessions', label: 'Login Sessions', icon: '📱' },
-      { id: 'support', label: 'Support', icon: '💬' },
-      { id: 'settings', label: 'Settings', icon: '⚙' },
+      { id: 'notifications', label: 'Notifications', icon: 'bell' },
+      { id: 'profile', label: 'Profile', icon: 'user' },
+      { id: 'security', label: 'Security', icon: 'shield' },
+      { id: 'sessions', label: 'Sessions', icon: 'clock' },
+      { id: 'support', label: 'Support', icon: 'life' },
+      { id: 'settings', label: 'Settings', icon: 'settings' },
     ] },
   ];
 
@@ -101,52 +101,79 @@
     var title = TITLES[route.view] || (route.view === 'account' ? 'Currency Account'
       : route.view === 'txn' ? 'Transaction Detail' : 'Meridian');
     var View = props.resolveView(route);
+    var unread = MG.app.unreadCount || 0;
+    var email = (user && (user.primaryEmailAddress && user.primaryEmailAddress.emailAddress)) || (user && user.email) || '';
+    var displayName = (user && (user.fullName || user.firstName)) || 'Customer';
 
     return h(React.Fragment, null,
       h('div', { className: 'shell' + (drawer ? ' nav-open' : '') },
-        h('aside', { className: 'sidenav', 'aria-label': 'Application' },
-          h('a', { className: 'side-brand', href: 'index.html' },
-            h('span', { className: 'brand-mark brand-mark-light', 'aria-hidden': 'true' }, '◎'),
-            h('span', { className: 'brand-text brand-text-side' }, 'Meridian ', h('small', null, 'GLOBAL ACCOUNTS'))),
-          NAV.map(function (group) {
-            return h('div', { key: group.group, className: 'nav-group' },
-              h('p', { className: 'nav-label' }, group.group),
-              group.items.map(function (item) {
-                return h('a', {
-                  key: item.id,
-                  className: 'nav-item' + (route.view === item.id ? ' active' : ''),
-                  href: '#/' + item.id,
-                  onClick: function () { setDrawer(false); },
-                },
-                h('span', { className: 'nav-ic', 'aria-hidden': 'true' }, item.icon),
-                item.label,
-                item.id === 'notifications' && MG.app.unreadCount > 0
-                  ? h('span', { className: 'nav-badge' }, MG.app.unreadCount > 9 ? '9+' : MG.app.unreadCount)
-                  : null);
-              }));
-          }),
-          h('button', {
-            className: 'nav-item nav-signout',
-            onClick: function () { MG.clerk.signOut(); },
-          }, h('span', { className: 'nav-ic', 'aria-hidden': 'true' }, '⎋'), 'Sign out')),
+        h('aside', { className: 'sidenav', id: 'gl-sidenav', 'aria-label': 'Account navigation' },
+          h('div', { className: 'sidenav-brand' },
+            h('a', { href: 'index.html', className: 'brand brand-side' },
+              h('span', { className: 'brand-mark brand-mark-light', 'aria-hidden': 'true' }, '◎'),
+              h('span', { className: 'brand-text' }, 'Meridian', h('small', null, ' GLOBAL ACCOUNTS')))),
+          h('nav', { className: 'sidenav-nav' },
+            NAV.map(function (group) {
+              return h(React.Fragment, { key: group.group },
+                h('p', { className: 'nav-group' }, group.group),
+                group.items.map(function (item) {
+                  var isActive = route.view === item.id || (item.id === 'accounts' && route.view === 'account');
+                  return h('a', {
+                    key: item.id,
+                    className: 'nav-item' + (isActive ? ' active' : ''),
+                    href: '#/' + item.id,
+                    onClick: function () { setDrawer(false); },
+                  },
+                    MG.icon ? MG.icon(item.icon, 17) : null,
+                    h('span', null, item.label),
+                    item.id === 'notifications' && unread > 0
+                      ? h('span', { className: 'nav-badge' }, unread > 9 ? '9+' : String(unread))
+                      : null);
+                }));
+            })),
+          h('div', { className: 'sidenav-foot' },
+            h('div', { className: 'sidenav-user' },
+              h('span', { className: 'avatar', 'aria-hidden': 'true' }, MG.util.initials(displayName)),
+              h('div', { className: 'sidenav-user-txt' },
+                h('b', null, displayName),
+                h('small', null, email || 'Signed in'))),
+            h('button', {
+              className: 'btn btn-outline btn-sm sidenav-out',
+              type: 'button',
+              onClick: function () { MG.clerk.signOut(); },
+            }, MG.icon ? MG.icon('logout', 15) : null, ' Sign out'))),
+
         h('div', { className: 'shell-main' },
           h('header', { className: 'topbar' },
             h('button', {
-              className: 'icon-btn nav-burger', 'aria-label': 'Open navigation',
+              className: 'icon-btn menu-btn',
+              type: 'button',
+              'aria-expanded': drawer ? 'true' : 'false',
+              'aria-controls': 'gl-sidenav',
+              'aria-label': drawer ? 'Close navigation' : 'Open navigation',
               onClick: function () { setDrawer(!drawer); },
-            }, '☰'),
-            h('h1', { id: 'gl-viewtitle', tabIndex: -1 }, title),
-            h('div', { className: 'topbar-right' },
-              h('a', { className: 'icon-btn', href: '#/notifications', 'aria-label': 'Notifications' }, '🔔'),
-              h('div', { className: 'user-chip' },
-                h('span', { className: 'avatar', 'aria-hidden': 'true' }, MG.util.initials(user.fullName)),
-                h('span', { className: 'user-chip-name' }, user.fullName)))),
+            }, MG.icon ? MG.icon('menu', 20) : '☰'),
+            h('h1', { className: 'topbar-title', id: 'gl-viewtitle', tabIndex: -1 }, title),
+            h('div', { className: 'topbar-actions' },
+              h('a', {
+                className: 'icon-btn topbar-bell',
+                href: '#/notifications',
+                'aria-label': unread ? ('Notifications, ' + unread + ' unread') : 'Notifications',
+              },
+                MG.icon ? MG.icon('bell', 19) : '🔔',
+                unread > 0 ? h('span', { className: 'nav-badge' }, unread > 9 ? '9+' : String(unread)) : null),
+              h('a', { className: 'topbar-chip', href: '#/profile', title: displayName },
+                h('span', { className: 'avatar avatar-sm', 'aria-hidden': 'true' }, MG.util.initials(displayName)),
+                h('span', { className: 'topbar-chip-name' }, displayName.split(' ')[0])))),
+
           h('main', { className: 'content', id: 'gl-main' },
             h(View, { route: route, user: user }))),
+
         h('div', {
           className: 'scrim' + (drawer ? '' : ' is-hidden'),
           onClick: function () { setDrawer(false); },
           hidden: !drawer,
+          'aria-hidden': 'true',
         })));
   }
 

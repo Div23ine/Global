@@ -1734,3 +1734,73 @@ td b { font-weight: 700; }
   .mock-chip-float { animation: none; }
   .preview-chip .dot { animation: none; }
 }
+
+
+/* --------------------------------------------------------------------------
+   Restoration utilities — align React app with Hong Kong prototype composition
+   -------------------------------------------------------------------------- */
+.section-head {
+  display: flex; align-items: flex-end; justify-content: space-between; gap: 16px;
+  margin-bottom: 14px; flex-wrap: wrap;
+}
+.section-title {
+  font: 800 18px/1.25 var(--font-display); letter-spacing: -.02em; color: var(--ink); margin: 0;
+}
+.stat-row {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px;
+}
+@media (max-width: 1100px) {
+  .stat-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) {
+  .stat-row { grid-template-columns: 1fr; }
+}
+.ov-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.ov-chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px;
+  border-radius: var(--r-pill); background: rgba(255,255,255,.12); color: #E8F0FF;
+  font: 600 12px var(--font-body); border: 1px solid rgba(255,255,255,.14);
+  transition: background .15s var(--ease);
+}
+.ov-chip:hover { background: rgba(255,255,255,.2); color: #fff; }
+.ov-chip b { font-size: 13px; }
+.ov-grid {
+  display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 16px;
+}
+@media (max-width: 960px) {
+  .ov-grid { grid-template-columns: 1fr; }
+}
+.notif-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.notif-item {
+  padding: 12px 14px; border-radius: var(--r-card); border: 1px solid var(--line);
+  background: var(--surface);
+}
+.notif-item.is-unread { border-color: #BFD5F5; background: #F5F9FF; }
+.notif-body b { display: block; font: 700 13.5px var(--font-body); margin-bottom: 4px; }
+.notif-body p { margin: 0 0 6px; font-size: 13px; color: var(--ink-2, var(--ink)); line-height: 1.45; }
+.gl-ic-wrap svg { display: block; }
+.brand-side { display: flex; align-items: center; gap: 10px; text-decoration: none; color: inherit; }
+.brand-side .brand-text { font: 800 14px var(--font-display); color: #fff; letter-spacing: -.01em; }
+.brand-side .brand-text small { display: block; font: 600 9.5px/1.2 var(--font-body); letter-spacing: .12em; color: #8FA3C7; }
+.topbar-chip {
+  display: inline-flex; align-items: center; gap: 8px; padding: 4px 10px 4px 4px;
+  border-radius: var(--r-pill); background: var(--surface); border: 1px solid var(--line);
+  text-decoration: none; color: var(--ink); font: 600 13px var(--font-body);
+}
+.topbar-chip:hover { border-color: #BFD5F5; }
+.avatar-sm { width: 28px; height: 28px; font-size: 11px; }
+.nav-open .sidenav { transform: translateX(0); }
+.menu-btn { display: none; }
+@media (max-width: 900px) {
+  .shell { grid-template-columns: 1fr; }
+  .sidenav {
+    position: fixed; inset: 0 auto 0 0; width: min(280px, 88vw);
+    transform: translateX(-105%); transition: transform .22s var(--ease); z-index: 120;
+  }
+  .nav-open .sidenav { transform: translateX(0); }
+  .menu-btn { display: inline-flex; }
+  .scrim {
+    position: fixed; inset: 0; background: rgba(8, 16, 36, .45); z-index: 110;
+  }
+  .scrim.is-hidden { display: none; }
+}
