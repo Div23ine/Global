@@ -2,7 +2,7 @@
    MERIDIAN ADMIN — Hong Kong International Fintech (Design 2)
    admin main.jsx — Application shell
 
-   Hash router, admin session gate (Clerk auth + admin role check),
+   Hash router, admin session gate (Supabase Auth + server-side admin role check),
    dark-navy grouped sidebar with icons, topbar with preview chip and
    user chip, mobile off-canvas drawer, toast host + confirm provider.
    ========================================================================== */
@@ -63,29 +63,33 @@
 
     useEffect(function () {
       MG.api.init();
-      MG.clerk.load().then(function () { setAuth({ ready: true, error: null }); })
+      MG.auth.load().then(function () { setAuth({ ready: true, error: null }); })
         .catch(function (err) { setAuth({ ready: true, error: err }); });
-      var off = MG.clerk.onChange(function () { force(function (x) { return x + 1; }); });
+      var off = MG.auth.onChange(function () { force(function (x) { return x + 1; }); });
       var onHash = function () { setRoute(parseHash()); };
       window.addEventListener('hashchange', onHash);
       return function () { off(); window.removeEventListener('hashchange', onHash); };
     }, []);
 
     useEffect(function () {
-      if (MG.clerk.state.signedIn && !profile) {
+      if (!MG.auth.state.signedIn) {
+        if (profile) setProfile(null);
+        return;
+      }
+      if (!profile) {
         MGA.api.overview().then(function () {
           setProfile({ admin: true });
         }).catch(function (err) {
           setProfile({ admin: false, error: err });
         });
       }
-    }, [MG.clerk.state.signedIn, profile]);
+    }, [MG.auth.state.signedIn, profile]);
 
     /* close drawer + reset scroll on every route change */
     useEffect(function () {
       setNavOpen(false);
       window.scrollTo(0, 0);
-      if (titleRef.current && MG.clerk.state.signedIn) {
+      if (titleRef.current && MG.auth.state.signedIn) {
         titleRef.current.focus({ preventScroll: true });
       }
     }, [route.view, route.param]);
@@ -101,7 +105,7 @@
         h('div', { className: 'auth-wrap' },
           h('div', { className: 'auth-card' },
             h('h1', null, 'Configuration required'),
-            h('p', { className: 'muted' }, 'Set CLERK_PUBLISHABLE_KEY and API_BASE_URL in js/config.js.'))));
+            h('p', { className: 'muted' }, 'Set SUPABASE_URL and SUPABASE_ANON_KEY and API_BASE_URL in js/config.js.'))));
     }
     if (!auth.ready) {
       return h('div', { className: 'auth-viewport' },
@@ -116,7 +120,7 @@
             h('p', { className: 'muted' }, 'The identity service could not be loaded.'),
             h('button', { className: 'btn btn-primary', onClick: function () { location.reload(); } }, 'Retry'))));
     }
-    if (!MG.clerk.state.signedIn) {
+    if (!MG.auth.state.signedIn) {
       return h(MG.ui.ConfirmProvider, null,
         h(SignInInline),
         h(MG.ui.ToastHost));
@@ -135,7 +139,7 @@
                 dangerouslySetInnerHTML: { __html: MG.ui.icon('shield', 26) } }),
               h('h2', null, 'Not an administrator'),
               h('p', null, 'This account does not hold an administrative role. Access attempts are logged.')),
-            h('button', { className: 'btn btn-ghost btn-block', onClick: function () { MG.clerk.signOut(); } },
+            h('button', { className: 'btn btn-ghost btn-block', onClick: function () { MG.auth.signOut({ scope: 'local' }); } },
               h(MG.ui.Icon, { name: 'logout', size: 15 }), ' Sign out'))));
     }
 
@@ -151,7 +155,7 @@
             h(MG.ui.Icon, { name: 'dashboard', size: 15 }), ' Back to dashboard')));
     };
 
-    var adminName = (MG.clerk.state.user && MG.clerk.state.user.fullName) || 'Administrator';
+    var adminName = (MG.auth.state.user && MG.auth.state.user.fullName) || 'Administrator';
 
     return h(MG.ui.ConfirmProvider, null,
       h('div', { className: 'shell' + (navOpen ? ' nav-open' : '') },
@@ -187,7 +191,7 @@
                 h('b', null, adminName),
                 h('small', null, 'Administrator'))),
             h('button', { type: 'button', className: 'btn btn-outline btn-sm sidenav-out',
-              onClick: function () { MG.clerk.signOut(); } },
+              onClick: function () { MG.auth.signOut({ scope: 'local' }); } },
               h('span', { 'aria-hidden': 'true',
                 dangerouslySetInnerHTML: { __html: MG.ui.icon('logout', 15) } }),
               ' Sign out'),
@@ -210,7 +214,7 @@
                 h('span', { className: 'user-chip-name' }, adminName),
                 h('span', { className: 'user-chip-role' }, 'ADMIN')),
               h('button', { type: 'button', className: 'icon-btn',
-                onClick: function () { MG.clerk.signOut(); },
+                onClick: function () { MG.auth.signOut({ scope: 'local' }); },
                 title: 'Sign out', 'aria-label': 'Sign out' },
                 h(MG.ui.Icon, { name: 'logout', size: 17 })))),
           h('main', { className: 'content', id: 'gl-main' },
@@ -220,10 +224,33 @@
   }
 
   function SignInInline() {
-    var ref = useRef(null);
-    useEffect(function () {
-      if (ref.current) MG.clerk.mountSignIn(ref.current, { fallbackRedirectUrl: 'admin.html' });
-    }, []);
+    var _e = React.useState(''); var email = _e[0]; var setEmail = _e[1];
+    var _p = React.useState(''); var password = _p[0]; var setPassword = _p[1];
+    var _b = React.useState(false); var busy = _b[0]; var setBusy = _b[1];
+    var _x = React.useState(''); var error = _x[0]; var setError = _x[1];
+    var _m = React.useState(''); var message = _m[0]; var setMessage = _m[1];
+
+    function submit(event) {
+      event.preventDefault(); setBusy(true); setError(''); setMessage('');
+      MG.auth.signIn(email, password).then(function (result) {
+        if (result.error) throw result.error;
+      }).catch(function (err) { setError(err.message || 'Sign in failed.'); })
+        .finally(function () { setBusy(false); });
+    }
+
+    function recover() {
+      if (!email) {
+        setError('Enter your email address first.');
+        return;
+      }
+      setBusy(true); setError(''); setMessage('');
+      MG.auth.resetPassword(email).then(function (result) {
+        if (result.error) throw result.error;
+        setMessage('If the address is registered, a password-reset link will arrive by email.');
+      }).catch(function (err) { setError(err.message || 'Could not send the reset email.'); })
+        .finally(function () { setBusy(false); });
+    }
+
     return h('div', { className: 'auth-viewport' },
       h('div', { className: 'auth-wrap' },
         h('main', null,
@@ -237,8 +264,24 @@
               h('span', { className: 'auth-ic', 'aria-hidden': 'true',
                 dangerouslySetInnerHTML: { __html: MG.ui.icon('shield-check', 26) } }),
               h('h2', null, 'Administrator sign in'),
-              h('p', null, 'Meridian Global Accounts \u00B7 operations console')),
-            h('div', { ref: ref, style: { width: '100%', maxWidth: '420px', margin: '0 auto' } })))));
+              h('p', null, 'Meridian Global Accounts · operations console')),
+            h('form', { onSubmit: submit },
+              h('div', { className: 'field' },
+                h('label', { htmlFor: 'admin-email' }, 'Email address'),
+                h('input', { id: 'admin-email', className: 'input', type: 'email', required: true,
+                  autoComplete: 'email', value: email,
+                  onChange: function (event) { setEmail(event.target.value); } })),
+              h('div', { className: 'field' },
+                h('label', { htmlFor: 'admin-password' }, 'Password'),
+                h('input', { id: 'admin-password', className: 'input', type: 'password', required: true,
+                  autoComplete: 'current-password', value: password,
+                  onChange: function (event) { setPassword(event.target.value); } })),
+              error ? h('p', { className: 'form-error', role: 'alert' }, error) : null,
+              message ? h('p', { className: 'form-success', role: 'status' }, message) : null,
+              h('button', { className: 'btn btn-primary btn-block', type: 'submit', disabled: busy },
+                busy ? 'Signing in…' : 'Sign in')),
+            h('button', { type: 'button', className: 'btn btn-ghost btn-block',
+              disabled: busy, onClick: recover }, 'Forgot password?')))));
   }
 
   ReactDOM.createRoot(document.getElementById('gl-app')).render(h(AdminApp));
