@@ -387,3 +387,272 @@ describe('account close guard', () => {
     )).rejects.toThrow('non-zero balance');
   });
 });
+
+/* -------------------------------------------------------------------------- */
+/* Deposit & refund upgrade (migration 0006)                                  */
+/* -------------------------------------------------------------------------- */
+
+describe('receiving bank accounts seed', () => {
+  it('seeds one active receiving account per supported currency', async () => {
+    const rows = await svc!.query(
+      `SELECT currency_code, count(*)::int AS n
+         FROM receiving_bank_accounts
+        WHERE is_active = true
+        GROUP BY currency_code
+        ORDER BY currency_code`,
+    );
+    const byCode = Object.fromEntries(rows.rows.map((r) => [r.currency_code, r.n]));
+    for (const code of ['EUR', 'GBP', 'USD', 'CHF', 'PLN']) {
+      expect(byCode[code], `missing bank for ${code}`).toBeGreaterThanOrEqual(1);
+    }
+  });
+});
+
+describe('admin_credit_deposit_payment RPC', () => {
+  const DEP_USER = 'user_dep_test_a';
+  let accountId: string;
+  let bankId: string;
+  let depositId: string;
+
+  beforeAll(async () => {
+    // Bootstrap a test customer with an EUR account
+    await svc!.query(`SELECT bootstrap_profile($1, $2, $3, $4, $5)`, [
+      DEP_USER, 'dep-a@example.com', 'Deposit', 'Tester', 'DE',
+    ]);
+    // bootstrap may already create EUR; ensure active
+    const acc = await svc!.query(
+      `SELECT id FROM accounts WHERE profile_id = $1 AND currency_code = 'EUR' LIMIT 1`,
+      [DEP_USER],
+    );
+    if (acc.rows.length === 0) {
+      await svc!.query(
+        `INSERT INTO accounts (profile_id, currency_code, status, balance)
+         VALUES ($1, 'EUR', 'active', 0)`,
+        [DEP_USER],
+      );
+    }
+    const a2 = await svc!.query(
+      `SELECT id FROM accounts WHERE profile_id = $1 AND currency_code = 'EUR'`,
+      [DEP_USER],
+    );
+    accountId = a2.rows[0].id as string;
+
+    const bank = await svc!.query(
+      `SELECT id FROM receiving_bank_accounts WHERE currency_code = 'EUR' AND is_active LIMIT 1`,
+    );
+    bankId = bank.rows[0].id as string;
+  });
+
+  it('creates a deposit request and credits a partial payment atomically', async () => {
+    const ref = `MGD-TEST-${Date.now()}`;
+    const ins = await svc!.query(
+      `INSERT INTO deposits (
+         reference, profile_id, account_id, currency_code, amount, requested_amount,
+         received_amount, credited_amount, fee, method, status, assigned_bank_id, assigned_at
+       ) VALUES (
+         $1, $2, $3, 'EUR', 1000.0000, 1000.0000, 0, 0, 0, 'bank_transfer',
+         'awaiting_payment', $4, now()
+       ) RETURNING id`,
+      [ref, DEP_USER, accountId, bankId],
+    );
+    depositId = ins.rows[0].id as string;
+
+    // Partial credit of 400
+    const credit = await svc!.query(
+      `SELECT admin_credit_deposit_payment($1, $2, $3, $4, $5, $6, $7, $8) AS result`,
+      [depositId, 400, 'EUR', bankId, `BANK-TXN-${Date.now()}`, 'REF-PARTIAL', 'admin_test', 'partial test'],
+    );
+    const result = credit.rows[0].result;
+    expect(result.status).toBe('partially_fulfilled');
+    expect(Number(result.credited_this_payment)).toBe(400);
+    expect(Number(result.total_credited)).toBe(400);
+
+    const dep = await svc!.query(`SELECT status, credited_amount, received_amount FROM deposits WHERE id = $1`, [depositId]);
+    expect(dep.rows[0].status).toBe('partially_fulfilled');
+    expect(Number(dep.rows[0].credited_amount)).toBe(400);
+
+    const bal = await svc!.query(`SELECT balance FROM accounts WHERE id = $1`, [accountId]);
+    expect(Number(bal.rows[0].balance)).toBe(400);
+
+    // Second partial of 600 → completed
+    const credit2 = await svc!.query(
+      `SELECT admin_credit_deposit_payment($1, $2, $3, $4, $5, $6, $7, $8) AS result`,
+      [depositId, 600, 'EUR', bankId, `BANK-TXN-${Date.now()}-2`, 'REF-FULL', 'admin_test', 'remainder'],
+    );
+    expect(credit2.rows[0].result.status).toBe('completed');
+    expect(Number(credit2.rows[0].result.total_credited)).toBe(1000);
+
+    const bal2 = await svc!.query(`SELECT balance FROM accounts WHERE id = $1`, [accountId]);
+    expect(Number(bal2.rows[0].balance)).toBe(1000);
+  });
+
+  it('rejects duplicate bank transaction IDs', async () => {
+    const ref = `MGD-DUP-${Date.now()}`;
+    const ins = await svc!.query(
+      `INSERT INTO deposits (
+         reference, profile_id, account_id, currency_code, amount, requested_amount,
+         received_amount, credited_amount, fee, method, status, assigned_bank_id, assigned_at
+       ) VALUES (
+         $1, $2, $3, 'EUR', 100.0000, 100.0000, 0, 0, 0, 'bank_transfer',
+         'awaiting_payment', $4, now()
+       ) RETURNING id`,
+      [ref, DEP_USER, accountId, bankId],
+    );
+    const depId = ins.rows[0].id as string;
+    const txnId = `DUP-TXN-${Date.now()}`;
+
+    await svc!.query(
+      `SELECT admin_credit_deposit_payment($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [depId, 50, 'EUR', bankId, txnId, null, 'admin_test', null],
+    );
+
+    await expect(
+      svc!.query(
+        `SELECT admin_credit_deposit_payment($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [depId, 50, 'EUR', bankId, txnId, null, 'admin_test', null],
+      ),
+    ).rejects.toThrow(/DUPLICATE_BANK_TRANSACTION/);
+  });
+
+  it('caps credit at requested amount (overpayment protection)', async () => {
+    const ref = `MGD-OVER-${Date.now()}`;
+    const ins = await svc!.query(
+      `INSERT INTO deposits (
+         reference, profile_id, account_id, currency_code, amount, requested_amount,
+         received_amount, credited_amount, fee, method, status, assigned_bank_id, assigned_at
+       ) VALUES (
+         $1, $2, $3, 'EUR', 100.0000, 100.0000, 0, 0, 0, 'bank_transfer',
+         'awaiting_payment', $4, now()
+       ) RETURNING id`,
+      [ref, DEP_USER, accountId, bankId],
+    );
+    const depId = ins.rows[0].id as string;
+    const balBefore = await svc!.query(`SELECT balance FROM accounts WHERE id = $1`, [accountId]);
+    const before = Number(balBefore.rows[0].balance);
+
+    const credit = await svc!.query(
+      `SELECT admin_credit_deposit_payment($1, $2, $3, $4, $5, $6, $7, $8) AS result`,
+      [depId, 150, 'EUR', bankId, `OVER-${Date.now()}`, null, 'admin_test', 'overpay attempt'],
+    );
+    // Should cap at 100
+    expect(Number(credit.rows[0].result.credited_this_payment)).toBe(100);
+    expect(credit.rows[0].result.status).toBe('completed');
+
+    const balAfter = await svc!.query(`SELECT balance FROM accounts WHERE id = $1`, [accountId]);
+    expect(Number(balAfter.rows[0].balance)).toBe(before + 100);
+  });
+});
+
+describe('process_internal_refund RPC', () => {
+  const REF_USER = 'user_ref_test_a';
+  let accountId: string;
+  let originalTxnId: string;
+  let originalRef: string;
+
+  beforeAll(async () => {
+    await svc!.query(`SELECT bootstrap_profile($1, $2, $3, $4, $5)`, [
+      REF_USER, 'ref-a@example.com', 'Refund', 'Tester', 'DE',
+    ]);
+    const acc = await svc!.query(
+      `SELECT id FROM accounts WHERE profile_id = $1 AND currency_code = 'EUR' LIMIT 1`,
+      [REF_USER],
+    );
+    accountId = acc.rows[0].id as string;
+
+    // Post an original credit of 500 so we have something to refund
+    originalRef = `TXN-ORIG-${Date.now()}`;
+    const txn = await svc!.query(
+      `INSERT INTO transactions (
+         reference, account_id, profile_id, type, direction, amount, currency_code, description, status
+       ) VALUES ($1, $2, $3, 'deposit', 'credit', 500.0000, 'EUR', 'Original for refund tests', 'posted')
+       RETURNING id`,
+      [originalRef, accountId, REF_USER],
+    );
+    originalTxnId = txn.rows[0].id as string;
+  });
+
+  it('credits Meridian balance on approved refund and enforces refund limits', async () => {
+    const ref1 = `MGR-TEST-${Date.now()}`;
+    const ins = await svc!.query(
+      `INSERT INTO refunds (
+         reference, profile_id, account_id, original_transaction_id, original_reference,
+         original_amount, requested_amount, approved_amount, currency_code, reason, status, approved_by, approved_at
+       ) VALUES (
+         $1, $2, $3, $4, $5, 500.0000, 200.0000, 200.0000, 'EUR', 'Partial test', 'approved', 'admin_test', now()
+       ) RETURNING id`,
+      [ref1, REF_USER, accountId, originalTxnId, originalRef],
+    );
+    const refundId = ins.rows[0].id as string;
+
+    const balBefore = await svc!.query(`SELECT balance FROM accounts WHERE id = $1`, [accountId]);
+    const before = Number(balBefore.rows[0].balance);
+
+    const result = await svc!.query(
+      `SELECT process_internal_refund($1, $2, $3) AS result`,
+      [refundId, 'admin_test', 200],
+    );
+    expect(Number(result.rows[0].result.credited)).toBe(200);
+
+    const balAfter = await svc!.query(`SELECT balance FROM accounts WHERE id = $1`, [accountId]);
+    expect(Number(balAfter.rows[0].balance)).toBe(before + 200);
+
+    const status = await svc!.query(`SELECT status FROM refunds WHERE id = $1`, [refundId]);
+    expect(status.rows[0].status).toBe('completed');
+
+    // Second partial of 300 (total 500) should succeed
+    const ref2 = `MGR-TEST2-${Date.now()}`;
+    const ins2 = await svc!.query(
+      `INSERT INTO refunds (
+         reference, profile_id, account_id, original_transaction_id, original_reference,
+         original_amount, requested_amount, approved_amount, currency_code, reason, status, approved_by, approved_at
+       ) VALUES (
+         $1, $2, $3, $4, $5, 500.0000, 300.0000, 300.0000, 'EUR', 'Remainder', 'approved', 'admin_test', now()
+       ) RETURNING id`,
+      [ref2, REF_USER, accountId, originalTxnId, originalRef],
+    );
+    await svc!.query(`SELECT process_internal_refund($1, $2, $3)`, [ins2.rows[0].id, 'admin_test', 300]);
+
+    // Third refund exceeding original must fail
+    const ref3 = `MGR-OVER-${Date.now()}`;
+    const ins3 = await svc!.query(
+      `INSERT INTO refunds (
+         reference, profile_id, account_id, original_transaction_id, original_reference,
+         original_amount, requested_amount, approved_amount, currency_code, reason, status, approved_by, approved_at
+       ) VALUES (
+         $1, $2, $3, $4, $5, 500.0000, 1.0000, 1.0000, 'EUR', 'Exceeds', 'approved', 'admin_test', now()
+       ) RETURNING id`,
+      [ref3, REF_USER, accountId, originalTxnId, originalRef],
+    );
+    await expect(
+      svc!.query(`SELECT process_internal_refund($1, $2, $3)`, [ins3.rows[0].id, 'admin_test', 1]),
+    ).rejects.toThrow(/REFUND_EXCEEDS_ORIGINAL/);
+  });
+});
+
+describe('customer isolation on deposits', () => {
+  it('customer A cannot read customer B deposit rows via RLS', async () => {
+    const USER_X = 'user_iso_x';
+    const USER_Y = 'user_iso_y';
+    await svc!.query(`SELECT bootstrap_profile($1, $2, $3, $4, $5)`, [USER_X, 'x@example.com', 'X', 'User', 'DE']);
+    await svc!.query(`SELECT bootstrap_profile($1, $2, $3, $4, $5)`, [USER_Y, 'y@example.com', 'Y', 'User', 'DE']);
+
+    const accX = await svc!.query(`SELECT id FROM accounts WHERE profile_id = $1 AND currency_code = 'EUR'`, [USER_X]);
+    await svc!.query(
+      `INSERT INTO deposits (reference, profile_id, account_id, currency_code, amount, requested_amount, fee, method, status)
+       VALUES ($1, $2, $3, 'EUR', 50, 50, 0, 'bank_transfer', 'pending_admin_action')`,
+      [`MGD-ISO-X-${Date.now()}`, USER_X, accX.rows[0].id],
+    );
+
+    // Simulate JWT claims for USER_Y
+    const y = await connect();
+    try {
+      await y.query(`SELECT set_config('request.jwt.claim.sub', $1, true)`, [USER_Y]);
+      await y.query(`SET ROLE authenticated`);
+      // Depending on RLS policies, either 0 rows or error — never USER_X data
+      const rows = await y.query(`SELECT * FROM deposits WHERE profile_id = $1`, [USER_X]);
+      expect(rows.rows).toHaveLength(0);
+    } finally {
+      await y.end().catch(() => undefined);
+    }
+  });
+});

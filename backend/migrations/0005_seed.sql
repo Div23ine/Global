@@ -46,11 +46,11 @@ ON CONFLICT (country_code) DO NOTHING;
 INSERT INTO admin_roles (id, description, permissions) VALUES
   ('super_admin', 'Full administrative access',
    ARRAY['users.read','users.edit','users.ban','users.delete','currencies.manage',
-         'deposits.read','transactions.read','payments.read','security.read',
+         'deposits.read','deposits.manage','refunds.manage','transactions.read','payments.read','security.read',
          'security.freeze','reports.read','support.manage','roles.manage',
          'audit.read','settings.manage']),
   ('support', 'Customer support operations',
-   ARRAY['users.read','users.edit','deposits.read','transactions.read',
+   ARRAY['users.read','users.edit','deposits.read','deposits.manage','refunds.manage','transactions.read',
          'support.manage','security.read']),
   ('compliance', 'Compliance and security oversight',
    ARRAY['users.read','transactions.read','deposits.read','payments.read',
