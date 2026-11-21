@@ -109,7 +109,6 @@
       return current.auth.getSession().then(function (result) {
         if (result.error) throw result.error;
         var session = result.data.session;
-        publish(session, session && session.user);
         return session ? session.access_token : null;
       });
     },
