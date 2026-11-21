@@ -1,91 +1,94 @@
 # SECURITY REVIEW — Meridian Global Accounts
 
-Status: v1.0 (development branch) · Method: STRIDE per surface, following the
-threat-modelling workflow adapted into AGENTS.md. Every category below has a
-recorded decision: **mitigated**, **accepted** or **deferred**, with a code
-pointer where mitigated.
+Status: Supabase Auth migration prepared on fix/worker-http-server-compat;
+code review and verification still pending.
+Method: STRIDE per surface. Decisions identify the owner and the code/migration
+that enforces the control.
 
 ## 1. Scope and trust boundaries
 
-```
-Browser (React CDN app, Clerk publishable key)
-   │  TLS                    trust boundary 1: public internet
-   ▼
-Cloudflare edge (DNS, CDN, TLS, WAF-capable)
-   │                          trust boundary 2
-   ▼
-Oracle Cloud VM: Express API (Clerk JWT verification, Zod validation,
-   │  rate limits, audit logging)
-   ▼                          trust boundary 3: service credentials
-Supabase PostgreSQL (RLS) · Clerk Backend API · Twilio API · Payment partner
+```text
+Browser (React app; Supabase URL + anon/publishable key)
+  | TLS; Authorization: Bearer Supabase Auth access JWT
+Cloudflare Pages / Cloudflare edge
+  |
+Cloudflare Worker (Express API; Auth getUser validation; Zod; rate limits)
+  | service-role credential held only in Worker secrets
+Supabase Auth + PostgreSQL (RLS) | Resend | Twilio | payment partner
 ```
 
-Assets: customer PII (names, emails, phones), financial records (ledger,
-deposits, balances), session tokens (Clerk), service credentials (Clerk
-secret, Supabase service-role, Twilio auth token, webhook secrets).
+Protected assets: customer PII, financial records, access/refresh tokens,
+service-role credentials and provider/webhook secrets. The Supabase anon or
+publishable key is public browser configuration; it is not an authorization
+boundary. The service-role key is privileged and must remain server-side.
 
-## 2. STRIDE — REST API surface (Express)
+## 2. STRIDE — API, identity and authorization
 
-| Threat | Decision | Mitigation / note |
+| Threat | Decision | Mitigation, owner and code pointer |
 |---|---|---|
-| **S**poofing (forged requests) | **mitigated** | Every protected route verifies the Clerk JWT (`src/middleware/auth.ts` → `verifyToken` against Clerk JWKS). No home-grown tokens. 401 on any failure. |
-| **S**poofing (webhook forgery) | **mitigated** | Clerk webhooks: svix signature verification over the raw body (`src/routes/webhooks.routes.ts`; raw-body capture mounted before JSON parsing in `src/app.ts`). Payment webhooks: HMAC-SHA256 with timing-safe compare (`verifyProviderSignature`, `src/services/deposits.service.ts`). Unknown providers rejected before parsing. |
-| **T**ampering (request bodies) | **mitigated** | Zod schema validation at the boundary for every mutating route (`src/middleware/validate.ts`); unknown fields rejected (`.strict()`); body size capped at 256 kb. |
-| **T**ampering (money records) | **mitigated** | The ledger is written exclusively by the SQL RPC `post_ledger_entry` under row locks; deposits transition only via `provider_confirm_deposit` / `provider_fail_deposit` (signed webhook path). There is no admin endpoint that mutates money — by construction, not by hidden buttons (`src/routes/admin.routes.ts` contains no such route). |
-| **R**epudiation | **mitigated** | Append-only `audit_logs`: every admin action, every denied attempt, every webhook effect; no UPDATE/DELETE policies; RLS denies all client access; the table is written only via the service role (`src/services/audit.service.ts`). |
-| **I**nformation disclosure | **mitigated** | Uniform error envelope without stack traces (`src/middleware/error.ts`); pino redaction for authorization headers, tokens, passwords (`src/utils/logger.ts`); secrets only in VM environment; `.env.example` committed with placeholders only. |
-| **I** (cross-customer data) | **mitigated** | Ownership enforced twice: code-level (queries always scoped by `req.auth.userId`) and RLS (`auth.jwt() ->> 'sub'`), verified by two-user integration tests (`backend/tests/integration/database.test.ts`). |
-| **D**enial of service | **mitigated (layered)** | Per-IP global bucket + per-user mutation buckets (`src/middleware/rateLimit.ts`), 256 kb body cap, 20 s request timeout in the frontend, Cloudflare WAF/rate rules available at the edge. **Accepted residual**: in-memory limiter is per-process; move to Redis when horizontally scaled (documented in DEPLOYMENT_GUIDE). |
-| **E**levation of privilege | **mitigated** | `requireAdmin(...permissions)` resolves the role from `admin_users` per request; deny-by-default; permission matrix in the database (`migrations/0005_seed.sql`); frontend role UI is cosmetic only — the backend re-checks on every endpoint. Role assignment verifies the Clerk user exists first. |
+| Spoofing: forged, expired or revoked bearer token | Mitigated by design; live tests pending | Backend calls Supabase Auth getUser(accessToken), rather than trusting locally decoded claims. Owner: backend. backend/src/services/supabase-auth.service.ts and backend/src/middleware/auth.ts. |
+| Spoofing: claim a legacy customer's profile | Mitigated by design; migration rehearsal pending | Bootstrap requires an Auth identity with a confirmed email, uses a service-role-only RPC, links only an unlinked matching email, and enforces a unique Auth UUID. Owner: database/backend. backend/migrations/0007_supabase_auth.sql. |
+| Tampering: request bodies | Mitigated | Zod validates mutation payloads; strict schemas reject unknown fields and request bodies are size-capped. Owner: backend. backend/src/middleware/validate.ts and route schemas. |
+| Tampering: financial records | Mitigated | Ledger posting and deposit transitions remain database RPC/state-machine controlled. No browser money-writing path was introduced. Owner: backend/database. backend/migrations/0004_functions_triggers.sql and backend/src/routes/admin.routes.ts. |
+| Repudiation | Mitigated | Audit logs remain append-only and service-role written; privileged actions and denials are audited. Owner: backend. backend/src/services/audit.service.ts. |
+| Information disclosure: service credentials | Mitigated by design; deployment scan pending | Service-role key stays in Worker secrets; browser receives only URL + anon/publishable key. Logger redaction covers credentials and tokens. Owner: platform operator/backend. backend/.env.example and backend/src/utils/logger.ts. |
+| Cross-customer access / RLS bypass | Mitigated by design; real Supabase verification pending | Backend maps Auth UUID to canonical profile ID and forwards the verified user's JWT for RLS reads. RLS maps auth.uid() through profiles.supabase_user_id. Owner: database/backend. backend/src/middleware/auth.ts, backend/src/services/supabase.service.ts and migration 0007. |
+| Denial of service | Mitigated (layered) | Cloudflare rate-limit bindings, body-size limits and frontend request timeout remain. Owner: platform operator. backend/src/middleware/rateLimit.ts and backend/wrangler.toml. |
+| Elevation of privilege | Mitigated by design; role migration rehearsal pending | Admin roles are resolved from admin_users.profile_id and admin_roles on protected API requests. Role assignment requires an active profile linked to a confirmed Supabase Auth identity. Owner: backend. backend/src/middleware/auth.ts and backend/src/routes/admin.routes.ts. |
 
-## 3. STRIDE — database (Supabase PostgreSQL)
+## 3. STRIDE — Auth lifecycle and sessions
 
-| Threat | Decision | Mitigation / note |
+| Threat | Decision | Mitigation, owner and code pointer |
 |---|---|---|
-| Client-side tampering via PostgREST | **mitigated** | RLS enabled on every table; client policies are read-scoping only; money/admin/audit tables have **no** client policies (deny). Verified by integration tests as `authenticated` and `anon`. |
-| Balance corruption | **mitigated** | `accounts.balance` is trigger-maintained from posted ledger entries only (`migrations/0004_functions_triggers.sql`); overdrafts refused with row locks; CHECK constraints on money columns; verified by integration tests. |
-| PII retention conflict (GDPR vs financial retention) | **mitigated** | Deletion = Clerk identity removal + `anonymize_profile()` (PII cleared, financial records retained pseudonymized). Documented in the privacy policy; exact retention periods **deferred** pending jurisdiction confirmation (open requirement, PROJECT_STATUS.md). |
-| SQL injection | **mitigated** | All backend access goes through supabase-js (parameterized PostgREST); no string-concatenated SQL in application code; the few raw RPCs use parameter binding. |
+| Password theft or storage | Mitigated by provider boundary | Signup, sign-in, email confirmation, recovery and password updates are handled by Supabase Auth; Meridian does not store passwords. Owner: Supabase project owner. frontend/js/services/supabase-auth.js and Supabase Auth settings. |
+| Session theft | Accepted residual risk with mitigations | HTTPS, token redaction, Supabase-managed refresh handling and server-side getUser validation are required. A stolen unexpired access JWT can remain usable until expiry unless profile status/link checks deny it. Owner: platform operator/backend. frontend/js/services/supabase-auth.js and backend/src/middleware/auth.ts. |
+| Suspend/ban while a JWT is still valid | Mitigated by request-time profile status check | Admin changes profile status before applying an Auth ban. requireAuth rejects any profile not active on every request. Owner: backend. backend/src/routes/admin.routes.ts and backend/src/middleware/auth.ts. |
+| Delete identity while a JWT is still valid | Mitigated by profile status + identity unlink | Deletion first marks the profile deleted, removes the linked Auth user, then anonymizes profile PII. The mapping is cleared and every request checks the profile. Financial records remain attached to the canonical profile. Owner: backend/database. backend/src/routes/admin.routes.ts and migration 0007. |
+| Session revocation | Mitigated with provider scopes; detailed inventory deferred | UI exposes local, others and global sign-out scopes. Supabase does not immediately invalidate already-issued access JWTs; they remain valid until expiry, so profile-status checks remain essential. Owner: backend/product. frontend/js/services/supabase-auth.js and frontend/js/app/views-account.jsx. |
+| Per-device session inventory and individual revoke | Deferred | This migration removes the old Clerk-specific session endpoints. The application does not claim to enumerate or individually revoke sessions. Owner: product/backend. frontend/js/app/views-account.jsx. |
+| MFA enrollment and challenge | Deferred | MFA UI and required assurance-level checks have not been implemented. Do not claim MFA is enabled in Meridian until the full flow and policies are configured and tested. Owner: product/backend. |
+| OTP/SMS ownership | Mitigated by scope; phone verification not migrated | Email/password plus confirmed email is the current Auth path. Twilio sends transactional notifications only; it is not used to send Auth OTPs. A profile phone number is contact data, not an authentication factor. Owner: platform operator. backend/src/services/twilio.service.ts and Supabase Auth settings. |
+| Email recovery abuse | Mitigated by provider controls; configuration pending | Supabase Auth reset-password email, configured redirect allow-list and Auth rate limits are required. Configure SMTP and exact Pages redirect URLs before release. Owner: Supabase project owner. frontend/js/services/supabase-auth.js and DEPLOYMENT_GUIDE.md. |
 
-## 4. STRIDE — identity (Clerk) and SMS (Twilio)
+## 4. STRIDE — database and infrastructure
 
-| Threat | Decision | Mitigation / note |
+| Threat | Decision | Mitigation, owner and code pointer |
 |---|---|---|
-| Password/credential handling | **mitigated** | Entirely delegated to Clerk; the application never sees or stores passwords. |
-| Session hijacking | **mitigated** | Clerk-managed sessions; ban/unban propagated through Clerk (sessions end immediately); device sessions visible and revocable by the customer (`/profile/sessions`). |
-| OTP system conflicts | **mitigated** | Single OTP authority (Clerk, configured with Twilio). The backend Twilio service sends only transactional notifications and **never** verification codes (`src/services/twilio.service.ts`). |
-| SMS abuse / cost attacks | **mitigated** | Hourly SMS budget, recipient allowlist in dev, E.164 validation, retry with backoff, redacted logging. |
-| Webhook replay | **mitigated** | Deposit confirmations are idempotent (duplicate deliveries recorded as `duplicate_ignored`, no double credit — integration-tested). Clerk events are upserts (idempotent). |
+| Direct PostgREST tampering | Mitigated by RLS design; production verification pending | Client policies are read-scoped; financial, admin and audit tables have no client write policies. Owner: database owner. backend/migrations/0003_rls.sql and 0007_supabase_auth.sql. |
+| SQL injection | Mitigated | Application database access uses supabase-js parameterized PostgREST and RPC calls; no dynamic SQL was added in the Auth migration. Owner: backend. Backend service and route files. |
+| Credential leakage | Mitigated by repository policy; deployment review pending | Never commit SUPABASE_SERVICE_ROLE_KEY. Only the URL and anon/publishable key belong in browser configuration. Worker secrets hold the service-role key. Owner: repository/Cloudflare administrators. backend/.env.example and backend/wrangler.toml. |
+| CDN script compromise | Deferred | React/Babel and the Supabase browser SDK are loaded over HTTPS from a CDN. SRI pinning or self-hosting remains pre-production hardening. Owner: frontend/platform. frontend/app.html and frontend/admin.html. |
+| Production schema/deployment error | Deferred pending owner approval | Migration 0007 adds Auth mapping and renames the admin identity column. Rehearse against a production-like backup and inspect existing admin holders before application. Owner: database/project owner. backend/migrations/0007_supabase_auth.sql and DEPLOYMENT_GUIDE.md. |
 
-## 5. STRIDE — infrastructure
+## 5. Migration-specific controls
 
-| Threat | Decision | Mitigation / note |
-|---|---|---|
-| Secret leakage via repository | **mitigated** | `.gitignore` for `.env`; `.env.example` placeholders only; secret values never appear in the codebase (grep-verified). |
-| VM exposure | **mitigated (deployment-time)** | Only 80/443 exposed; API behind a TLS-terminating reverse proxy; systemd hardening options in the unit file (DEPLOYMENT_GUIDE.md). |
-| Frontend supply chain | **deferred (accepted for this stage)** | React/Babel/ClerkJS are loaded from unpkg CDN over TLS with SRI planned before production (recorded as next-task: add Subresource Integrity hashes or self-host the vendor files). |
-| Production DNS/destructive ops | **mitigated (by policy)** | AGENTS.md stop-conditions: no production DNS, database or VM changes without owner authorization. |
+- Existing profiles.id values are preserved. Financial foreign keys are not
+  rewritten when a legacy identity is linked.
+- Only a Supabase Auth user whose email is confirmed by Supabase can be linked.
+- The link RPC is executable only by service_role; browser clients cannot call it.
+- A unique index prevents one Supabase Auth UUID from being attached to two
+  Meridian profiles.
+- Existing Clerk passwords are not imported. Customers must establish a
+  Supabase Auth identity using the same confirmed email, or use a controlled
+  support recovery process if their email changed or is inaccessible.
+- admin_users is renamed to profile_id so the permission assignment continues
+  to refer to the canonical Meridian profile.
+- The migration is forward-only and has not been applied to production.
 
-## 6. Findings register
+## 6. Never-log list
 
-| # | Severity | Finding | Status |
-|---|---|---|---|
-| 1 | HIGH (design) | Original prototype enforced financial restrictions only in browser code | Resolved: moved to backend/DB enforcement (no admin money endpoints; RPC-only state machine) |
-| 2 | MEDIUM | Statement download is a provisional plain-text format | Accepted for now (no licensed statement provider yet); documented in the UI |
-| 3 | MEDIUM | CDN scripts lack Subresource Integrity attributes | Deferred — next task before production |
-| 4 | LOW | In-memory rate limiter is per-process | Accepted at current scale; Redis interface documented |
-| 5 | LOW | Admin console served from the same static origin as the customer app | Accepted: no secrets in static assets; all authorization is server-side; `noindex` set on admin.html |
+Passwords, access/refresh tokens, API keys, service-role credentials, full
+bank/account numbers, session cookies, authorization headers and SMS bodies
+containing codes. Logs may carry request IDs, route, method, status, duration,
+opaque profile IDs and event types.
 
-## 7. Never-log list (enforced in code review and pino redaction)
+## 7. Verification status
 
-Passwords, tokens, API keys, full card/account numbers, session cookies,
-authorization headers, SMS bodies containing codes. Logs carry: request id,
-route, method, status, duration, opaque user ids, auth event types.
-
-## 8. Verification evidence
-
-- Two-user RLS isolation, ledger immutability, deposit state machine,
-  idempotency, anonymization: `backend/tests/integration/database.test.ts`
-  (12 tests, real PostgreSQL 18) — passing.
-- Webhook signature rejection paths: `backend/tests/unit/signature.test.ts` — passing.
-- Full matrix of code-level checks: see TEST_REPORT.md.
+- Production Wrangler tail showed the prior Worker exception:
+  [unenv] http.createServer is not implemented yet!. The compatibility flag
+  fix is prepared on the feature branch and is not deployed.
+- Supabase Auth source, migration 0007, frontend login/recovery flows, admin
+  role mapping and tests have been changed on the feature branch.
+- Typecheck, lint, integration test execution, browser testing, migration
+  rehearsal and live Supabase Auth verification have not yet been run after
+  these changes. No production deployment or database migration was performed.
