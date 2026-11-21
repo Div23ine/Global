@@ -19,8 +19,6 @@
     /* ---- profile ---- */
     profile: function () { return http.get('/profile'); },
     updateProfile: function (patch) { return http.patch('/profile', patch); },
-    sessions: function () { return http.get('/profile/sessions'); },
-    revokeSession: function (id) { return http.del('/profile/sessions/' + encodeURIComponent(id)); },
 
     /* ---- accounts & currencies ---- */
     currencies: function () { return http.get('/currencies'); },
@@ -117,10 +115,10 @@
     replyTicket: function (id, message) { return http.post('/admin/support/tickets/' + encodeURIComponent(id) + '/reply', { message: message }); },
     resolveTicket: function (id) { return http.post('/admin/support/tickets/' + encodeURIComponent(id) + '/resolve'); },
     roles: function () { return http.get('/admin/roles'); },
-    assignRole: function (clerkUserId, roleId, displayName) {
-      return http.post('/admin/roles/assign', { clerkUserId: clerkUserId, roleId: roleId, displayName: displayName });
+    assignRole: function (email, roleId, displayName) {
+      return http.post('/admin/roles/assign', { email: email, roleId: roleId, displayName: displayName });
     },
-    revokeRole: function (clerkUserId) { return http.post('/admin/roles/revoke', { clerkUserId: clerkUserId }); },
+    revokeRole: function (profileId) { return http.post('/admin/roles/revoke', { profileId: profileId }); },
     audit: function (filters) { return http.get('/admin/audit' + qs(filters)); },
     settings: function () { return http.get('/admin/settings'); },
     updateSettings: function (patch) { return http.patch('/admin/settings', patch); },
