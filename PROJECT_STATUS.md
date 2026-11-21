@@ -1,25 +1,40 @@
 # PROJECT STATUS — Meridian Global Accounts
 
-Last updated: 2026-11-21 (SPA wiring confirmed, bank seeds, expanded tests, config)
+Last updated: 2026-11-21 (Cloudflare Workers backend + Resend email)
 
-## Current state: DEPOSIT + REFUND WORKFLOWS COMPLETE (BACKEND + SPA)
+## Current state: CLOUDFLARE-NATIVE (Pages + Workers) + RESEND EMAIL
 
-### Completed this cycle
-- Admin SPA Deposit Management + Refund Management (confirmation screens with customer, reference, amount, impact) — already on `development`
-- Customer Deposit section: assigned bank details + report-payment action — already on `development`
-- Sample receiving bank accounts for EUR, GBP, USD, CHF, PLN seeded in migration 0006
-- Admin role permissions expanded (`deposits.manage`, `refunds.manage`)
-- Integration tests: partial deposits, duplicate bank txn rejection, overpayment cap, refund limits, customer isolation
-- Unit tests: deposit/refund amount invariants
-- Frontend config: deployment-oriented placeholders with `window.MG_*` / `config.local.js` inject points (no secrets)
+### Hosting
+| Component | Platform |
+|-----------|----------|
+| Frontend | Cloudflare Pages (`frontend/`) |
+| Backend API | Cloudflare Workers (`backend/src/worker.ts`, `wrangler.toml`) |
+| Database | Supabase PostgreSQL |
+| Auth | Clerk |
+| SMS | Twilio |
+| Email | **Resend** |
 
-### Not done (external dependencies)
-| Item | Status |
-|------|--------|
-| Live Clerk / Supabase / Twilio verification | **CODE IMPLEMENTED, EXTERNAL CONFIGURATION REQUIRED** — provide sandbox credentials |
-| Oracle VM backend deployment | **Requires explicit authorization** |
-| Cloudflare Pages production deploy | **Requires explicit authorization** (workflow already points at `frontend/`) |
-| Apply migration 0006 on live Supabase | Owner action |
+Oracle Cloud VM is **no longer** the deployment target.
+
+### Resend notifications
+Emails sent (non-blocking; never rolls back financial ops):
+- Admin assigns receiving bank → customer receives bank details + reference
+- Deposit verified & credited → confirmation email
+- Internal refund completed → confirmation email
+
+### Cloudflare Workers
+- `backend/src/worker.ts` — Express via `cloudflare:node` `httpServerHandler` + `nodejs_compat`
+- `backend/wrangler.toml` — name `meridian-api`, vars + secret list
+- Scripts: `npm run cf:dev`, `npm run cf:deploy`
+- CI: `.github/workflows/workers.yml` (needs `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`)
+
+### Still required from owner
+1. Apply migration 0006 on Supabase
+2. `wrangler secret put` for Clerk, Supabase, Resend, Twilio
+3. Set `CORS_ORIGIN` to Pages origin
+4. Cloudflare Pages project + optional Worker custom domain
+5. GitHub secrets for CI deploy (optional)
+6. Live verification with real credentials
 
 ### Integration status
 | Integration | Status |
@@ -27,13 +42,8 @@ Last updated: 2026-11-21 (SPA wiring confirmed, bank seeds, expanded tests, conf
 | Clerk | CODE IMPLEMENTED, EXTERNAL CONFIGURATION REQUIRED |
 | Supabase | CODE IMPLEMENTED, EXTERNAL CONFIGURATION REQUIRED |
 | Twilio | CODE IMPLEMENTED, EXTERNAL CONFIGURATION REQUIRED |
+| **Resend** | **CODE IMPLEMENTED, EXTERNAL CONFIGURATION REQUIRED** |
 | Manual deposit workflow | CODE IMPLEMENTED (backend + SPA) |
 | Internal refund workflow | CODE IMPLEMENTED (backend + SPA) |
-| Cloudflare Pages path | FIXED |
-| Oracle VM | CODE READY, DEPLOYMENT PENDING AUTHORIZATION |
-
-### How to run tests locally
-```bash
-cd backend && npm ci && npm test
-```
-Integration tests use embedded-postgres and apply all migrations including 0006.
+| Cloudflare Pages | READY (static `frontend/`) |
+| Cloudflare Workers API | CODE IMPLEMENTED, DEPLOY PENDING SECRETS |

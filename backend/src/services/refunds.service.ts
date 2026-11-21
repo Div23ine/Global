@@ -7,6 +7,7 @@ import { getServiceClient } from './supabase.service';
 import { auditAllowed } from './audit.service';
 import { badRequest, conflict, forbidden, invalidState, notFound } from '../utils/httpError';
 import { parseAmount, type Money } from '../utils/money';
+import { emailRefundCompleted } from './resend.service';
 
 export interface RefundInput {
   originalTransactionId: string;
@@ -176,6 +177,24 @@ export async function approveAndProcessRefund(
     title: 'Refund completed',
     body: `Refund ${refund.reference} of ${result.credited ?? amount} ${refund.currency_code} has been credited to your Meridian balance (original transaction ${refund.original_reference}).`,
   });
+
+  try {
+    const { data: profile } = await db
+      .from('profiles')
+      .select('email, full_name, first_name')
+      .eq('id', refund.profile_id)
+      .maybeSingle();
+    if (profile?.email) {
+      await emailRefundCompleted({
+        to: profile.email,
+        customerName: profile.full_name || profile.first_name || '',
+        reference: refund.reference,
+        amount: String(result.credited ?? amount),
+        currency: refund.currency_code,
+        originalReference: refund.original_reference,
+      });
+    }
+  } catch { /* non-blocking */ }
 
   await auditAllowed(adminId, 'refund.approve_process', { type: 'refund', id: refund.reference }, {
     amount, result,

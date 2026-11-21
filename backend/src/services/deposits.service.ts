@@ -17,6 +17,7 @@ import { badRequest, conflict, invalidState, notFound } from '../utils/httpError
 import { parseAmount, type Money } from '../utils/money';
 import { env } from '../config/env';
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { emailBankDetailsAssigned, emailDepositCredited } from './resend.service';
 
 export type DepositMethod = 'bank_transfer';
 
@@ -288,6 +289,32 @@ export async function assignReceivingBank(
     body: `Please transfer ${dep.requested_amount ?? dep.amount} ${dep.currency_code} using the details shown in your Deposit section. Include reference ${dep.reference} in the transfer narration.`,
   });
 
+  // Email bank details via Resend (non-blocking on failure)
+  try {
+    const { data: profile } = await db
+      .from('profiles')
+      .select('email, full_name, first_name')
+      .eq('id', dep.profile_id)
+      .maybeSingle();
+    if (profile?.email) {
+      await emailBankDetailsAssigned({
+        to: profile.email,
+        customerName: profile.full_name || profile.first_name || '',
+        reference: dep.reference,
+        amount: String(dep.requested_amount ?? dep.amount),
+        currency: dep.currency_code,
+        bankName: bank.bank_name,
+        beneficiaryName: bank.beneficiary_name,
+        iban: bank.iban,
+        accountNumber: bank.account_number,
+        swiftBic: bank.swift_bic,
+        transferInstructions: bank.transfer_instructions,
+      });
+    }
+  } catch {
+    /* email failure must not roll back assignment */
+  }
+
   await auditAllowed(adminId, 'deposit.assign_bank', { type: 'deposit', id: dep.reference }, {
     bankId: bankAccountId, bankLabel: bank.label,
   }, { ip: ctx?.ip, userAgent: ctx?.userAgent });
@@ -346,6 +373,23 @@ export async function verifyAndCreditPayment(
     title: 'Deposit credited',
     body: `Your deposit ${dep.reference} has been verified. ${result.credited_this_payment ?? amount} ${input.currencyCode} has been added to your Meridian balance.`,
   });
+
+  try {
+    const { data: profile } = await db
+      .from('profiles')
+      .select('email, full_name, first_name')
+      .eq('id', dep.profile_id)
+      .maybeSingle();
+    if (profile?.email) {
+      await emailDepositCredited({
+        to: profile.email,
+        customerName: profile.full_name || profile.first_name || '',
+        reference: dep.reference,
+        amount: String(result.credited_this_payment ?? amount),
+        currency: input.currencyCode,
+      });
+    }
+  } catch { /* non-blocking */ }
 
   await auditAllowed(adminId, 'deposit.verify_credit', { type: 'deposit', id: dep.reference }, {
     amount, currency: input.currencyCode, bankTxnId: input.bankTransactionId, result,

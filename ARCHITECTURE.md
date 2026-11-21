@@ -10,7 +10,7 @@ frontend prototype into a production platform.
                                   |
              +--------------------+---------------------+
              |                                          |
-     Cloudflare Pages                          Oracle Cloud VM
+     Cloudflare Pages                          Cloudflare Workers
      (static frontend)                         (dedicated backend host)
      frontend/                                 backend/ (Node.js + TS + Express)
         index.html  (public site)                 REST API  /api/v1/*
@@ -33,7 +33,7 @@ Key decisions and their rationale:
 |---|---|---|
 | Frontend framework | React 18 via CDN + Babel Standalone, HTML entry files | Client requirement: no build step for the initial implementation; simple to run and to deploy on Cloudflare Pages; preserves the prototype's no-tooling philosophy while giving a real component model. Migration path to Vite is prepared (section 8). |
 | Backend framework | Express 5 + TypeScript | Massive ecosystem, one framework only (no competing frameworks), mature middleware model for rate limiting / validation / error handling. |
-| Database | Supabase PostgreSQL (managed) | Client requirement. The Oracle VM runs no second PostgreSQL; the backend connects to Supabase. |
+| Database | Supabase PostgreSQL (managed) | Client requirement. No database on the Worker; the API connects to Supabase over HTTPS. |
 | Auth | Clerk (system of record for identity) | Client requirement. Clerk owns registration, login, sessions, password recovery, email/phone verification, banning, deletion. The application never stores passwords. |
 | Auth-to-data link | Clerk JWT (Supabase JWT template) verified by backend; RLS keyed on `sub` claim | Defense in depth: the backend authorizes every request in code, and the database additionally enforces row ownership via RLS. |
 | SMS | Twilio (via Clerk for OTP, via backend for notifications) | Client requirement. One OTP system only (Clerk's); the backend sends transactional notifications. |
@@ -186,8 +186,7 @@ See `DATABASE_DESIGN.md` for the full schema. Core invariants:
 
 ## 6. Security architecture
 
-- TLS everywhere (Cloudflare edge for frontend; backend behind TLS terminating
-  reverse proxy on the Oracle VM).
+- TLS everywhere (Cloudflare edge for frontend and Workers API).
 - Security headers (helmet), strict CORS (single origin), body size caps,
   request timeouts.
 - Deny-by-default authorization; every route declares its policy.
@@ -233,4 +232,4 @@ No application logic changes are required by design.
 | Supabase production project | Migrations ready; project provisioning required |
 | Twilio production numbers + messaging service | Credentials required |
 | Cloudflare account/zone + Pages project | DNS migration is a change-controlled operation |
-| Oracle VM access credentials | SSH access required for deployment |
+| Cloudflare API token + account ID | Workers + Pages deploy |

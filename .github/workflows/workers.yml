@@ -1,0 +1,44 @@
+name: Deploy API to Cloudflare Workers
+
+on:
+  push:
+    branches: [main, development]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/workers.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test -- --exclude tests/integration/**
+
+      - name: Deploy Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: backend
+          command: deploy
+        # Requires CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID in repo secrets.
+        # Worker secrets (Clerk, Supabase, Resend, …) are set once via wrangler secret put
+        # and persist across deploys — they are NOT in GitHub secrets for this workflow.

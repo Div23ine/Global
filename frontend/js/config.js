@@ -16,7 +16,7 @@ MG.config = {
   // Local development default targets the Oracle/local backend.
   API_BASE_URL: (typeof window !== 'undefined' && window.MG_API_BASE_URL)
     ? window.MG_API_BASE_URL
-    : 'https://api.meridian.example.com/api/v1',
+    : 'https://meridian-api.<your-subdomain>.workers.dev/api/v1',
 
   // Clerk publishable key (pk_test_… or pk_live_…). Public by design.
   // Injected at deploy time; never a secret.

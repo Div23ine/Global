@@ -1,0 +1,36 @@
+# Meridian Global Accounts API — Cloudflare Workers
+# Docs: https://developers.cloudflare.com/workers/
+
+name = "meridian-api"
+main = "src/worker.ts"
+compatibility_date = "2024-11-12"
+compatibility_flags = ["nodejs_compat"]
+
+# Account / routes configured via dashboard or:
+# routes = [{ pattern = "api.meridian.example.com/*", zone_name = "meridian.example.com" }]
+
+[vars]
+NODE_ENV = "production"
+LOG_LEVEL = "info"
+PAYMENT_PROVIDER = "manual-bank-transfer"
+RESEND_FROM_NAME = "Meridian Global Accounts"
+# CORS_ORIGIN must list the Cloudflare Pages frontend origin(s), e.g.:
+# CORS_ORIGIN = "https://app.meridian.example.com,https://meridian-global.pages.dev"
+CORS_ORIGIN = "https://meridian-global.pages.dev"
+
+# Secrets (set with: npx wrangler secret put NAME)
+# CLERK_SECRET_KEY
+# CLERK_PUBLISHABLE_KEY
+# CLERK_WEBHOOK_SIGNING_SECRET
+# SUPABASE_URL
+# SUPABASE_ANON_KEY
+# SUPABASE_SERVICE_ROLE_KEY
+# TWILIO_ACCOUNT_SID
+# TWILIO_AUTH_TOKEN
+# TWILIO_FROM_NUMBER
+# RESEND_API_KEY
+# RESEND_FROM_EMAIL
+# PAYMENT_WEBHOOK_SECRET
+
+[observability]
+enabled = true

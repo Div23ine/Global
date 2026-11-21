@@ -3,6 +3,17 @@
 All notable changes on the `development` branch. Format: Keep a Changelog;
 this project follows semantic versioning at release time.
 
+## [Unreleased]
+
+### Added
+- Cloudflare Workers deployment for the API (`backend/src/worker.ts`, `wrangler.toml`)
+- Resend email service: bank-details assignment, deposit credited, refund completed
+- GitHub Actions workflow `.github/workflows/workers.yml`
+
+### Changed
+- Deployment target: Cloudflare Pages + Workers (Oracle Cloud VM removed)
+- `env.ts` supports Worker secret bindings via `applyWorkerEnv`
+
 ## [Unreleased] — 2026-11-20
 
 ### Upgrade of the approved prototype into a full-stack platform
