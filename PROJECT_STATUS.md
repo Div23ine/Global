@@ -69,9 +69,9 @@ app.html/admin.html origins. Never expose the service-role key in the frontend.
   cloudflare:node/httpServerHandler, but backend/wrangler.toml had only
   nodejs_compat on the older compatibility date.
 - The feature branch retains nodejs_compat and enables both
-enable_nodejs_http_modules and enable_nodejs_http_server_modules for the
-complete node:http implementation used by the adapter. This additional flag
-configuration is not deployed.
+  enable_nodejs_http_modules and enable_nodejs_http_server_modules for the
+  complete node:http implementation used by the adapter. This configuration
+  is not deployed.
 - API base configured in frontend/js/config.js:
   https://global.primeage.workers.dev/api/v1
 - The earlier production log also reported missing Clerk and Supabase secrets.
@@ -90,8 +90,9 @@ configuration is not deployed.
 - Migration 0007 for Supabase Auth identity linkage and RLS mapping.
 - Integration tests updated for confirmed Auth users, legacy profile linkage,
   RLS mapping, and function privilege boundaries.
-- Migration 0007 explicitly grants anon execution of the safe RLS identity helper
-  and restricts SECURITY DEFINER profile anonymization to service_role.
+- Migration 0007 explicitly grants anon execution of the safe RLS identity helper,
+  restricts SECURITY DEFINER profile anonymization to service_role, and uses a
+  valid dollar-quoted SQL function body.
 - The frontend HTTP client now caps both network retries and Supabase token
   refresh to prevent an unbounded retry loop.
 - Active Clerk code and dependencies removed; architecture, security and
@@ -130,7 +131,8 @@ configuration is not deployed.
 
 Review branch: feat/supabase-auth-migration
 Base: development
-Pull request: to be opened after rebasing the changes onto the current development head.
+Draft pull request: https://github.com/Div23ine/Global/pull/3
+The PR is open against development and has not been merged.
 
 Do not report the current live Worker as fixed until the compatible Worker
 configuration is deployed and the health/auth flows are verified.
