@@ -1,6 +1,6 @@
 # SECURITY REVIEW — Meridian Global Accounts
 
-Status: Supabase Auth migration prepared on fix/worker-http-server-compat;
+Status: Supabase Auth migration prepared on feat/supabase-auth-migration;
 code review and verification still pending.
 Method: STRIDE per surface. Decisions identify the owner and the code/migration
 that enforces the control.
@@ -65,7 +65,15 @@ boundary. The service-role key is privileged and must remain server-side.
 - Existing profiles.id values are preserved. Financial foreign keys are not
   rewritten when a legacy identity is linked.
 - Only a Supabase Auth user whose email is confirmed by Supabase can be linked.
-- The link RPC is executable only by service_role; browser clients cannot call it.
+- The link/bootstrap RPC is executable only by service_role; browser clients
+  cannot call it.
+- The RLS identity helper is executable by anon, authenticated and
+  service_role because RLS expressions invoke it; unauthenticated callers
+  resolve to an empty identity and cannot see customer rows.
+- Profile anonymization is SECURITY DEFINER but executable only by
+  service_role. Migration 0007 explicitly revokes inherited PUBLIC, anon and
+  authenticated grants before granting service_role; this is essential because
+  CREATE OR REPLACE FUNCTION preserves prior ACLs.
 - A unique index prevents one Supabase Auth UUID from being attached to two
   Meridian profiles.
 - Existing Clerk passwords are not imported. Customers must establish a
@@ -89,6 +97,8 @@ opaque profile IDs and event types.
   fix is prepared on the feature branch and is not deployed.
 - Supabase Auth source, migration 0007, frontend login/recovery flows, admin
   role mapping and tests have been changed on the feature branch.
+- A regression test now asserts that anon can call the safe RLS identity helper
+  but neither anon nor authenticated can execute profile anonymization.
 - Typecheck, lint, integration test execution, browser testing, migration
   rehearsal and live Supabase Auth verification have not yet been run after
   these changes. No production deployment or database migration was performed.
