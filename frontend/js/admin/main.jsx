@@ -62,13 +62,26 @@
     var titleRef = useRef(null);
 
     useEffect(function () {
-      MG.api.init();
-      MG.auth.load().then(function () { setAuth({ ready: true, error: null }); })
-        .catch(function (err) { setAuth({ ready: true, error: err }); });
-      var off = MG.auth.onChange(function () { force(function (x) { return x + 1; }); });
+      var active = true;
+      var off = function () {};
       var onHash = function () { setRoute(parseHash()); };
       window.addEventListener('hashchange', onHash);
-      return function () { off(); window.removeEventListener('hashchange', onHash); };
+      MG.ready.then(function () {
+        if (!active) return;
+        if (!MG.isConfigured()) throw (MG.configError || new Error('API public configuration is incomplete.'));
+        MG.api.init();
+        off = MG.auth.onChange(function () { force(function (x) { return x + 1; }); });
+        return MG.auth.load();
+      }).then(function () {
+        if (active) setAuth({ ready: true, error: null });
+      }).catch(function (err) {
+        if (active) setAuth({ ready: true, error: err });
+      });
+      return function () {
+        active = false;
+        off();
+        window.removeEventListener('hashchange', onHash);
+      };
     }, []);
 
     useEffect(function () {
@@ -105,7 +118,7 @@
         h('div', { className: 'auth-wrap' },
           h('div', { className: 'auth-card' },
             h('h1', null, 'Configuration required'),
-            h('p', { className: 'muted' }, 'Set SUPABASE_URL and SUPABASE_ANON_KEY and API_BASE_URL in js/config.js.'))));
+            h('p', { className: 'muted' }, 'The app could not retrieve its public Supabase configuration from api.meridian.uk.com. Check the Worker secrets and try again.'))));
     }
     if (!auth.ready) {
       return h('div', { className: 'auth-viewport' },
