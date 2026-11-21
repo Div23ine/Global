@@ -74,6 +74,10 @@ boundary. The service-role key is privileged and must remain server-side.
 - admin_users is renamed to profile_id so the permission assignment continues
   to refer to the canonical Meridian profile.
 - The migration is forward-only and has not been applied to production.
+- Migration 0007 is not backward-compatible with the old Clerk API: the
+  admin_users identity column and RLS helper change. Production rollout must
+  use a coordinated maintenance window with authenticated traffic paused until
+  the new API is deployed and verified.
 
 ## 6. Never-log list
 
