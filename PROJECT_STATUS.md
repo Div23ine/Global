@@ -27,18 +27,21 @@ Emails sent (non-blocking; never rolls back financial ops):
 - `backend/src/worker.ts` runs Express through `node:http.createServer()` and `cloudflare:node` `httpServerHandler`.
 - Root cause of observed 1101: the old `2024-11-12` compatibility date did not enable Node.js HTTP server modules; Wrangler's compatibility polyfill threw `[unenv] http.createServer is not implemented yet!`.
 - Fix prepared on branch `fix/worker-http-server-compat`: add `enable_nodejs_http_server_modules` beside `nodejs_compat` in `backend/wrangler.toml`. This is not yet deployed.
+- `frontend/js/config.js` now defaults `API_BASE_URL` to `https://global.primeage.workers.dev/api/v1`; `MG_API_BASE_URL` can still override it for preview/staging.
+- The frontend Clerk publishable key remains intentionally blank until the owner supplies the real `pk_test_...` or `pk_live_...` key via Pages injection or gitignored `config.local.js`.
 - The same production log reported missing secrets: `CLERK_SECRET_KEY`, `CLERK_WEBHOOK_SIGNING_SECRET`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY`. These must be configured in Cloudflare; do not commit them.
 - Scripts: `npm run cf:dev`, `npm run cf:deploy`.
 - CI: `.github/workflows/workers.yml` (needs `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`).
 
 ### Still required from owner
-1. Review/merge the Worker compatibility fix; deploy only after approval.
+1. Review/merge the fix PR; deployment is not yet performed.
 2. Set required Worker secrets for Clerk and Supabase (plus Resend/Twilio if those features are enabled).
-3. Apply migration 0006 on Supabase.
-4. Set `CORS_ORIGIN` to the actual Pages frontend origin(s).
-5. Complete live verification: `/api/v1/health` returns 200 and reports real dependency configuration; then test authenticated endpoints.
-6. Cloudflare Pages project + optional Worker custom domain.
-7. GitHub secrets for CI deploy (optional).
+3. Set the Clerk publishable key in the frontend's Pages environment/injection or local config.
+4. Apply migration 0006 on Supabase.
+5. Set `CORS_ORIGIN` to the actual Pages frontend origin(s).
+6. Complete live verification: `/api/v1/health` returns 200 and reports real dependency configuration; then test authenticated endpoints.
+7. Cloudflare Pages project + optional Worker custom domain.
+8. GitHub secrets for CI deploy (optional).
 
 ### Integration status
 | Integration | Status |
