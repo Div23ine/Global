@@ -33,6 +33,20 @@ when its email is confirmed. It preserves the legacy profiles.id value and all
 financial foreign keys. New users get a profile and a zero-balance default
 currency account.
 
+Before production migration, schedule a coordinated maintenance window.
+Migration 0007 is not backward-compatible with the old Clerk API: it renames
+admin_users.clerk_user_id and changes the RLS identity helper. Once it has been
+applied, the old Clerk-backed API version is no longer supported. Pause
+authenticated customer/admin traffic, apply 0007, deploy the new Supabase Auth
+Worker, verify /api/v1/health and a test login, then publish the new frontend
+configuration. Do not leave the old Worker running against the migrated schema.
+
+Before the window, rehearse the exact sequence against a production-like backup,
+prepare a database restore/forward-repair plan, and confirm a known administrator
+can sign in with Supabase Auth. If the new Worker fails after migration, keep
+authenticated traffic paused and use the approved restore/repair plan; do not
+simply roll back the old Clerk Worker against the new schema.
+
 Before production migration, check that every existing admin holder maps to a
 profile. On the pre-migration schema, run:
 
