@@ -13,10 +13,16 @@ cd frontend && python3 -m http.server 4173
 ```
 
 ## Configure
-Inject these public values before `js/config.js` loads in both `app.html` and
-`admin.html` (or use the deployment's build-time config injection step):
-- `API_BASE_URL` — backend base, e.g. `https://global.primeage.workers.dev/api/v1`
-- `SUPABASE_URL` and `SUPABASE_ANON_KEY` — public browser configuration values
+Set the public browser configuration in `js/config.local.js` (loaded before
+`js/config.js` by the public site, customer app, and admin console):
+- `SUPABASE_URL` — your Supabase project URL
+- `SUPABASE_ANON_KEY` — your Supabase anon/publishable key
+- `API_BASE_URL` — optional override; defaults to `https://api.meridian.uk.com/api/v1`
+
+The same values may instead be injected as `window.MG_SUPABASE_URL`,
+`window.MG_SUPABASE_ANON_KEY`, and `window.MG_API_BASE_URL` before `config.js`.
+The local file contains public browser values only; never put the Supabase
+service-role key or any backend secret in it.
 
 The Supabase anon/publishable key is intended for browser use. The Supabase
 service-role key must never appear in frontend code. Without configuration,
@@ -28,6 +34,7 @@ index.html + 9 pages   public marketing site (static, design 02)
 app.html               customer application (React CDN SPA, hash-routed)
 admin.html             administrator console (React CDN SPA, role-gated)
 assets/theme.css       the approved design system
+js/config.local.js     public runtime values (Supabase URL + anon key)
 js/config.js           non-secret configuration
 js/util.js             formatting / toast / download helpers
 js/site.js             public-site chrome + behaviours
