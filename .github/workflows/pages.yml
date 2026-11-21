@@ -1,38 +1,33 @@
-name: Deploy Meridian Global Accounts
+name: Deploy Meridian Global Accounts to Cloudflare Pages
 
 on:
   push:
-    branches: [main, development]
+    branches: [development]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/pages.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: pages
+  group: cloudflare-pages-development
   cancel-in-progress: true
 
 jobs:
   deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout development branch
         uses: actions/checkout@v4
-
-      - name: Configure Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload production frontend
-        uses: actions/upload-pages-artifact@v3
         with:
-          path: frontend
+          ref: development
 
-      - name: Deploy website
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Deploy frontend to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy frontend --project-name=meridian-global --branch=development
