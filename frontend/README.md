@@ -13,20 +13,17 @@ cd frontend && python3 -m http.server 4173
 ```
 
 ## Configure
-Set the public browser configuration in `js/config.local.js` (loaded before
-`js/config.js` by the public site, customer app, and admin console):
-- `SUPABASE_URL` — your Supabase project URL
-- `SUPABASE_ANON_KEY` — your Supabase anon/publishable key
-- `API_BASE_URL` — optional override; defaults to `https://api.meridian.uk.com/api/v1`
+The customer app, admin console, and public site retrieve the public Supabase
+browser configuration automatically from `https://api.meridian.uk.com/api/v1/public-config`.
 
-The same values may instead be injected as `window.MG_SUPABASE_URL`,
-`window.MG_SUPABASE_ANON_KEY`, and `window.MG_API_BASE_URL` before `config.js`.
-The local file contains public browser values only; never put the Supabase
-service-role key or any backend secret in it.
+Set these Cloudflare Worker secrets on the `global` Worker:
+- `SUPABASE_URL`
+- `SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
 
-The Supabase anon/publishable key is intended for browser use. The Supabase
-service-role key must never appear in frontend code. Without configuration,
-`app.html` and `admin.html` render an explicit screen and never use simulated data.
+The API endpoint returns only the Supabase project URL and anon key. The
+service-role key and all other private credentials remain backend-only. No
+frontend file needs manual credentials or a local configuration override.
 
 ## Structure
 ```
