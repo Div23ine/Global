@@ -5,7 +5,10 @@
 name = "global"
 main = "src/worker.ts"
 compatibility_date = "2024-11-12"
-compatibility_flags = ["nodejs_compat"]
+# worker.ts uses node:http.createServer() with cloudflare:node's httpServerHandler.
+# This server-side Node HTTP compatibility flag is required before the 2025-09-01
+# compatibility-date default; keep nodejs_compat for the other Node APIs.
+compatibility_flags = ["nodejs_compat", "enable_nodejs_http_server_modules"]
 
 # Account / routes configured via dashboard or:
 # routes = [{ pattern = "api.meridian.example.com/*", zone_name = "meridian.example.com" }]
