@@ -46,8 +46,16 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
   try {
     const header = req.headers.authorization;
     if (!header) throw unauthenticated();
-    const claims = await verifier(header);
-    const token = header.startsWith('Bearer ') ? header.slice(7) : header;
+    const bearer = /^Bearer\\s+([^\\s]+)$/i.exec(header);
+    if (!bearer) throw unauthenticated();
+
+    let claims: { sub: string; email?: string };
+    try {
+      claims = await verifier(header);
+    } catch {
+      throw unauthenticated();
+    }
+    const token = bearer[1];
     const db = getServiceClient();
 
     let { data: profile, error } = await db
@@ -84,8 +92,8 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
       supabaseJwt: token,
     };
     next();
-  } catch {
-    next(unauthenticated());
+  } catch (err) {
+    next(err);
   }
 }
 
@@ -96,7 +104,8 @@ async function loadAdmin(auth: AuthInfo): Promise<AdminInfo | null> {
     .select('profile_id, display_name, role_id, admin_roles(permissions)')
     .eq('profile_id', auth.userId)
     .maybeSingle();
-  if (error || !data) return null;
+  if (error) throw new Error(error.message);
+  if (!data) return null;
   const role = data.admin_roles as unknown as { permissions: string[] } | null;
   return {
     ...auth,
