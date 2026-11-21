@@ -13,7 +13,7 @@ healthRouter.get('/health', (_req, res) => {
     environment: env.nodeEnv,
     checks: {
       database: supabaseConfigured() ? 'configured' : 'not_configured',
-      clerk: env.clerk.secretKey ? 'configured' : 'not_configured',
+      auth: supabaseConfigured() ? 'configured' : 'not_configured',
       twilio: env.twilio.accountSid ? 'configured' : 'not_configured',
     },
   }, 'Service healthy');
