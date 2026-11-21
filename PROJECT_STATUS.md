@@ -102,8 +102,12 @@ app.html/admin.html origins. Never expose the service-role key in the frontend.
    public config and exact CORS origins.
 6. Deploy to a preview Worker and verify /api/v1/health returns HTTP 200.
    Test real Supabase Auth and two-user RLS isolation before production.
-7. Only after explicit owner approval, merge/deploy and apply migration 0007
-   to production using the approved backup/rollback plan.
+7. Plan a production maintenance window: migration 0007 changes admin_users
+   and the RLS identity helper, so the old Clerk API cannot run against the
+   migrated schema. Pause authenticated traffic, apply the migration, deploy
+   the new Worker and verify a test login before publishing the new frontend.
+   Have a tested restore/forward-repair plan ready.
+8. Only after explicit owner approval, perform the production cutover.
 
 ## Earlier deployment workflow results (PR #1 merge)
 
