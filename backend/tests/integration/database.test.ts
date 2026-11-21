@@ -106,7 +106,7 @@ afterAll(async () => {
 
 const USER_A = '00000000-0000-4000-8000-000000000001';
 const USER_B = '00000000-0000-4000-8000-000000000002';
-const LEGACY_PROFILE = 'legacy_clerk_profile_001';
+const LEGACY_PROFILE = 'legacy_profile_001';
 const LEGACY_AUTH_USER = '00000000-0000-4000-8000-000000000003';
 
 async function asUser(supabaseUserId: string): Promise<Client> {
