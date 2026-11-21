@@ -95,6 +95,18 @@ export type AppEnv = ReturnType<typeof buildEnv>;
 export let env: AppEnv = buildEnv();
 
 /**
+ * Check whether all credentials required by both Supabase clients are configured.
+ * This checks configuration only; it does not test network reachability.
+ */
+export function supabaseConfigured(): boolean {
+  return Boolean(
+    env.supabase.url &&
+    env.supabase.anonKey &&
+    env.supabase.serviceRoleKey
+  );
+}
+
+/**
  * Apply Cloudflare Worker secrets/vars into the env bag and rebuild.
  * Call once at the start of each fetch (or on isolate init).
  */
@@ -117,6 +129,7 @@ export function assertProductionReadiness(): void {
   if (!env.clerk.secretKey) missing.push('CLERK_SECRET_KEY');
   if (!env.clerk.webhookSigningSecret) missing.push('CLERK_WEBHOOK_SIGNING_SECRET');
   if (!env.supabase.url) missing.push('SUPABASE_URL');
+  if (!env.supabase.anonKey) missing.push('SUPABASE_ANON_KEY');
   if (!env.supabase.serviceRoleKey) missing.push('SUPABASE_SERVICE_ROLE_KEY');
   if (missing.length) {
     throw new Error(`Production missing required secrets: ${missing.join(', ')}`);
