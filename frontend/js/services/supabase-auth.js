@@ -165,7 +165,8 @@
     signOut: function (options) {
       var scope = options && options.scope ? options.scope : 'local';
       return requireClient().auth.signOut({ scope: scope }).then(function (result) {
-        if (!result.error) publish(null, null);
+        // "others" retains this browser's session; local/global sign-out do not.
+        if (!result.error && scope !== 'others') publish(null, null);
         return result;
       });
     },
