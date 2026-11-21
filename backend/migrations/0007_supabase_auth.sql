@@ -172,7 +172,7 @@ BEGIN
          deleted_at = now()
    WHERE id = p_profile_id;
 END;
-$;
+$$;
 
 -- This SECURITY DEFINER function can clear customer PII and unlink an Auth
 -- identity. It must be callable only by the trusted backend service role.
