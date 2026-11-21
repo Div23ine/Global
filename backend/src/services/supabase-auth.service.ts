@@ -43,6 +43,10 @@ export async function verifySupabaseAccessToken(headerValue: string): Promise<Su
 /** Resolve an active, already-linked Supabase Auth user for admin role assignment. */
 export async function getLinkedProfileByEmail(email: string): Promise<LinkedAuthProfile> {
   const db = getServiceClient();
+  const normalizedEmail = email.trim().toLowerCase();
+  // PostgREST ilike patterns treat '%' and '_' as wildcards. Escape them so
+  // a role assignment always targets the literal email the admin supplied.
+  const emailPattern = normalizedEmail.replace(/[\\%_]/g, '\\  const db = getServiceClient();
   const { data, error } = await db
     .from('profiles')
     .select('id, email, first_name, last_name, supabase_user_id, status')
@@ -52,7 +56,35 @@ export async function getLinkedProfileByEmail(email: string): Promise<LinkedAuth
   if (!data || !data.supabase_user_id || data.status !== 'active') {
     throw notFound('An active Supabase Auth user with this verified email must sign in before a role can be assigned.');
   }
-  return data as LinkedAuthProfile;
+  return data as LinkedAuthProfile;');
+  const { data, error } = await db
+    .from('profiles')
+    .select('id, email, first_name, last_name, supabase_user_id, status')
+    .ilike('email', emailPattern)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data || !data.supabase_user_id || data.status !== 'active') {
+    throw notFound('An active Supabase Auth user with this verified email must sign in before a role can be assigned.');
+  }
+
+  // Re-check the currently confirmed Auth email; profile email values can be
+  // stale after an identity changes its email address.
+  const { data: authResult, error: authError } =
+    await db.auth.admin.getUserById(data.supabase_user_id);
+  if (authError) throw new Error(authError.message);
+  const authUser = authResult.user;
+  if (
+    !authUser?.email ||
+    !authUser.email_confirmed_at ||
+    authUser.email.trim().toLowerCase() !== normalizedEmail
+  ) {
+    throw notFound('The Supabase Auth user must have this exact confirmed email before a role can be assigned.');
+  }
+
+  return {
+    ...data,
+    email: authUser.email,
+  } as LinkedAuthProfile;
 }
 
 /** Apply an Auth ban in addition to the profile-status request guard. */
