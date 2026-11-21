@@ -68,12 +68,12 @@ beforeAll(async () => {
       raw_user_meta_data jsonb NOT NULL DEFAULT '{}'::jsonb
     );
     CREATE FUNCTION auth.uid() RETURNS uuid
-    LANGUAGE sql STABLE AS $
+    LANGUAGE sql STABLE AS $auth$
       SELECT (NULLIF(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub')::uuid;
-    $;`);
+    $auth$;`);
 
   // Create Supabase's API roles before migrations that grant function access.
-  await svc.query(`DO $ BEGIN
+  await svc.query(`DO $roles$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
       CREATE ROLE authenticated NOLOGIN;
     END IF;
@@ -83,7 +83,7 @@ beforeAll(async () => {
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
       CREATE ROLE service_role NOLOGIN;
     END IF;
-  END $;`);
+  END $roles$;`);
   await svc.query('GRANT USAGE ON SCHEMA auth TO authenticated, anon, service_role');
   await svc.query('GRANT EXECUTE ON FUNCTION auth.uid() TO authenticated, anon, service_role');
 
@@ -226,6 +226,29 @@ describe('Supabase Auth profile bootstrap', () => {
 
     const accounts = await svc!.query('SELECT profile_id FROM accounts WHERE profile_id = $1', [LEGACY_PROFILE]);
     expect(accounts.rows).toHaveLength(1);
+
+    // The Auth UUID must resolve to the legacy canonical profile id inside RLS.
+    const legacyUser = await asUser(LEGACY_AUTH_USER);
+    try {
+      const visibleProfile = await legacyUser.query('SELECT id FROM profiles');
+      expect(visibleProfile.rows).toEqual([{ id: LEGACY_PROFILE }]);
+    } finally {
+      await legacyUser.end().catch(() => undefined);
+    }
+  });
+
+  it('refuses to bootstrap an Auth identity until its email is confirmed', async () => {
+    const unverifiedId = '00000000-0000-4000-8000-000000000008';
+    await svc!.query(
+      `INSERT INTO auth.users (id, email, raw_user_meta_data)
+       VALUES ($1::uuid, 'unverified@example.com', '{}'::jsonb)`,
+      [unverifiedId],
+    );
+    await expect(
+      svc!.query('SELECT public.bootstrap_supabase_profile($1::uuid)', [unverifiedId]),
+    ).rejects.toThrow('AUTH_EMAIL_NOT_VERIFIED');
+    const profile = await svc!.query('SELECT id FROM profiles WHERE email = $1', ['unverified@example.com']);
+    expect(profile.rows).toHaveLength(0);
   });
 });
 
