@@ -5,8 +5,10 @@ Last updated: 2026-11-21 (Supabase Auth migration prepared; deployment pending)
 ## Current state
 
 Cloudflare-native frontend/API, Supabase PostgreSQL and Supabase Auth. The
-authentication migration and Worker runtime fix are prepared on branch
-fix/worker-http-server-compat and are not merged or deployed.
+Supabase Auth conversion is prepared on branch
+feat/supabase-auth-migration and is not merged or deployed. The initial Worker
+runtime fix was already merged into development via PR #1; the updated
+complete node:http flags are included in this authentication branch.
 
 ### Hosting and services
 
@@ -66,8 +68,10 @@ app.html/admin.html origins. Never expose the service-role key in the frontend.
 - Root cause: backend/src/worker.ts uses node:http.createServer() with
   cloudflare:node/httpServerHandler, but backend/wrangler.toml had only
   nodejs_compat on the older compatibility date.
-- The feature branch adds enable_nodejs_http_server_modules while retaining
-  nodejs_compat. This fix is not deployed.
+- The feature branch retains nodejs_compat and enables both
+enable_nodejs_http_modules and enable_nodejs_http_server_modules for the
+complete node:http implementation used by the adapter. This additional flag
+configuration is not deployed.
 - API base configured in frontend/js/config.js:
   https://global.primeage.workers.dev/api/v1
 - The earlier production log also reported missing Clerk and Supabase secrets.
@@ -84,8 +88,12 @@ app.html/admin.html origins. Never expose the service-role key in the frontend.
 - Admin role assignment by confirmed Supabase Auth email; suspend/ban/unban
   and deletion use Supabase Auth admin operations plus profile-status checks.
 - Migration 0007 for Supabase Auth identity linkage and RLS mapping.
-- Integration tests updated for confirmed Auth users, legacy profile linkage
-  and RLS mapping.
+- Integration tests updated for confirmed Auth users, legacy profile linkage,
+  RLS mapping, and function privilege boundaries.
+- Migration 0007 explicitly grants anon execution of the safe RLS identity helper
+  and restricts SECURITY DEFINER profile anonymization to service_role.
+- The frontend HTTP client now caps both network retries and Supabase token
+  refresh to prevent an unbounded retry loop.
 - Active Clerk code and dependencies removed; architecture, security and
   deployment documentation updated.
 
@@ -113,16 +121,16 @@ app.html/admin.html origins. Never expose the service-role key in the frontend.
 | Wrangler runtime fix | Prepared, not deployed |
 | Supabase Auth frontend/backend changes | Prepared, not deployed |
 | Migration 0007 | Added to branch, not applied |
-| Backend typecheck/lint/tests after migration | NOT RUN |
-| Frontend syntax/browser checks after migration | NOT RUN |
+| Backend typecheck/lint/tests after migration | NOT RUN; regression coverage added for function ACLs |
+| Frontend syntax/browser checks after migration | NOT RUN; HTTP retry logic updated |
 | Live Supabase Auth verification | NOT RUN |
 | Production deployment | NOT PERFORMED |
 
 ## Pull request
 
-Draft pull request: https://github.com/Div23ine/Global/pull/1
-Branch: fix/worker-http-server-compat
+Review branch: feat/supabase-auth-migration
 Base: development
+Pull request: to be opened after rebasing the changes onto the current development head.
 
 Do not report the current live Worker as fixed until the compatible Worker
 configuration is deployed and the health/auth flows are verified.
