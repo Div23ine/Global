@@ -49,7 +49,7 @@ frontend/             Production frontend — React 18 CDN + Babel Standalone
   admin.html          Administrator console SPA (React CDN)
   assets/             theme.css (design system carried over from Design 02), images
   js/                 classic scripts, no modules: config, services, components, views
-backend/              Node.js + TypeScript + Express REST API (Oracle Cloud VM)
+backend/              Node.js + TypeScript + Express REST API (Cloudflare Worker)
   src/                config, middleware, routes, services, utils
   migrations/         Supabase PostgreSQL SQL migrations (forward-only)
   tests/              Vitest unit + integration tests
