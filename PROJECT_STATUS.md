@@ -1,19 +1,21 @@
 # PROJECT STATUS — Meridian Global Accounts
 
-Last updated: 2026-11-21 (Supabase Auth migration prepared; deployment pending)
+Last updated: 2026-11-21 (Meridian domain connected; Supabase Auth migration prepared)
 
 ## Current state
 
 Cloudflare-native frontend/API, Supabase PostgreSQL and Supabase Auth. The
-authentication migration and Worker runtime fix are prepared on branch
-fix/worker-http-server-compat and are not merged or deployed.
+Supabase Auth conversion is prepared on branch
+feat/supabase-auth-migration and is not merged or deployed. The initial Worker
+runtime fix was already merged into development via PR #1; the updated
+complete node:http flags are included in this authentication branch.
 
 ### Hosting and services
 
 | Component | Platform / status |
 |---|---|
-| Frontend | Cloudflare Pages, static frontend/ directory |
-| Backend API | Cloudflare Worker named global |
+| Frontend | Cloudflare Pages, custom domain https://meridian.uk.com |
+| Backend API | Cloudflare Worker named global, custom domain https://api.meridian.uk.com |
 | Database | Supabase PostgreSQL |
 | Authentication | Supabase Auth (email/password; email confirmation required) |
 | Email notifications | Resend; Auth confirmation/recovery SMTP configured separately in Supabase |
@@ -52,13 +54,14 @@ Worker secrets required:
 - SUPABASE_SERVICE_ROLE_KEY
 
 Frontend public configuration required:
-- MG_API_BASE_URL (defaults to the Worker API base below)
+- MG_API_BASE_URL (production default: https://api.meridian.uk.com/api/v1)
 - MG_SUPABASE_URL
 - MG_SUPABASE_ANON_KEY
 
 Configure Supabase Auth Email provider, require email confirmation, SMTP for
-confirmation/recovery, and exact redirect URLs for the Cloudflare Pages
-app.html/admin.html origins. Never expose the service-role key in the frontend.
+confirmation/recovery, and exact redirect URLs for
+https://meridian.uk.com/app.html and https://meridian.uk.com/admin.html.
+Never expose the service-role key in the frontend.
 
 ## Cloudflare Worker incident
 
@@ -66,26 +69,34 @@ app.html/admin.html origins. Never expose the service-role key in the frontend.
 - Root cause: backend/src/worker.ts uses node:http.createServer() with
   cloudflare:node/httpServerHandler, but backend/wrangler.toml had only
   nodejs_compat on the older compatibility date.
-- The feature branch adds enable_nodejs_http_server_modules while retaining
-  nodejs_compat. This fix is not deployed.
+- The feature branch retains nodejs_compat and enables both
+  enable_nodejs_http_modules and enable_nodejs_http_server_modules for the
+  complete node:http implementation used by the adapter. This configuration
+  is not deployed.
 - API base configured in frontend/js/config.js:
-  https://global.primeage.workers.dev/api/v1
+  https://api.meridian.uk.com/api/v1
 - The earlier production log also reported missing Clerk and Supabase secrets.
   Clerk secrets are obsolete after this migration; the Supabase trio above
   remain required.
-- Set CORS_ORIGIN to the exact deployed Pages origin(s).
+- Production CORS_ORIGIN is set to https://meridian.uk.com and https://www.meridian.uk.com.
 
 ## Changes on the feature branch
 
-- Worker compatibility flag and API base URL.
+- Worker compatibility flags and branded API base URL https://api.meridian.uk.com/api/v1.
+- Production domain meridian.uk.com connected to Cloudflare Pages; api.meridian.uk.com attached as the global Worker custom domain.
 - Supabase Auth browser client, customer/admin login, signup and recovery.
 - Backend Supabase Auth token verification and canonical profile mapping.
 - Supabase user-scoped database client forwarding the verified bearer JWT.
 - Admin role assignment by confirmed Supabase Auth email; suspend/ban/unban
   and deletion use Supabase Auth admin operations plus profile-status checks.
 - Migration 0007 for Supabase Auth identity linkage and RLS mapping.
-- Integration tests updated for confirmed Auth users, legacy profile linkage
-  and RLS mapping.
+- Integration tests updated for confirmed Auth users, legacy profile linkage,
+  RLS mapping, and function privilege boundaries.
+- Migration 0007 explicitly grants anon execution of the safe RLS identity helper,
+  restricts SECURITY DEFINER profile anonymization to service_role, and uses a
+  valid dollar-quoted SQL function body.
+- The frontend HTTP client now caps both network retries and Supabase token
+  refresh to prevent an unbounded retry loop.
 - Active Clerk code and dependencies removed; architecture, security and
   deployment documentation updated.
 
@@ -99,7 +110,7 @@ app.html/admin.html origins. Never expose the service-role key in the frontend.
 4. Rehearse migrations 0001–0007 against a production-like database backup.
    Verify every existing admin holder maps to a profiles.id before migration.
 5. Configure Supabase Auth SMTP and redirect URLs, Worker secrets, frontend
-   public config and exact CORS origins.
+   public config and exact CORS origins for meridian.uk.com.
 6. Deploy to a preview Worker and verify /api/v1/health returns HTTP 200.
    Test real Supabase Auth and two-user RLS isolation before production.
 7. Plan a production maintenance window: migration 0007 changes admin_users
@@ -135,16 +146,17 @@ branch remains unmerged; migration 0007 has not been applied.
 | Wrangler runtime fix | Prepared, not deployed |
 | Supabase Auth frontend/backend changes | Prepared, not deployed |
 | Migration 0007 | Added to branch, not applied |
-| Backend typecheck/lint/tests after migration | NOT RUN |
-| Frontend syntax/browser checks after migration | NOT RUN |
+| Backend typecheck/lint/tests after migration | NOT RUN; regression coverage added for function ACLs |
+| Frontend syntax/browser checks after migration | NOT RUN; HTTP retry logic updated |
 | Live Supabase Auth verification | NOT RUN |
 | Production deployment | NOT PERFORMED |
 
 ## Pull request
 
-Draft pull request: https://github.com/Div23ine/Global/pull/1
-Branch: fix/worker-http-server-compat
+Review branch: feat/supabase-auth-migration
 Base: development
+Draft pull request: https://github.com/Div23ine/Global/pull/3
+The PR is open against development and has not been merged.
 
 Do not report the current live Worker as fixed until the compatible Worker
 configuration is deployed and the health/auth flows are verified.

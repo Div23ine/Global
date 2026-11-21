@@ -6,6 +6,8 @@ this project follows semantic versioning at release time.
 ## [Unreleased]
 
 ### Changed
+- Production frontend uses https://meridian.uk.com and API requests use https://api.meridian.uk.com/api/v1.
+- Worker CORS allowlist is configured for the production root domain and www alias; deployment guide and project status document the Cloudflare Pages/Worker custom-domain setup.
 - Authentication provider: replace Clerk with Supabase Auth for customer and admin identity.
 - API bearer-token validation now uses Supabase Auth getUser; authorization maps Auth UUIDs to canonical Meridian profile IDs.
 - Migration 0007 preserves existing financial ownership while linking confirmed Supabase Auth identities and migrating admin role IDs.

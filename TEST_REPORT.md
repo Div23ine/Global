@@ -98,7 +98,7 @@ cd ../frontend && ./check.sh
 The earlier PASS results above are historical baseline evidence from before the
 Supabase Auth migration. They do not verify the current feature branch.
 
-Changes prepared on fix/worker-http-server-compat:
+Changes prepared on feat/supabase-auth-migration:
 - Supabase Auth bearer tokens are checked using the Auth service getUser call.
 - Customer and admin login/signup/recovery/password update use Supabase Auth.
 - Legacy profile linking preserves profiles.id and existing financial ownership.
@@ -107,9 +107,10 @@ Changes prepared on fix/worker-http-server-compat:
   migration integration test seeds a legacy administrator before migration 0007.
 - The integration tests now cover confirmed-email bootstrap, legacy profile
   linking, canonical profile ID visibility through RLS, unconfirmed-email denial
-  and preservation of an existing admin assignment.
+  preservation of an existing admin assignment, and function ACL boundaries (anon may execute the safe RLS identity helper; anon/authenticated may not execute profile anonymization).
 - Clerk browser/backend services, webhook route and package dependencies have
-  been removed from active production source.
+  been removed from active production source. The frontend request client also
+  bounds transient network retries and permits only one Auth token refresh.
 
 No current-branch check has been executed in this environment:
 - npm ci: NOT RUN
@@ -118,7 +119,7 @@ No current-branch check has been executed in this environment:
 - npm test: NOT RUN
 - frontend/check.sh: NOT RUN
 - browser/customer/admin Auth flows: NOT RUN
-- migration 0007 rehearsal on real Supabase: NOT RUN
+- migration 0007 rehearsal on real Supabase: NOT RUN (including SQL ACL regression test execution)
 - preview or production deployment: NOT PERFORMED
 
 Do not reuse the historical test counts as a release gate for this branch.

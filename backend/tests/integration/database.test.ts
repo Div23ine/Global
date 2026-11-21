@@ -184,6 +184,37 @@ describe('migrations + seed', () => {
       expect(rows[0].currency_code).toBe(currency);
     }
   });
+
+  it('keeps the RLS identity helper public while protecting profile anonymization', async () => {
+    const { rows } = await svc!.query(`
+      SELECT
+        has_function_privilege('anon', 'public.app_current_user_id()', 'EXECUTE') AS anon_can_resolve_identity,
+        has_function_privilege('authenticated', 'public.app_current_user_id()', 'EXECUTE') AS user_can_resolve_identity,
+        has_function_privilege('anon', 'public.anonymize_profile(text)', 'EXECUTE') AS anon_can_anonymize,
+        has_function_privilege('authenticated', 'public.anonymize_profile(text)', 'EXECUTE') AS user_can_anonymize,
+        has_function_privilege('service_role', 'public.anonymize_profile(text)', 'EXECUTE') AS service_can_anonymize
+    `);
+    expect(rows[0]).toEqual({
+      anon_can_resolve_identity: true,
+      user_can_resolve_identity: true,
+      anon_can_anonymize: false,
+      user_can_anonymize: false,
+      service_can_anonymize: true,
+    });
+
+    const anon = await connect();
+    try {
+      await anon.query('SET ROLE anon');
+      const identity = await anon.query('SELECT public.app_current_user_id() AS id');
+      expect(identity.rows[0].id).toBe('');
+      await expect(anon.query(
+        'SELECT public.anonymize_profile($1)',
+        ['legacy_admin_profile'],
+      )).rejects.toThrow(/permission denied/i);
+    } finally {
+      await anon.end().catch(() => undefined);
+    }
+  });
 });
 
 describe('Supabase Auth profile bootstrap', () => {

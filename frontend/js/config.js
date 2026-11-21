@@ -8,7 +8,7 @@ window.MG = window.MG || {};
 MG.config = {
   API_BASE_URL: (typeof window !== 'undefined' && window.MG_API_BASE_URL)
     ? window.MG_API_BASE_URL
-    : 'https://global.primeage.workers.dev/api/v1',
+    : 'https://api.meridian.uk.com/api/v1',
 
   SUPABASE_URL: (typeof window !== 'undefined' && window.MG_SUPABASE_URL)
     ? window.MG_SUPABASE_URL
