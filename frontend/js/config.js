@@ -11,12 +11,11 @@
 */
 window.MG = window.MG || {};
 MG.config = {
-  // REST API base (no trailing slash). Production example:
-  //   https://api.meridian.example.com/api/v1
-  // Local development default targets the Oracle/local backend.
+  // REST API base (no trailing slash). This is the confirmed Cloudflare Worker
+  // host for Meridian; override with MG_API_BASE_URL for preview/staging.
   API_BASE_URL: (typeof window !== 'undefined' && window.MG_API_BASE_URL)
     ? window.MG_API_BASE_URL
-    : 'https://meridian-api.<your-subdomain>.workers.dev/api/v1',
+    : 'https://global.primeage.workers.dev/api/v1',
 
   // Clerk publishable key (pk_test_… or pk_live_…). Public by design.
   // Injected at deploy time; never a secret.
@@ -33,7 +32,7 @@ MG.config = {
   APP_NAME: 'Meridian Global Accounts',
 };
 
-// Local overrides (gitignored). Prefer config.local.js for secrets-free local keys.
+// Local overrides (gitignored). Prefer config.local.js for local keys.
 (function () {
   try {
     if (window.MG_LOCAL_CONFIG) Object.assign(MG.config, window.MG_LOCAL_CONFIG);
