@@ -105,9 +105,17 @@ Clerk secrets and Svix webhook secrets are no longer required by the active
 backend. Never place SUPABASE_SERVICE_ROLE_KEY in frontend code, HTML, a public
 Pages variable, or a GitHub source file.
 
-Set CORS_ORIGIN in backend/wrangler.toml to the exact deployed frontend origin
-or comma-separated list of origins. Confirm the Cloudflare rate-limit bindings
-are configured for the Worker.
+The production domain is meridian.uk.com. The Pages project is attached to
+https://meridian.uk.com (and optionally https://www.meridian.uk.com). The API
+Worker named "global" has the custom domain api.meridian.uk.com configured in
+Cloudflare Workers → Settings → Domains & Routes. Cloudflare manages the DNS
+record and TLS certificate for that Worker custom domain; do not create a
+competing manual DNS record.
+
+Set CORS_ORIGIN in backend/wrangler.toml to the exact deployed frontend origins:
+https://meridian.uk.com,https://www.meridian.uk.com. If you later serve the
+customer or admin apps from separate subdomains, add those exact origins too.
+Confirm the Cloudflare rate-limit bindings are configured for the Worker.
 
 The Worker entry point uses node:http.createServer() through
 cloudflare:node/httpServerHandler. Keep nodejs_compat,
@@ -123,11 +131,14 @@ npm run cf:dev
 npm run cf:deploy
 ```
 
-The configured API base is:
+The production API base configured in frontend/js/config.js is:
 
 ```text
-https://global.primeage.workers.dev/api/v1
+https://api.meridian.uk.com/api/v1
 ```
+
+The workers.dev hostname may remain available for controlled diagnostics, but
+the production frontend should use the branded API hostname.
 
 ## 4. Frontend — Cloudflare Pages
 
@@ -137,7 +148,7 @@ loads in both app.html and admin.html, inject the public values, for example:
 
 ```html
 <script>
-  window.MG_API_BASE_URL = 'https://global.primeage.workers.dev/api/v1';
+  window.MG_API_BASE_URL = 'https://api.meridian.uk.com/api/v1';
   window.MG_SUPABASE_URL = 'https://<project-ref>.supabase.co';
   window.MG_SUPABASE_ANON_KEY = '<public-anon-or-publishable-key>';
 </script>
@@ -159,13 +170,13 @@ Cloudflare Pages settings:
 Set CORS_ORIGIN to the exact Pages URL, for example:
 
 ```text
-CORS_ORIGIN=https://<your-pages-host>.pages.dev
+CORS_ORIGIN=https://meridian.uk.com,https://www.meridian.uk.com
 ```
 
 Then check:
 
 ```bash
-curl -i https://global.primeage.workers.dev/api/v1/health
+curl -i https://api.meridian.uk.com/api/v1/health
 ```
 
 A 200 response confirms the Worker handles the health request. It does not,
