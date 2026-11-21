@@ -26,7 +26,7 @@ const createSchema = z.object({
   notes: z.string().max(500).optional(),
 }).strict();
 
-depositsRouter.post('/deposits', depositLimiter, requireAuth, validate(createSchema), async (req, res, next) => {
+depositsRouter.post('/deposits', requireAuth, depositLimiter, validate(createSchema), async (req, res, next) => {
   try {
     const deposit = await createDeposit(
       req.auth!.userId,
