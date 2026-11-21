@@ -204,6 +204,10 @@ adminRouter.delete('/admin/users/:id', requireAdmin('users.delete'), async (req,
     const { error: statusError } = await db.from('profiles')
       .update({ status: 'deleted' }).eq('id', String(req.params.id));
     if (statusError) throw new Error(statusError.message);
+    // A deleted identity must not retain an administrator role.
+    const { error: roleError } = await db.from('admin_users')
+      .delete().eq('profile_id', String(req.params.id));
+    if (roleError) throw new Error(roleError.message);
     await deleteSupabaseUserForProfile(String(req.params.id));
     const { error } = await db.rpc('anonymize_profile', { p_profile_id: String(req.params.id) });
     if (error) throw new Error(error.message);
