@@ -31,8 +31,8 @@ deposits stay `PENDING` and **no payment may ever be manufactured as successful*
   requirement (see `PROJECT_STATUS.md`).
 - Architecture: React 18 via CDN + Babel Standalone in HTML entry files (no
   Next.js, no frontend build step for the initial implementation); Node.js +
-  TypeScript + Express backend on Oracle Cloud VM; Supabase PostgreSQL;
-  Supabase Auth; Twilio SMS; Cloudflare Pages + Cloudflare DNS.
+  TypeScript + Express backend on Cloudflare Workers; Supabase PostgreSQL and
+  Supabase Auth; Resend email notifications; Twilio transactional SMS; Cloudflare Pages.
 
 ## 2. Repository map
 
