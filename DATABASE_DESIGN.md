@@ -1,8 +1,7 @@
 # DATABASE DESIGN — Meridian Global Accounts (Supabase PostgreSQL)
 
 Status: v1.0 · All money values are `numeric(19,4)` · All timestamps are
-`timestamptz` · Primary keys are `uuid` (gen_random_uuid / pgcrypto) except
-natural keys noted below.
+`timestamptz` · Entity IDs are `uuid` where generated; profiles and admin identity keys are text. Profile-owned foreign keys are text.
 
 ## 1. Entity relationship overview
 
@@ -27,7 +26,7 @@ The canonical application record. `id` is a stable text key retained from legacy
 |---|---|---|
 | id | text PK | canonical Meridian profile id; existing ids are preserved |
 | supabase_user_id | uuid UNIQUE FK auth.users(id) ON DELETE SET NULL | verified Supabase Auth identity; NULL for unlinked legacy profiles |
-| email | text NOT NULL UNIQUE | verified email linked from Supabase Auth or retained from migration |
+| email | text NOT NULL | verified email linked from Supabase Auth or retained from migration; unique case-insensitive index |
 | full_name | text NOT NULL DEFAULT '' | |
 | first_name / last_name | text | permitted-edit fields |
 | phone | text | E.164 |
@@ -84,7 +83,7 @@ Immutable entries; the source of truth for balances.
 | id | uuid PK | |
 | reference | text NOT NULL UNIQUE | e.g. TXN-2026-000123 (sequence-based) |
 | account_id | uuid FK accounts(id) | |
-| profile_id | uuid FK profiles(id) | denormalized for RLS simplicity |
+| profile_id | text FK profiles(id) | denormalized for RLS simplicity |
 | type | text NOT NULL | deposit / withdrawal / fee / adjustment / transfer_in / transfer_out |
 | direction | text NOT NULL | credit / debit |
 | amount | numeric(19,4) NOT NULL CHECK (amount > 0) | always positive |
@@ -106,7 +105,7 @@ projection trigger and the posting function).
 |---|---|---|
 | id | uuid PK | |
 | reference | text NOT NULL UNIQUE | DEP-2026-000123 |
-| profile_id | uuid FK profiles(id) | |
+| profile_id | text FK profiles(id) | |
 | account_id | uuid FK accounts(id) | target account |
 | currency_code | text NOT NULL | |
 | amount | numeric(19,4) NOT NULL CHECK (amount > 0) | |
@@ -152,7 +151,7 @@ Generated on demand from the ledger; content is deterministic.
 | column | type |
 |---|---|
 | id | uuid PK |
-| profile_id | uuid FK profiles(id) |
+| profile_id | text FK profiles(id) |
 | type | text NOT NULL (info / success / warning / security) |
 | title | text NOT NULL |
 | body | text NOT NULL |
@@ -163,7 +162,7 @@ Generated on demand from the ledger; content is deterministic.
 | tickets | type |
 |---|---|
 | id | uuid PK |
-| profile_id | uuid FK |
+| profile_id | text FK profiles(id) |
 | subject | text NOT NULL |
 | category | text NOT NULL (general / deposits / currencies / security / account) |
 | status | text NOT NULL DEFAULT 'open' (open / pending / resolved) |
@@ -181,7 +180,7 @@ Generated on demand from the ledger; content is deterministic.
 | column | type |
 |---|---|
 | id | uuid PK |
-| profile_id | uuid FK |
+| profile_id | text FK profiles(id) |
 | type | text NOT NULL (suspicious_login / freeze / unfreeze / ban / password_change / mfa_change) |
 | severity | text NOT NULL (info / warning / critical) |
 | detail | jsonb |
@@ -248,9 +247,13 @@ Seeded: `platform.name`, `platform.maintenance_mode`,
    amount/currency/account after creation.
 5. `guard_account_close()` — BEFORE UPDATE on accounts: `closed_at` requires
    balance = 0.
-6. `anonymize_profile()` — invoked by the backend on user deletion: clears
-   PII columns, sets `status='deleted'`, `deleted_at=now()`; keeps the row and
-   all financial records (retention).
+6. `app_current_user_id()` — SECURITY DEFINER maps auth.uid() to an active
+   canonical profiles.id through profiles.supabase_user_id for RLS.
+7. `bootstrap_supabase_profile(uuid)` — service-role-only; requires a confirmed
+   Auth email, links an unlinked legacy profile or creates a new profile and
+   default-currency account.
+8. `anonymize_profile()` — called by the backend after identity deletion:
+   clears PII and the Auth link, sets deleted status/time, and retains financial rows.
 
 ## 4. Row Level Security
 
@@ -269,16 +272,16 @@ unique constraint prevents one Auth UUID from linking to multiple profiles or
 an already-linked email from being claimed by a second identity.
 | table | select | insert | update | delete |
 |---|---|---|---|---|
-| profiles | own row | own row (id = app_current_user_id() after service bootstrap | own row, limited columns (full_name, first_name, last_name, phone, prefs) via `profiles_self_update` trigger guard | none |
-| accounts | own | none (service only) | none | none |
-| transactions | own | none | none | none |
-| deposits | own | own (pending, own profile/account) | none (state machine via service only) | none |
+| profiles | own row | none (service bootstrap) | none (backend service role) | none |
+| accounts | own row | none (backend service role) | none | none |
+| transactions | own rows | none (ledger RPC/backend only) | none | none |
+| deposits | own rows | none (backend service role) | none (state machine via service only) | none |
 | payment_attempts | none client | none | none | none |
-| statements | own | none | none | none |
-| notifications | own | none | own (read_at only) | none |
-| support_tickets | own | own | none | none |
-| support_messages | via ticket join (own tickets) | own tickets | none | none |
-| security_events | own | none | none | none |
+| statements | own rows | none (backend service role) | none | none |
+| notifications | own rows | none (backend service role) | none (backend service role) | none |
+| support_tickets | own rows | none (backend service role) | none (backend service role) | none |
+| support_messages | via own-ticket join | none (backend service role) | none | none |
+| security_events | own rows | none (backend service role) | none | none |
 | currencies / country_defaults | public read (anon) | none | none | none |
 | admin_roles / admin_users | none client | none | none | none |
 | audit_logs | none | none | none | none |
@@ -287,7 +290,7 @@ an already-linked email from being claimed by a second identity.
 The backend uses:
 - the **service-role client** for administrative and money-mutating
   operations (authorization enforced in code, one verified place);
-- a **user-scoped client** (forwards the user's Clerk JWT) for
+- a **user-scoped client** (forwards the user's verified Supabase Auth JWT) for
   customer-facing reads — RLS is exercised on the hot path as defense in
   depth, and a bypass path exists only in the service client.
 
@@ -298,7 +301,7 @@ The backend uses:
 `0004_functions_triggers.sql`, `0005_seed.sql`, `0006_deposit_refund_upgrade.sql`,
 `0007_supabase_auth.sql`.
 
-Apply order matters (schema → RLS → functions → seed). A `0000` marker table
+Apply order matters (schema → RLS → functions → seed). A schema_migrations marker table
 `schema_migrations` records applied files. Rollback = restore from backup;
 destructive changes follow expand-then-contract in future migrations.
 
