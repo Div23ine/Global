@@ -14,19 +14,20 @@ profiles 1──* accounts 1──* transactions (ledger entries)
    │             ├──* support_tickets 1──* support_messages
    │             ├──* security_events
    │             └──* audit_logs (as actor or target)
-admin_roles 1──* admin_users (clerk user id → role)
+admin_roles 1──* admin_users (profile id → role)
 currencies 1──* accounts          app_settings (key/value)
 ```
 
 ## 2. Tables
 
 ### profiles
-The application record for a Clerk user. `id` = Clerk `sub` (uuid text key).
+The canonical application record. `id` is a stable text key retained from legacy accounts; new records use the Supabase Auth UUID as text. `supabase_user_id` links the profile to `auth.users(id)`.
 
 | column | type | notes |
 |---|---|---|
-| id | uuid PK | Clerk user id (from JWT `sub`) |
-| email | text NOT NULL UNIQUE | synced from Clerk |
+| id | text PK | canonical Meridian profile id; existing ids are preserved |
+| supabase_user_id | uuid UNIQUE FK auth.users(id) ON DELETE SET NULL | verified Supabase Auth identity; NULL for unlinked legacy profiles |
+| email | text NOT NULL UNIQUE | verified email linked from Supabase Auth or retained from migration |
 | full_name | text NOT NULL DEFAULT '' | |
 | first_name / last_name | text | permitted-edit fields |
 | phone | text | E.164 |
@@ -68,7 +69,7 @@ One row per (customer, currency). UNIQUE(profile_id, currency_code).
 | column | type | notes |
 |---|---|---|
 | id | uuid PK | |
-| profile_id | uuid FK profiles(id) ON DELETE RESTRICT | financial records retained |
+| profile_id | text FK profiles(id) ON DELETE RESTRICT | financial records retained |
 | currency_code | text FK currencies.code | |
 | status | text NOT NULL DEFAULT 'active' | active / suspended / closed |
 | balance | numeric(19,4) NOT NULL DEFAULT 0 | projection of the ledger (trigger-maintained) |
@@ -195,7 +196,7 @@ Generated on demand from the ledger; content is deterministic.
 
 | admin_users | type |
 |---|---|
-| clerk_user_id | text PK (Clerk sub as text) |
+| profile_id | text PK FK profiles(id) |
 | role_id | text FK admin_roles(id) |
 | assigned_by | text |
 | assigned_at | timestamptz |
@@ -209,7 +210,7 @@ Permission strings: `users.read`, `users.edit`, `users.ban`, `users.delete`,
 | column | type |
 |---|---|
 | id | uuid PK |
-| actor_id | text (Clerk sub or 'system' / 'webhook:<provider>') |
+| actor_id | text (canonical profile id or 'system' / 'webhook:<provider>') |
 | actor_role | text |
 | action | text NOT NULL |
 | target_type | text |
@@ -253,14 +254,22 @@ Seeded: `platform.name`, `platform.maintenance_mode`,
 
 ## 4. Row Level Security
 
-All tables `ENABLE ROW LEVEL SECURITY`. Clerk issues the JWT; Supabase
-validates it via the Clerk JWT template (claims: `sub`, `role='authenticated'`).
-Policies compare `auth.jwt() ->> 'sub'` with the owning `profile_id` (cast to
-text where needed).
+All tables `ENABLE ROW LEVEL SECURITY`. Supabase Auth issues the access JWT.
+For each protected request the backend validates the token with Auth
+`getUser()`, then maps `auth.uid()` to `profiles.id` through the unique
+`profiles.supabase_user_id` column. RLS policies call
+`public.app_current_user_id()` to resolve this canonical profile id; client
+policies never trust an email or profile id supplied by the browser.
 
+`bootstrap_supabase_profile(uuid)` is a service-role-only security-definer
+function. It requires a confirmed Supabase Auth email, links a matching
+unlinked legacy profile by verified email without changing its canonical id,
+or creates a new profile and its zero-balance default-currency account. A
+unique constraint prevents one Auth UUID from linking to multiple profiles or
+an already-linked email from being claimed by a second identity.
 | table | select | insert | update | delete |
 |---|---|---|---|---|
-| profiles | own row | own row (id = sub) on signup bootstrap | own row, limited columns (full_name, first_name, last_name, phone, prefs) via `profiles_self_update` trigger guard | none |
+| profiles | own row | own row (id = app_current_user_id() after service bootstrap | own row, limited columns (full_name, first_name, last_name, phone, prefs) via `profiles_self_update` trigger guard | none |
 | accounts | own | none (service only) | none | none |
 | transactions | own | none | none | none |
 | deposits | own | own (pending, own profile/account) | none (state machine via service only) | none |
@@ -286,7 +295,8 @@ The backend uses:
 
 `backend/migrations/` — forward-only, ordered:
 `0001_extensions.sql`, `0002_schema.sql`, `0003_rls.sql`,
-`0004_functions_triggers.sql`, `0005_seed.sql`.
+`0004_functions_triggers.sql`, `0005_seed.sql`, `0006_deposit_refund_upgrade.sql`,
+`0007_supabase_auth.sql`.
 
 Apply order matters (schema → RLS → functions → seed). A `0000` marker table
 `schema_migrations` records applied files. Rollback = restore from backup;
