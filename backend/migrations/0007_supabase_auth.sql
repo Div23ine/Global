@@ -15,6 +15,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_profiles_supabase_user_id
 ALTER TABLE public.admin_users
   RENAME COLUMN clerk_user_id TO profile_id;
 
+-- Admin role holders must map to a real canonical Meridian profile.
+-- The pre-migration orphan check is documented in DEPLOYMENT_GUIDE.md.
+ALTER TABLE public.admin_users
+  ADD CONSTRAINT admin_users_profile_id_fkey
+  FOREIGN KEY (profile_id) REFERENCES public.profiles(id) ON DELETE RESTRICT;
+
 -- Resolve the Supabase Auth UUID to the canonical profile id used by the
 -- existing schema. SECURITY DEFINER avoids recursive RLS when reading profiles.
 CREATE OR REPLACE FUNCTION public.app_current_user_id() RETURNS text
