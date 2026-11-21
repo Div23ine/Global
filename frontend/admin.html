@@ -10,24 +10,10 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="assets/theme.css">
-  <style>
-    /* Admin-specific additions in the approved design language. */
-    .adm-chip { display:inline-flex; align-items:center; gap:6px; padding:3px 10px; border-radius:999px;
-      font-size:11px; font-weight:700; letter-spacing:.04em; background:var(--side-bg); color:#DCE7F9; }
-    .adm-note { display:flex; gap:8px; align-items:flex-start; padding:12px 14px; border-radius:12px;
-      background:var(--warn-soft); color:var(--warn-2); font-size:12.5px; margin-bottom:16px; }
-    .role-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:14px; }
-    .matrix td, .matrix th { font-size:12px; }
-    .matrix .yes { color:var(--success-2); font-weight:700; }
-    .matrix .no { color:var(--muted); }
-    .denied-row td { background:rgba(240,68,56,.05); }
-  </style>
+  <link rel="stylesheet" href="assets/admin.css">
 </head>
 <body data-page="admin">
-  <a class="skip-link" href="#gl-main">Skip to content</a>
   <div id="gl-app" aria-live="polite"></div>
-  <div id="gl-toasts" class="gl-toasts" aria-live="polite"></div>
-  <div id="gl-modal" class="gl-modal-root" hidden></div>
 
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>

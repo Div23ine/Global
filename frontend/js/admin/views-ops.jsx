@@ -1,5 +1,12 @@
-/* Admin views — operations: currencies, deposits, transactions, payments,
-   security, reports, support, roles, audit, settings. */
+/* ==========================================================================
+   MERIDIAN ADMIN — Hong Kong International Fintech (Design 2)
+   admin views-ops.jsx — Currencies · Deposits · Refunds · Transactions ·
+   Payments · Security · Reports · Support · Roles · Audit · Settings
+
+   Every view uses the prototype design: PageHead, StatCard with icons,
+   DataTable with cell patterns, filter bars with segmented controls,
+   restricted panels, feeds, mini-lists, role cards, support threads.
+   ========================================================================== */
 (function () {
   var React = window.React;
   var h = React.createElement;
@@ -9,32 +16,43 @@
   MGA.views.currencies = function () {
     var _r = React.useState(0); var reload = _r[1];
     var state = MG.ui.useAsync(function () { return MGA.api.currencies(); }, [_r[0]]);
-    if (state.loading) return h(MG.ui.LoadingPanel);
+    if (state.loading) return h(MG.ui.PageSkeleton, { variant: 'list' });
     if (state.error) return h(MG.ui.ErrorPanel, { error: state.error, onRetry: function () { location.reload(); } });
-    return h(MG.ui.Card, { title: 'Currency availability' },
-      h('p', { className: 'muted' }, 'Availability changes take effect immediately for customer activation attempts and are audit-logged.'),
-      h(MG.ui.Table, {
-        columns: [{ label: 'Code' }, { label: 'Name' }, { label: 'Symbol' }, { label: 'Status' }, { label: '' }],
+    return h(React.Fragment, null,
+      h(MG.ui.PageHead, {
+        icon: 'coins', title: 'Currency management',
+        sub: 'Control which currencies customers can activate. Changes are audited and take effect immediately.' }),
+      h(MG.ui.Notice, { tone: 'info', icon: 'globe' },
+        h('p', null, 'Availability is a ', h('b', null, 'live platform setting'),
+          ' \u2014 the customer Activate page re-reads it on every visit.')),
+      h(MG.ui.DataTable, {
         rows: state.data || [],
-        renderRow: function (c) {
-          return h('tr', { key: c.code },
-            h('td', null, h('b', null, c.code)),
-            h('td', null, c.name),
-            h('td', null, c.symbol),
-            h('td', null, h(MG.ui.Badge, { status: c.status })),
-            h('td', null,
-              h(MG.ui.Button, {
-                variant: c.status === 'active' ? 'ghost' : 'primary', size: 'sm',
-                onClick: function () {
-                  var next = c.status === 'active' ? 'unavailable' : 'active';
+        rowKey: function (c) { return c.code; },
+        empty: h(MG.ui.Empty, { icon: 'coins', title: 'No currencies', note: 'The supported currency list is empty.' }),
+        columns: [
+          { th: 'Currency', td: function (c) {
+            return h('span', { className: 'cell-cur' },
+              h('span', { className: 'cur-glyph' }, c.symbol),
+              h('span', null, h('b', null, c.code), h('small', null, c.name))); } },
+          { th: 'Status', td: function (c) { return h(MG.ui.Badge, { status: c.status, label: c.status === 'active' ? 'available' : 'unavailable' }); } },
+          { th: 'Availability', align: 'right', td: function (c) {
+            return c.status === 'active'
+              ? h('button', { className: 'btn btn-ghost btn-sm', onClick: function () {
+                  var next = 'unavailable';
                   MGA.api.setCurrencyStatus(c.code, next).then(function () {
-                    MG.util.toast(c.code + ' set to ' + next + '.', 'ok');
+                    MG.ui.toast(c.code + ' set to ' + next + '.', 'ok');
                     reload(function (x) { return x + 1; });
-                  }).catch(function (e) { MG.util.toast(MG.util.errMessage(e), 'err'); });
-                },
-              }, c.status === 'active' ? 'Set unavailable' : 'Set active')));
-        },
-      }));
+                  }).catch(function (e) { MG.ui.toast(MG.util.errMessage(e), 'err'); });
+                } }, h(MG.ui.Icon, { name: 'pause', size: 13 }), ' Set unavailable')
+              : h('button', { className: 'btn btn-primary btn-sm', onClick: function () {
+                  var next = 'active';
+                  MGA.api.setCurrencyStatus(c.code, next).then(function () {
+                    MG.ui.toast(c.code + ' set to ' + next + '.', 'ok');
+                    reload(function (x) { return x + 1; });
+                  }).catch(function (e) { MG.ui.toast(MG.util.errMessage(e), 'err'); });
+                } }, h(MG.ui.Icon, { name: 'check', size: 13 }), ' Set available');
+          } },
+        ] }));
   };
 
   /* --------------------------------------------------------------- deposits */
@@ -48,7 +66,6 @@
     var _txn = React.useState(''); var bankTxnId = _txn[0]; var setBankTxnId = _txn[1];
     var _notes = React.useState(''); var notes = _notes[0]; var setNotes = _notes[1];
     var _busy = React.useState(false); var busy = _busy[0]; var setBusy = _busy[1];
-    var _confirm = React.useState(null); var confirm = _confirm[0]; var setConfirm = _confirm[1];
 
     var state = MG.ui.useAsync(function () { return MGA.api.depositQueue(1, status); }, [status, _r[0]]);
 
@@ -62,150 +79,121 @@
       if (!selected || !bankId) return;
       setBusy(true);
       MGA.api.assignBank(selected.id, bankId).then(function () {
-        MG.util.toast('Bank details assigned — customer notified.', 'ok');
+        MG.ui.toast('Bank details assigned \u2014 customer notified.', 'ok');
         setSelected(null); setBankId('');
         reload(function (x) { return x + 1; });
-      }).catch(function (e) { MG.util.toast(MG.util.errMessage(e), 'err'); })
+      }).catch(function (e) { MG.ui.toast(MG.util.errMessage(e), 'err'); })
         .finally(function () { setBusy(false); });
     }
 
     function doVerify() {
       if (!selected || !amountReceived) return;
-      setConfirm({
-        type: 'credit',
-        customer: selected.profiles ? (selected.profiles.full_name || selected.profiles.email) : selected.profile_id,
-        reference: selected.reference,
-        amount: amountReceived,
-        currency: selected.currency_code,
-        impact: 'Credit ' + amountReceived + ' ' + selected.currency_code + ' to customer Meridian balance',
-      });
-    }
-
-    function executeConfirm() {
-      if (!confirm || !selected) return;
       setBusy(true);
-      if (confirm.type === 'credit') {
-        MGA.api.verifyCredit(selected.id, {
-          amountReceived: amountReceived,
-          currencyCode: selected.currency_code,
-          bankTransactionId: bankTxnId || undefined,
-          notes: notes || undefined,
-        }).then(function (res) {
-          MG.util.toast('Payment verified and balance credited.', 'ok');
-          setSelected(null); setAmountReceived(''); setBankTxnId(''); setNotes('');
-          setConfirm(null);
-          reload(function (x) { return x + 1; });
-        }).catch(function (e) { MG.util.toast(MG.util.errMessage(e), 'err'); })
-          .finally(function () { setBusy(false); });
-      } else if (confirm.type === 'reject') {
-        MGA.api.rejectDeposit(selected.id, notes || 'Rejected by administrator').then(function () {
-          MG.util.toast('Deposit rejected.', 'ok');
-          setSelected(null); setNotes(''); setConfirm(null);
-          reload(function (x) { return x + 1; });
-        }).catch(function (e) { MG.util.toast(MG.util.errMessage(e), 'err'); })
-          .finally(function () { setBusy(false); });
-      }
+      MGA.api.verifyCredit(selected.id, {
+        amountReceived: amountReceived,
+        currencyCode: selected.currency_code,
+        bankTransactionId: bankTxnId || undefined,
+        notes: notes || undefined,
+      }).then(function () {
+        MG.ui.toast('Payment verified and balance credited.', 'ok');
+        setSelected(null); setAmountReceived(''); setBankTxnId(''); setNotes('');
+        reload(function (x) { return x + 1; });
+      }).catch(function (e) { MG.ui.toast(MG.util.errMessage(e), 'err'); })
+        .finally(function () { setBusy(false); });
     }
 
-    var statusOpts = [
-      { value: '', label: 'Actionable queue' },
-      { value: 'pending_admin_action', label: 'Pending admin action' },
-      { value: 'awaiting_payment', label: 'Awaiting payment' },
-      { value: 'payment_reported', label: 'Payment reported' },
-      { value: 'under_verification', label: 'Under verification' },
-      { value: 'partially_fulfilled', label: 'Partially fulfilled' },
-      { value: 'completed', label: 'Completed' },
-      { value: 'rejected', label: 'Rejected' },
-      { value: 'cancelled', label: 'Cancelled' },
-    ];
+    return h(React.Fragment, null,
+      h(MG.ui.PageHead, {
+        icon: 'wallet', title: 'Deposit management',
+        sub: 'Monitor every deposit attempt \u2014 confirmation stays with the payment provider.',
+        actions: h('span', { className: 'panel-chip' },
+          state.loading ? 'Loading\u2026' : ((state.data || []).length + ' deposits')) }),
 
-    return h('div', { className: 'view-stack' },
-      h('div', { className: 'adm-note' },
-        'Manual bank-transfer workflow. Customer identity for credits is taken from the original deposit request — never selected by the administrator.'),
-      h(MG.ui.Card, null,
-        h('div', { className: 'filter-bar' },
-          h(MG.ui.Select, {
-            value: status, onChange: function (e) { setStatus(e.target.value); },
-            options: statusOpts,
-          }))),
-      h(MG.ui.Card, { title: 'Deposit management queue' },
-        state.loading ? h(MG.ui.Skeleton, { lines: 6 })
-          : state.error ? h(MG.ui.ErrorPanel, { error: state.error, onRetry: function () { location.reload(); } })
-          : (state.data || []).length === 0
-            ? h(MG.ui.Empty, { title: 'No deposits in queue' })
-            : h(MG.ui.Table, {
-                columns: [
-                  { label: 'Reference' }, { label: 'Customer' },
-                  { label: 'Requested', right: true }, { label: 'Credited', right: true },
-                  { label: 'Status' }, { label: 'Requested' }, { label: '' },
-                ],
-                rows: state.data || [],
-                renderRow: function (d) {
-                  var cust = d.profiles ? (d.profiles.full_name || d.profiles.email) : '—';
-                  var reqAmt = d.requested_amount != null ? d.requested_amount : d.amount;
-                  var cred = d.credited_amount != null ? d.credited_amount : '0';
-                  return h('tr', { key: d.id, className: selected && selected.id === d.id ? 'row-selected' : '' },
-                    h('td', null, h('b', null, d.reference)),
-                    h('td', null, cust),
-                    h('td', { style: { textAlign: 'right' } }, MG.util.money(reqAmt, d.currency_code)),
-                    h('td', { style: { textAlign: 'right' } }, MG.util.money(cred, d.currency_code)),
-                    h('td', null, h(MG.ui.Badge, { status: d.status })),
-                    h('td', null, MG.util.date(d.requested_at)),
-                    h('td', null,
-                      h(MG.ui.Button, { size: 'sm', variant: 'ghost', onClick: function () { setSelected(d); setAmountReceived(String(reqAmt)); } }, 'Manage')));
-                },
-              })),
-      selected ? h(MG.ui.Card, { title: 'Manage deposit — ' + selected.reference },
-        h('div', { className: 'form-grid' },
-          h('p', null, h('b', null, 'Customer: '), selected.profiles ? (selected.profiles.full_name || selected.profiles.email) : selected.profile_id),
-          h('p', null, h('b', null, 'Requested: '), MG.util.money(selected.requested_amount || selected.amount, selected.currency_code),
-            ' · Credited: ', MG.util.money(selected.credited_amount || 0, selected.currency_code),
-            ' · Status: ', h(MG.ui.Badge, { status: selected.status })),
-          (selected.status === 'pending_admin_action' || selected.status === 'awaiting_payment') ? h('div', { className: 'form-row' },
-            h('label', null, 'Assign receiving bank'),
-            h(MG.ui.Select, {
-              value: bankId, onChange: function (e) { setBankId(e.target.value); },
-              options: [{ value: '', label: 'Select bank account…' }].concat(
+      h(MG.ui.Notice, { tone: 'warn', icon: 'lock' },
+        h('p', null, h('b', null, 'Administrators cannot confirm or alter deposits.'),
+          ' Deposit outcomes come from the payment provider; not even a Super Administrator can flip a pending deposit to successful.')),
+
+      h(MG.ui.RestrictedPanel, {
+        intro: 'Demonstration \u2014 attempt to alter a deposit confirmation:',
+        ops: [{ op: 'alter_deposit', label: 'Alter deposit confirmation' }] }),
+
+      h('div', { className: 'filter-bar' },
+        h('div', { className: 'field' },
+          h('label', null, 'Status'),
+          h('select', { value: status, onChange: function (e) { setStatus(e.target.value); } },
+            h('option', { value: '' }, 'Actionable queue'),
+            h('option', { value: 'pending_admin_action' }, 'Pending admin action'),
+            h('option', { value: 'awaiting_payment' }, 'Awaiting payment'),
+            h('option', { value: 'payment_reported' }, 'Payment reported'),
+            h('option', { value: 'under_verification' }, 'Under verification'),
+            h('option', { value: 'partially_fulfilled' }, 'Partially fulfilled'),
+            h('option', { value: 'completed' }, 'Completed'),
+            h('option', { value: 'rejected' }, 'Rejected'),
+            h('option', { value: 'cancelled' }, 'Cancelled')))),
+
+      state.loading ? h(MG.ui.PageSkeleton, { variant: 'list' })
+        : state.error ? h(MG.ui.ErrorPanel, { error: state.error, onRetry: function () { location.reload(); } })
+        : h(MG.ui.DataTable, {
+            rows: state.data || [],
+            rowKey: function (d) { return d.id; },
+            empty: h(MG.ui.Empty, { icon: 'wallet', title: 'No deposits in queue', note: 'No deposit attempts match the current filter.' }),
+            columns: [
+              { th: 'Reference', td: function (d) { return h('code', null, d.reference); } },
+              { th: 'Customer', td: function (d) {
+                return h('div', { className: 'cell-person' },
+                  h(MG.ui.Avatar, { name: d.profiles ? (d.profiles.full_name || d.profiles.email) : d.profile_id }),
+                  h('div', null, h('b', null, d.profiles ? (d.profiles.full_name || d.profiles.email) : d.profile_id))); } },
+              { th: 'Requested', align: 'right', td: function (d) {
+                var reqAmt = d.requested_amount != null ? d.requested_amount : d.amount;
+                return h('span', { className: 'td-amount' }, MG.util.money(reqAmt, d.currency_code)); } },
+              { th: 'Status', td: function (d) { return h(MG.ui.Badge, { status: d.status }); } },
+              { th: 'Requested', td: function (d) { return h('span', { className: 'td-date' }, MG.util.date(d.requested_at)); } },
+              { th: '', align: 'right', td: function (d) {
+                return h('button', { className: 'btn btn-ghost btn-sm', onClick: function () {
+                  setSelected(d); setAmountReceived(String(d.requested_amount != null ? d.requested_amount : d.amount));
+                } }, h(MG.ui.Icon, { name: 'eye', size: 13 }), ' Manage'); } },
+            ] }),
+
+      selected ? h(MG.ui.Card, { title: h('h3', { className: 'panel-title' }, 'Manage deposit \u2014 ', selected.reference) },
+        h('div', { className: 'grid-two' },
+          h('div', null,
+            h('p', null, h('b', null, 'Customer: '), selected.profiles ? (selected.profiles.full_name || selected.profiles.email) : selected.profile_id),
+            h('p', null, h('b', null, 'Requested: '), MG.util.money(selected.requested_amount || selected.amount, selected.currency_code),
+              ' \u00B7 Status: ', h(MG.ui.Badge, { status: selected.status })),
+            (selected.status === 'pending_admin_action' || selected.status === 'awaiting_payment') ? h('div', { className: 'field', style: { marginTop: 14 } },
+              h('label', null, 'Assign receiving bank'),
+              h('select', { value: bankId, onChange: function (e) { setBankId(e.target.value); } },
+                h('option', { value: '' }, 'Select bank account\u2026'),
                 (banks || []).filter(function (b) { return b.currency_code === selected.currency_code && b.is_active !== false; })
-                  .map(function (b) { return { value: b.id, label: b.label + ' — ' + b.bank_name }; })
-              ),
-            }),
-            h(MG.ui.Button, { variant: 'primary', disabled: busy || !bankId, onClick: doAssign }, 'Assign bank details')
-          ) : null,
-          (['awaiting_payment','payment_reported','under_verification','partially_fulfilled'].indexOf(selected.status) >= 0) ? h('div', { className: 'form-row' },
-            h('label', null, 'Amount received (will be credited)'),
-            h(MG.ui.Input, { value: amountReceived, onChange: function (e) { setAmountReceived(e.target.value); }, placeholder: 'e.g. 1000.00' }),
-            h('label', null, 'Bank transaction ID (optional, unique)'),
-            h(MG.ui.Input, { value: bankTxnId, onChange: function (e) { setBankTxnId(e.target.value); } }),
-            h('label', null, 'Verification notes'),
-            h(MG.ui.Input, { value: notes, onChange: function (e) { setNotes(e.target.value); } }),
-            h('div', { className: 'btn-row' },
-              h(MG.ui.Button, { variant: 'primary', disabled: busy || !amountReceived, onClick: doVerify }, 'Approve and credit'),
-              h(MG.ui.Button, { variant: 'ghost', disabled: busy, onClick: function () {
-                setConfirm({ type: 'reject', customer: selected.profiles ? (selected.profiles.full_name || selected.profiles.email) : selected.profile_id,
-                  reference: selected.reference, amount: selected.requested_amount || selected.amount, currency: selected.currency_code,
-                  impact: 'Reject deposit — no balance change' });
-              } }, 'Reject'))
-          ) : null,
-          h(MG.ui.Button, { variant: 'ghost', size: 'sm', onClick: function () { setSelected(null); } }, 'Close')
-        )
-      ) : null,
-      confirm ? h('div', { className: 'modal-overlay' },
-        h('div', { className: 'modal-card' },
-          h('h3', null, 'Confirm financial operation'),
-          h('p', null, h('b', null, 'Customer: '), confirm.customer),
-          h('p', null, h('b', null, 'Reference: '), confirm.reference),
-          h('p', null, h('b', null, 'Amount: '), confirm.amount, ' ', confirm.currency),
-          h('p', null, h('b', null, 'Impact: '), confirm.impact),
-          h('div', { className: 'btn-row' },
-            h(MG.ui.Button, { variant: 'primary', disabled: busy, onClick: executeConfirm }, 'Confirm'),
-            h(MG.ui.Button, { variant: 'ghost', onClick: function () { setConfirm(null); } }, 'Cancel'))
-        )
-      ) : null
-    );
+                  .map(function (b) { return h('option', { key: b.id, value: b.id }, b.label + ' \u2014 ' + b.bank_name); })),
+              h('button', { className: 'btn btn-primary btn-sm', style: { marginTop: 8 }, disabled: busy || !bankId, onClick: doAssign },
+                'Assign bank details')) : null),
+          h('div', null,
+            (['awaiting_payment','payment_reported','under_verification','partially_fulfilled'].indexOf(selected.status) >= 0) ? h(React.Fragment, null,
+              h('div', { className: 'field' },
+                h('label', null, 'Amount received (will be credited)'),
+                h('input', { value: amountReceived, onChange: function (e) { setAmountReceived(e.target.value); }, placeholder: 'e.g. 1000.00' })),
+              h('div', { className: 'field' },
+                h('label', null, 'Bank transaction ID (optional)'),
+                h('input', { value: bankTxnId, onChange: function (e) { setBankTxnId(e.target.value); } })),
+              h('div', { className: 'field' },
+                h('label', null, 'Verification notes'),
+                h('input', { value: notes, onChange: function (e) { setNotes(e.target.value); } })),
+              h('div', { className: 'btn-row' },
+                h('button', { className: 'btn btn-primary', disabled: busy || !amountReceived, onClick: doVerify }, 'Approve and credit'),
+                h('button', { className: 'btn btn-ghost', disabled: busy, onClick: function () {
+                  setBusy(true);
+                  MGA.api.rejectDeposit(selected.id, notes || 'Rejected by administrator').then(function () {
+                    MG.ui.toast('Deposit rejected.', 'ok');
+                    setSelected(null); setNotes('');
+                    reload(function (x) { return x + 1; });
+                  }).catch(function (e) { MG.ui.toast(MG.util.errMessage(e), 'err'); })
+                    .finally(function () { setBusy(false); });
+                } }, 'Reject'))) : null)),
+        h('button', { className: 'btn btn-ghost btn-sm', style: { marginTop: 12 }, onClick: function () { setSelected(null); } }, 'Close')) : null);
   };
 
-  /* ----------------------------------------------------------------- refunds */
+  /* --------------------------------------------------------------- refunds */
   MGA.views.refunds = function () {
     var _s = React.useState(''); var status = _s[0]; var setStatus = _s[1];
     var _r = React.useState(0); var reload = _r[1];
@@ -213,117 +201,79 @@
     var _amt = React.useState(''); var approvedAmount = _amt[0]; var setApprovedAmount = _amt[1];
     var _notes = React.useState(''); var notes = _notes[0]; var setNotes = _notes[1];
     var _busy = React.useState(false); var busy = _busy[0]; var setBusy = _busy[1];
-    var _confirm = React.useState(null); var confirm = _confirm[0]; var setConfirm = _confirm[1];
 
     var state = MG.ui.useAsync(function () { return MGA.api.refunds(1, status); }, [status, _r[0]]);
 
-    function doApprove() {
-      if (!selected) return;
-      setConfirm({
-        type: 'approve',
-        customer: selected.profile_id,
-        reference: selected.reference,
-        amount: approvedAmount || selected.requested_amount,
-        currency: selected.currency_code,
-        impact: 'Credit ' + (approvedAmount || selected.requested_amount) + ' ' + selected.currency_code + ' to customer Meridian balance (internal refund)',
-      });
-    }
+    return h(React.Fragment, null,
+      h(MG.ui.PageHead, {
+        icon: 'receipt', title: 'Refund management',
+        sub: 'All refunds are internal. Approving credits the customer\u2019s Meridian balance.' }),
 
-    function executeConfirm() {
-      if (!confirm || !selected) return;
-      setBusy(true);
-      if (confirm.type === 'approve') {
-        MGA.api.approveRefund(selected.id, approvedAmount || undefined, notes || undefined).then(function () {
-          MG.util.toast('Refund approved — Meridian balance credited.', 'ok');
-          setSelected(null); setApprovedAmount(''); setNotes(''); setConfirm(null);
-          reload(function (x) { return x + 1; });
-        }).catch(function (e) { MG.util.toast(MG.util.errMessage(e), 'err'); })
-          .finally(function () { setBusy(false); });
-      } else {
-        MGA.api.rejectRefund(selected.id, notes || 'Rejected').then(function () {
-          MG.util.toast('Refund rejected.', 'ok');
-          setSelected(null); setNotes(''); setConfirm(null);
-          reload(function (x) { return x + 1; });
-        }).catch(function (e) { MG.util.toast(MG.util.errMessage(e), 'err'); })
-          .finally(function () { setBusy(false); });
-      }
-    }
+      h(MG.ui.Notice, { tone: 'info', icon: 'info' },
+        h('p', null, 'No external bank payout is performed. All refunds credit the internal Meridian balance.')),
 
-    return h('div', { className: 'view-stack' },
-      h('div', { className: 'adm-note' },
-        'All refunds are internal. Approving a refund credits the customer\'s Meridian balance. No external bank payout is performed.'),
-      h(MG.ui.Card, null,
-        h('div', { className: 'filter-bar' },
-          h(MG.ui.Select, {
-            value: status, onChange: function (e) { setStatus(e.target.value); },
-            options: [
-              { value: '', label: 'All statuses' },
-              { value: 'requested', label: 'Requested' },
-              { value: 'under_review', label: 'Under review' },
-              { value: 'approved', label: 'Approved' },
-              { value: 'completed', label: 'Completed' },
-              { value: 'rejected', label: 'Rejected' },
-            ],
-          }))),
-      h(MG.ui.Card, { title: 'Refund requests' },
-        state.loading ? h(MG.ui.Skeleton, { lines: 6 })
-          : state.error ? h(MG.ui.ErrorPanel, { error: state.error, onRetry: function () { location.reload(); } })
-          : (state.data || []).length === 0
-            ? h(MG.ui.Empty, { title: 'No refunds' })
-            : h(MG.ui.Table, {
-                columns: [
-                  { label: 'Reference' }, { label: 'Original' },
-                  { label: 'Requested', right: true }, { label: 'Status' }, { label: 'Created' }, { label: '' },
-                ],
-                rows: state.data || [],
-                renderRow: function (r) {
-                  return h('tr', { key: r.id },
-                    h('td', null, h('b', null, r.reference)),
-                    h('td', null, r.original_reference),
-                    h('td', { style: { textAlign: 'right' } }, MG.util.money(r.requested_amount, r.currency_code)),
-                    h('td', null, h(MG.ui.Badge, { status: r.status })),
-                    h('td', null, MG.util.date(r.created_at)),
-                    h('td', null,
-                      h(MG.ui.Button, { size: 'sm', variant: 'ghost', onClick: function () {
-                        setSelected(r); setApprovedAmount(String(r.requested_amount));
-                      } }, 'Review')));
-                },
-              })),
-      selected ? h(MG.ui.Card, { title: 'Review refund — ' + selected.reference },
-        h('div', { className: 'form-grid' },
-          h('p', null, h('b', null, 'Original transaction: '), selected.original_reference,
-            ' (', MG.util.money(selected.original_amount, selected.currency_code), ')'),
-          h('p', null, h('b', null, 'Customer: '), selected.profile_id),
-          h('p', null, h('b', null, 'Reason: '), selected.reason),
-          h('p', null, h('b', null, 'Status: '), h(MG.ui.Badge, { status: selected.status })),
-          (['requested','under_review','approved'].indexOf(selected.status) >= 0) ? h('div', { className: 'form-row' },
+      h('div', { className: 'filter-bar' },
+        h('div', { className: 'field' },
+          h('label', null, 'Status'),
+          h('select', { value: status, onChange: function (e) { setStatus(e.target.value); } },
+            h('option', { value: '' }, 'All statuses'),
+            h('option', { value: 'requested' }, 'Requested'),
+            h('option', { value: 'under_review' }, 'Under review'),
+            h('option', { value: 'approved' }, 'Approved'),
+            h('option', { value: 'completed' }, 'Completed'),
+            h('option', { value: 'rejected' }, 'Rejected')))),
+
+      state.loading ? h(MG.ui.PageSkeleton, { variant: 'list' })
+        : state.error ? h(MG.ui.ErrorPanel, { error: state.error, onRetry: function () { location.reload(); } })
+        : h(MG.ui.DataTable, {
+            rows: state.data || [],
+            rowKey: function (r) { return r.id; },
+            empty: h(MG.ui.Empty, { icon: 'receipt', title: 'No refunds', note: 'No refund requests match the current filter.' }),
+            columns: [
+              { th: 'Reference', td: function (r) { return h('code', null, r.reference); } },
+              { th: 'Original', td: function (r) { return r.original_reference; } },
+              { th: 'Requested', align: 'right', td: function (r) { return h('span', { className: 'td-amount' }, MG.util.money(r.requested_amount, r.currency_code)); } },
+              { th: 'Status', td: function (r) { return h(MG.ui.Badge, { status: r.status }); } },
+              { th: 'Created', td: function (r) { return h('span', { className: 'td-date' }, MG.util.date(r.created_at)); } },
+              { th: '', align: 'right', td: function (r) {
+                return h('button', { className: 'btn btn-ghost btn-sm', onClick: function () {
+                  setSelected(r); setApprovedAmount(String(r.requested_amount));
+                } }, h(MG.ui.Icon, { name: 'eye', size: 13 }), ' Review'); } },
+            ] }),
+
+      selected ? h(MG.ui.Card, { title: h('h3', { className: 'panel-title' }, 'Review refund \u2014 ', selected.reference) },
+        h('p', null, h('b', null, 'Original transaction: '), selected.original_reference,
+          ' (', MG.util.money(selected.original_amount, selected.currency_code), ')'),
+        h('p', null, h('b', null, 'Customer: '), selected.profile_id),
+        h('p', null, h('b', null, 'Reason: '), selected.reason),
+        h('p', null, h('b', null, 'Status: '), h(MG.ui.Badge, { status: selected.status })),
+        (['requested','under_review','approved'].indexOf(selected.status) >= 0) ? h(React.Fragment, null,
+          h('div', { className: 'field', style: { marginTop: 14 } },
             h('label', null, 'Approved amount'),
-            h(MG.ui.Input, { value: approvedAmount, onChange: function (e) { setApprovedAmount(e.target.value); } }),
+            h('input', { value: approvedAmount, onChange: function (e) { setApprovedAmount(e.target.value); } })),
+          h('div', { className: 'field' },
             h('label', null, 'Notes'),
-            h(MG.ui.Input, { value: notes, onChange: function (e) { setNotes(e.target.value); } }),
-            h('div', { className: 'btn-row' },
-              h(MG.ui.Button, { variant: 'primary', disabled: busy, onClick: doApprove }, 'Approve and credit Meridian balance'),
-              h(MG.ui.Button, { variant: 'ghost', disabled: busy, onClick: function () {
-                setConfirm({ type: 'reject', customer: selected.profile_id, reference: selected.reference,
-                  amount: selected.requested_amount, currency: selected.currency_code, impact: 'Reject refund — no balance change' });
-              } }, 'Reject'))
-          ) : null,
-          h(MG.ui.Button, { variant: 'ghost', size: 'sm', onClick: function () { setSelected(null); } }, 'Close')
-        )
-      ) : null,
-      confirm ? h('div', { className: 'modal-overlay' },
-        h('div', { className: 'modal-card' },
-          h('h3', null, 'Confirm financial operation'),
-          h('p', null, h('b', null, 'Customer: '), confirm.customer),
-          h('p', null, h('b', null, 'Reference: '), confirm.reference),
-          h('p', null, h('b', null, 'Amount: '), confirm.amount, ' ', confirm.currency),
-          h('p', null, h('b', null, 'Impact: '), confirm.impact),
+            h('input', { value: notes, onChange: function (e) { setNotes(e.target.value); } })),
           h('div', { className: 'btn-row' },
-            h(MG.ui.Button, { variant: 'primary', disabled: busy, onClick: executeConfirm }, 'Confirm'),
-            h(MG.ui.Button, { variant: 'ghost', onClick: function () { setConfirm(null); } }, 'Cancel'))
-        )
-      ) : null
-    );
+            h('button', { className: 'btn btn-primary', disabled: busy, onClick: function () {
+              setBusy(true);
+              MGA.api.approveRefund(selected.id, approvedAmount || undefined, notes || undefined).then(function () {
+                MG.ui.toast('Refund approved \u2014 Meridian balance credited.', 'ok');
+                setSelected(null); setApprovedAmount(''); setNotes('');
+                reload(function (x) { return x + 1; });
+              }).catch(function (e) { MG.ui.toast(MG.util.errMessage(e), 'err'); })
+                .finally(function () { setBusy(false); });
+            } }, 'Approve and credit'),
+            h('button', { className: 'btn btn-ghost', disabled: busy, onClick: function () {
+              setBusy(true);
+              MGA.api.rejectRefund(selected.id, notes || 'Rejected').then(function () {
+                MG.ui.toast('Refund rejected.', 'ok');
+                setSelected(null); setNotes('');
+                reload(function (x) { return x + 1; });
+              }).catch(function (e) { MG.ui.toast(MG.util.errMessage(e), 'err'); })
+                .finally(function () { setBusy(false); });
+            } }, 'Reject'))) : null,
+        h('button', { className: 'btn btn-ghost btn-sm', style: { marginTop: 12 }, onClick: function () { setSelected(null); } }, 'Close')) : null);
   };
 
   /* ----------------------------------------------------------- transactions */
@@ -332,77 +282,83 @@
     var state = MG.ui.useAsync(function () {
       return MGA.api.transactions({ q: filters.q, currency: filters.currency, status: filters.status });
     }, [filters.q, filters.currency, filters.status]);
-    return h('div', { className: 'view-stack' },
-      h(MG.ui.Card, null,
-        h('div', { className: 'filter-bar' },
-          h(MG.ui.Input, { placeholder: 'Search reference…', value: filters.q,
-            onChange: function (e) { setFilters(Object.assign({}, filters, { q: e.target.value })); },
-            passThrough: { style: { flex: 2 } } }),
-          h(MG.ui.Select, {
-            value: filters.currency, onChange: function (e) { setFilters(Object.assign({}, filters, { currency: e.target.value })); },
-            options: [
-              { value: '', label: 'All currencies' }, { value: 'EUR', label: 'EUR' },
-              { value: 'GBP', label: 'GBP' }, { value: 'USD', label: 'USD' },
-              { value: 'CHF', label: 'CHF' }, { value: 'PLN', label: 'PLN' },
-            ],
-          }),
-          h(MG.ui.Select, {
-            value: filters.status, onChange: function (e) { setFilters(Object.assign({}, filters, { status: e.target.value })); },
-            options: [
-              { value: '', label: 'All statuses' }, { value: 'posted', label: 'Posted' },
-              { value: 'pending', label: 'Pending' }, { value: 'failed', label: 'Failed' },
-              { value: 'cancelled', label: 'Cancelled' },
-            ],
-          }))),
-      h(MG.ui.Card, { title: 'Ledger (immutable — no administrative edits exist)' },
-        state.loading ? h(MG.ui.Skeleton, { lines: 8 })
-          : state.error ? h(MG.ui.ErrorPanel, { error: state.error, onRetry: function () { location.reload(); } })
-          : (state.data || []).length === 0
-            ? h(MG.ui.Empty, { title: 'No transactions match' })
-            : h(MG.ui.Table, {
-                columns: [{ label: 'Reference' }, { label: 'Customer' }, { label: 'Amount', right: true }, { label: 'Status' }, { label: 'Date' }],
-                rows: state.data || [],
-                renderRow: function (t) {
-                  var cust = t.profiles ? (t.profiles.full_name || t.profiles.email) : '—';
-                  return h('tr', { key: t.id },
-                    h('td', null, t.reference),
-                    h('td', null, cust),
-                    h('td', { style: { textAlign: 'right' } },
-                      (t.direction === 'credit' ? '+' : '-') + MG.util.money(t.amount, t.currency_code)),
-                    h('td', null, h(MG.ui.Badge, { status: t.status })),
-                    h('td', null, MG.util.date(t.created_at)));
-                },
-              })));
+    return h(React.Fragment, null,
+      h(MG.ui.PageHead, {
+        icon: 'receipt', title: 'Transactions',
+        sub: 'The complete customer ledger \u2014 read-only for administrators.',
+        actions: h('span', { className: 'panel-chip' },
+          state.loading ? 'Loading\u2026' : ((state.data || []).length + ' entries')) }),
+
+      h('div', { className: 'filter-bar' },
+        h('div', { className: 'field field-search' },
+          h('label', { htmlFor: 'tx-search' }, 'Search'),
+          h('input', { id: 'tx-search', type: 'search', placeholder: 'Reference\u2026',
+            value: filters.q, onChange: function (e) { setFilters(Object.assign({}, filters, { q: e.target.value })); } })),
+        h('div', { className: 'field' },
+          h('label', null, 'Currency'),
+          h('select', { value: filters.currency, onChange: function (e) { setFilters(Object.assign({}, filters, { currency: e.target.value })); } },
+            h('option', { value: '' }, 'All currencies'),
+            h('option', { value: 'EUR' }, 'EUR'), h('option', { value: 'GBP' }, 'GBP'),
+            h('option', { value: 'USD' }, 'USD'), h('option', { value: 'CHF' }, 'CHF'),
+            h('option', { value: 'PLN' }, 'PLN'))),
+        h('div', { className: 'field' },
+          h('label', null, 'Status'),
+          h('select', { value: filters.status, onChange: function (e) { setFilters(Object.assign({}, filters, { status: e.target.value })); } },
+            h('option', { value: '' }, 'All statuses'),
+            h('option', { value: 'posted' }, 'Posted'),
+            h('option', { value: 'pending' }, 'Pending'),
+            h('option', { value: 'failed' }, 'Failed'),
+            h('option', { value: 'cancelled' }, 'Cancelled')))),
+
+      state.loading ? h(MG.ui.PageSkeleton, { variant: 'list' })
+        : state.error ? h(MG.ui.ErrorPanel, { error: state.error, onRetry: function () { location.reload(); } })
+        : h(MG.ui.DataTable, {
+            rows: state.data || [],
+            rowKey: function (t) { return t.id; },
+            empty: h(MG.ui.Empty, { icon: 'receipt', title: 'No transactions match', note: 'No ledger entries match the current filters.' }),
+            columns: [
+              { th: 'Reference', td: function (t) { return h('code', null, t.reference); } },
+              { th: 'Customer', td: function (t) {
+                var cust = t.profiles ? (t.profiles.full_name || t.profiles.email) : '\u2014';
+                return cust; } },
+              { th: 'Amount', align: 'right', td: function (t) {
+                return h('span', { className: 'td-amount ' + (t.direction === 'credit' ? 'pos' : 'neg') },
+                  (t.direction === 'credit' ? '+' : '-') + MG.util.money(t.amount, t.currency_code)); } },
+              { th: 'Status', td: function (t) { return h(MG.ui.Badge, { status: t.status }); } },
+              { th: 'Date', td: function (t) { return h('span', { className: 'td-date' }, MG.util.date(t.created_at)); } },
+            ] }));
   };
 
   /* --------------------------------------------------------------- payments */
   MGA.views.payments = function () {
     var state = MG.ui.useAsync(function () { return MGA.api.payments(1); }, []);
-    if (state.loading) return h(MG.ui.LoadingPanel);
+    if (state.loading) return h(MG.ui.PageSkeleton, { variant: 'page' });
     if (state.error) return h(MG.ui.ErrorPanel, { error: state.error, onRetry: function () { location.reload(); } });
     var list = state.data || [];
     var stats = {};
     list.forEach(function (a) { stats[a.outcome] = (stats[a.outcome] || 0) + 1; });
-    return h('div', { className: 'view-stack' },
-      h('div', { className: 'grid-4' },
+    return h(React.Fragment, null,
+      h(MG.ui.PageHead, {
+        icon: 'card', title: 'Payment monitoring',
+        sub: 'Every gateway attempt with its outcome and timing.',
+        actions: h('span', { className: 'panel-chip' }, list.length + ' attempts') }),
+      h('div', { className: 'stat-row stat-row-six' },
         Object.keys(stats).map(function (k) {
-          return h(MG.ui.StatCard, { key: k, label: k.replace('_', ' '), value: MG.util.num(stats[k]) });
+          var tone = k === 'successful' ? 'success' : k === 'pending' ? 'warn' : k === 'failed' ? 'danger' : 'info';
+          var icon = k === 'successful' ? 'check-circle' : k === 'pending' ? 'clock' : k === 'failed' ? 'x-circle' : 'alert';
+          return h(MG.ui.StatCard, { key: k, icon: icon, tone: tone,
+            label: k.replace('_', ' '), value: MG.util.num(stats[k]) });
         })),
-      h(MG.ui.Card, { title: 'Payment attempts' },
-        list.length === 0
-          ? h(MG.ui.Empty, { title: 'No payment attempts yet' })
-          : h(MG.ui.Table, {
-              columns: [{ label: 'Deposit' }, { label: 'Provider' }, { label: 'Outcome' }, { label: 'Recorded' }],
-              rows: list,
-              renderRow: function (a) {
-                var dep = a.deposits ? a.deposits.reference : '—';
-                return h('tr', { key: a.id },
-                  h('td', null, dep),
-                  h('td', null, a.provider),
-                  h('td', null, h(MG.ui.Badge, { status: a.outcome })),
-                  h('td', null, MG.util.dateTime(a.created_at)));
-              },
-            })));
+      h(MG.ui.DataTable, {
+        rows: list,
+        rowKey: function (a) { return a.id; },
+        empty: h(MG.ui.Empty, { icon: 'card', title: 'No payment attempts yet', note: 'Gateway attempts will appear here.' }),
+        columns: [
+          { th: 'Deposit', td: function (a) { var dep = a.deposits ? a.deposits.reference : '\u2014'; return dep; } },
+          { th: 'Provider', td: function (a) { return a.provider; } },
+          { th: 'Outcome', td: function (a) { return h(MG.ui.Badge, { status: a.outcome }); } },
+          { th: 'Recorded', td: function (a) { return h('span', { className: 'td-date' }, MG.util.dateTime(a.created_at)); } },
+        ] }));
   };
 
   /* --------------------------------------------------------------- security */
@@ -411,77 +367,122 @@
     var _rs = React.useState(''); var freezeReason = _rs[0]; var setFreezeReason = _rs[1];
     var _b = React.useState(false); var busy = _b[0]; var setBusy = _b[1];
     var state = MG.ui.useAsync(function () { return MGA.api.securityEvents(1); }, []);
-    return h('div', { className: 'view-stack' },
-      h(MG.ui.Card, { title: 'Freeze an account' },
-        h('p', { className: 'muted' }, 'Freezing suspends the customer via Clerk (sessions end immediately) and records a security event with your reason.'),
-        h('div', { className: 'filter-bar' },
-          h(MG.ui.Input, { placeholder: 'Clerk user id (user_…)', value: freezeUser,
-            onChange: function (e) { setFreezeUser(e.target.value); } }),
-          h(MG.ui.Input, { placeholder: 'Reason (recorded)', value: freezeReason,
-            onChange: function (e) { setFreezeReason(e.target.value); } }),
-          h(MG.ui.Button, {
-            variant: 'danger', busy: busy,
-            onClick: function () {
-              if (!freezeUser || freezeReason.trim().length < 3) {
-                MG.util.toast('Provide the user id and a reason.', 'err'); return;
-              }
-              setBusy(true);
-              MGA.api.freeze(freezeUser, freezeReason).then(function () {
-                setBusy(false);
-                MG.util.toast('Account frozen.', 'ok');
-                location.reload();
-              }).catch(function (e) { setBusy(false); MG.util.toast(MG.util.errMessage(e), 'err'); });
-            },
-          }, 'Freeze'))),
-      h(MG.ui.Card, { title: 'Security events' },
-        state.loading ? h(MG.ui.Skeleton, { lines: 6 })
-          : state.error ? h(MG.ui.ErrorPanel, { error: state.error, onRetry: function () { location.reload(); } })
-          : (state.data || []).length === 0
-            ? h(MG.ui.Empty, { title: 'No security events' })
-            : h(MG.ui.Table, {
-                columns: [{ label: 'Type' }, { label: 'Customer' }, { label: 'Severity' }, { label: 'Detail' }, { label: 'When' }],
-                rows: state.data || [],
-                renderRow: function (e) {
-                  var cust = e.profiles ? (e.profiles.email || e.profiles.full_name) : e.profile_id;
-                  return h('tr', { key: e.id },
-                    h('td', null, (e.type || '').replace('_', ' ')),
-                    h('td', null, cust),
-                    h('td', null, h(MG.ui.Badge, { status: e.severity === 'critical' ? 'failed' : e.severity === 'warning' ? 'pending' : 'posted' })),
-                    h('td', null, e.detail ? JSON.stringify(e.detail).slice(0, 80) : '—'),
-                    h('td', null, MG.util.dateTime(e.created_at)));
-                },
-              })));
+    var events = state.data || [];
+    var suspiciousCount = events.filter(function (e) { return e.severity === 'critical'; }).length;
+
+    return h(React.Fragment, null,
+      h(MG.ui.PageHead, {
+        icon: 'shield', title: 'Security monitoring',
+        sub: 'Sign-in activity, MFA changes and flagged events across the platform.',
+        actions: h('button', { className: 'btn btn-ghost btn-sm', onClick: function () { location.reload(); } },
+          h(MG.ui.Icon, { name: 'refresh', size: 14 }), ' Refresh') }),
+
+      h('div', { className: 'stat-row' },
+        h(MG.ui.StatCard, { icon: 'shield', tone: 'info', label: 'Events in view', value: MG.util.num(events.length), sub: 'All security events' }),
+        h(MG.ui.StatCard, { icon: 'alert', tone: 'danger', label: 'Critical', value: MG.util.num(suspiciousCount), sub: 'Highlighted in the feed' }),
+        h(MG.ui.StatCard, { icon: 'snowflake', tone: 'warn', label: 'Freeze tool', value: 'Ready', sub: 'Suspend via Clerk' })),
+
+      h('div', { className: 'grid-side' },
+        h('div', { className: 'grid-side-main' },
+          h(MG.ui.Card, { title: h('h3', { className: 'panel-title' }, h(MG.ui.Icon, { name: 'shield', size: 15 }), ' Event feed') },
+            state.loading ? h(MG.ui.PageSkeleton, { variant: 'list' })
+              : state.error ? h(MG.ui.ErrorPanel, { error: state.error, onRetry: function () { location.reload(); } })
+              : events.length === 0
+                ? h(MG.ui.Empty, { icon: 'shield-check', title: 'No security events', note: 'Security events will appear here as customers sign in.' })
+                : h('ul', { className: 'feed' },
+                    events.map(function (e) {
+                      var cust = e.profiles ? (e.profiles.email || e.profiles.full_name) : e.profile_id;
+                      return h('li', { key: e.id, className: 'feed-item' + (e.severity === 'critical' ? ' susp' : '') },
+                        h('span', { className: 'feed-ic', 'aria-hidden': 'true',
+                          dangerouslySetInnerHTML: { __html: MG.ui.icon(e.severity === 'critical' ? 'alert' : 'shield', 16) } }),
+                        h('div', { className: 'feed-main' },
+                          h('b', null, (e.type || '').replace(/_/g, ' ')),
+                          h('small', null, cust, ' \u00B7 ', e.detail ? JSON.stringify(e.detail).slice(0, 80) : '\u2014')),
+                        h('div', { className: 'feed-side' },
+                          h(MG.ui.Badge, { status: e.severity === 'critical' ? 'failed' : e.severity === 'warning' ? 'pending' : 'posted' }),
+                          h('span', { className: 'td-date' }, MG.util.timeAgo(e.created_at))));
+                    })))),
+        h('div', { className: 'grid-side-aside' },
+          h(MG.ui.Card, { title: h('h3', { className: 'panel-title' }, h(MG.ui.Icon, { name: 'snowflake', size: 15 }), ' Freeze an account') },
+            h('p', { className: 'muted' }, 'Freezing suspends the customer via Clerk (sessions end immediately) and records a security event with your reason.'),
+            h('div', { className: 'field' },
+              h('label', { htmlFor: 'frz-user' }, 'Clerk user id'),
+              h('input', { id: 'frz-user', placeholder: 'user_\u2026', value: freezeUser,
+                onChange: function (e) { setFreezeUser(e.target.value); } })),
+            h('div', { className: 'field' },
+              h('label', { htmlFor: 'frz-reason' }, 'Reason (recorded)'),
+              h('input', { id: 'frz-reason', placeholder: 'e.g. Suspicious login pattern', value: freezeReason,
+                onChange: function (e) { setFreezeReason(e.target.value); } })),
+            h('button', { className: 'btn btn-danger btn-block', disabled: busy,
+              onClick: function () {
+                if (!freezeUser || freezeReason.trim().length < 3) {
+                  MG.ui.toast('Provide the user id and a reason.', 'err'); return;
+                }
+                setBusy(true);
+                MGA.api.freeze(freezeUser, freezeReason).then(function () {
+                  setBusy(false);
+                  MG.ui.toast('Account frozen.', 'ok');
+                  location.reload();
+                }).catch(function (e) { setBusy(false); MG.ui.toast(MG.util.errMessage(e), 'err'); });
+              } },
+              h(MG.ui.Icon, { name: 'snowflake', size: 15 }), ' Freeze account')))));
   };
 
   /* ---------------------------------------------------------------- reports */
   MGA.views.reports = function () {
     var state = MG.ui.useAsync(function () { return MGA.api.reports(); }, []);
-    if (state.loading) return h(MG.ui.LoadingPanel);
+    if (state.loading) return h(MG.ui.PageSkeleton, { variant: 'charts' });
     if (state.error) return h(MG.ui.ErrorPanel, { error: state.error, onRetry: function () { location.reload(); } });
     var d = state.data || {};
     function rowsOf(obj) {
       return Object.keys(obj || {}).map(function (k) { return [k, obj[k]]; });
     }
-    return h('div', { className: 'view-stack' },
-      h('div', { className: 'grid-3' },
+    return h(React.Fragment, null,
+      h(MG.ui.PageHead, {
+        icon: 'chart', title: 'Reports',
+        sub: 'Aggregated analytics across deposits, payment outcomes and customers.',
+        actions: h('button', { className: 'btn btn-primary btn-sm', onClick: function () {
+          var rows = [['Meridian platform report', ''], ['Generated', MG.util.dateTime(new Date().toISOString())], []];
+          rows.push(['Deposits by method', 'Count']);
+          rowsOf(d.depositsByMethod).forEach(function (r) { rows.push(r); });
+          rows.push([]);
+          rows.push(['Deposits by status', 'Count']);
+          rowsOf(d.depositsByStatus).forEach(function (r) { rows.push(r); });
+          rows.push([]);
+          rows.push(['Users by country', 'Customers']);
+          rowsOf(d.usersByCountry).forEach(function (r) { rows.push(r); });
+          MG.util.downloadText('meridian-report.csv', MG.util.toCsv(rows), 'text/csv');
+          MG.ui.toast('Report exported \u2014 meridian-report.csv', 'ok');
+        } }, h(MG.ui.Icon, { name: 'download', size: 14 }), ' Export CSV') }),
+
+      h('div', { className: 'stat-row' },
+        h(MG.ui.StatCard, { icon: 'users', label: 'Customers', value: MG.util.num(rowsOf(d.usersByCountry).length), sub: 'Across countries' }),
+        h(MG.ui.StatCard, { icon: 'wallet', tone: 'success', label: 'Deposits', value: MG.util.num(rowsOf(d.depositsByStatus).reduce(function (s, r) { return s + r[1]; }, 0)), sub: 'All statuses' }),
+        h(MG.ui.StatCard, { icon: 'receipt', tone: 'info', label: 'Ledger entries', value: '\u2014', sub: 'Read-only history' })),
+
+      h('div', { className: 'grid-two' },
         h(MG.ui.Card, { title: 'Deposits by method' },
-          h(MG.ui.Table, {
-            columns: [{ label: 'Method' }, { label: 'Count', right: true }],
-            rows: rowsOf(d.depositsByMethod), emptyTitle: 'No deposits yet',
-            renderRow: function (r) { return h('tr', { key: r[0] }, h('td', null, r[0].replace('_', ' ')), h('td', { style: { textAlign: 'right' } }, MG.util.num(r[1]))); },
-          })),
+          h(MG.ui.DataTable, {
+            compact: true, rows: rowsOf(d.depositsByMethod), rowKey: function (r) { return r[0]; }, empty: null,
+            columns: [
+              { th: 'Method', td: function (r) { return h('b', null, r[0].replace(/_/g, ' ')); } },
+              { th: 'Count', align: 'right', td: function (r) { return MG.util.num(r[1]); } },
+            ] })),
         h(MG.ui.Card, { title: 'Deposits by status' },
-          h(MG.ui.Table, {
-            columns: [{ label: 'Status' }, { label: 'Count', right: true }],
-            rows: rowsOf(d.depositsByStatus), emptyTitle: 'No deposits yet',
-            renderRow: function (r) { return h('tr', { key: r[0] }, h('td', null, h(MG.ui.Badge, { status: r[0] })), h('td', { style: { textAlign: 'right' } }, MG.util.num(r[1]))); },
-          })),
+          h(MG.ui.DataTable, {
+            compact: true, rows: rowsOf(d.depositsByStatus), rowKey: function (r) { return r[0]; }, empty: null,
+            columns: [
+              { th: 'Status', td: function (r) { return h(MG.ui.Badge, { status: r[0] }); } },
+              { th: 'Count', align: 'right', td: function (r) { return MG.util.num(r[1]); } },
+            ] })),
         h(MG.ui.Card, { title: 'Customers by country' },
-          h(MG.ui.Table, {
-            columns: [{ label: 'Country' }, { label: 'Customers', right: true }],
-            rows: rowsOf(d.usersByCountry), emptyTitle: 'No customers yet',
-            renderRow: function (r) { return h('tr', { key: r[0] }, h('td', null, r[0]), h('td', { style: { textAlign: 'right' } }, MG.util.num(r[1]))); },
-          }))));
+          h(MG.ui.DataTable, {
+            compact: true, rows: rowsOf(d.usersByCountry), rowKey: function (r) { return r[0]; },
+            empty: h(MG.ui.Empty, { icon: 'globe', title: 'No customers', note: 'Country distribution appears once customers exist.' }),
+            columns: [
+              { th: 'Country', td: function (r) { return r[0]; } },
+              { th: 'Customers', align: 'right', td: function (r) { return h('b', null, MG.util.num(r[1])); } },
+            ] }))));
   };
 
   /* ---------------------------------------------------------------- support */
@@ -489,48 +490,51 @@
     var _r = React.useState(0); var reload = _r[1];
     var state = MG.ui.useAsync(function () { return MGA.api.tickets(); }, [_r[0]]);
     var _m = React.useState({}); var replies = _m[0]; var setReplies = _m[1];
-    if (state.loading) return h(MG.ui.LoadingPanel);
+    if (state.loading) return h(MG.ui.PageSkeleton, { variant: 'list' });
     if (state.error) return h(MG.ui.ErrorPanel, { error: state.error, onRetry: function () { location.reload(); } });
     var list = state.data || [];
-    return h(MG.ui.Card, { title: 'Support tickets' },
+    var openCount = list.filter(function (t) { return t.status !== 'resolved'; }).length;
+    return h(React.Fragment, null,
+      h(MG.ui.PageHead, {
+        icon: 'ticket', title: 'Support',
+        sub: 'Customer support tickets \u2014 replies notify the customer; resolving is reversible.',
+        actions: h('span', { className: 'panel-chip' }, openCount + ' open \u00B7 ' + list.length + ' total') }),
       list.length === 0
-        ? h(MG.ui.Empty, { title: 'No tickets' })
-        : list.map(function (t) {
-            var cust = t.profiles ? (t.profiles.full_name || t.profiles.email) : '—';
-            return h('div', { key: t.id, className: 'ticket' },
-              h('div', { className: 'ticket-head' },
-                h('div', null, h('b', null, t.subject), h('small', { className: 'muted' }, ' · ' + cust + ' · ' + t.category)),
-                h(MG.ui.Badge, { status: t.status })),
-              h('ul', { className: 'thread' }, (t.support_messages || []).map(function (m) {
-                return h('li', { key: m.id, className: 'msg msg-' + m.sender },
-                  h('small', null, m.sender === 'customer' ? 'Customer' : 'Support', ' · ', MG.util.timeAgo(m.created_at)),
-                  h('p', null, m.body));
-              })),
-              t.status !== 'resolved' ? h('div', { className: 'filter-bar' },
-                h(MG.ui.Input, {
-                  placeholder: 'Write a reply…', value: replies[t.id] || '',
-                  onChange: function (e) { var n = Object.assign({}, replies); n[t.id] = e.target.value; setReplies(n); },
-                  passThrough: { style: { flex: 3 } },
-                }),
-                h(MG.ui.Button, {
-                  variant: 'primary', onClick: function () {
+        ? h(MG.ui.Empty, { icon: 'ticket', title: 'No support tickets', note: 'Tickets submitted from the customer app will appear here.' })
+        : h(MG.ui.Card, null,
+            list.map(function (t) {
+              var cust = t.profiles ? (t.profiles.full_name || t.profiles.email) : '\u2014';
+              return h('div', { key: t.id, style: { marginBottom: 16 } },
+                h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 } },
+                  h('div', null, h('b', null, t.subject),
+                    h('small', { className: 'muted', style: { marginLeft: 8 } }, cust + ' \u00B7 ' + t.category)),
+                  h(MG.ui.Badge, { status: t.status })),
+                (t.support_messages || []).length > 0 ? h('ul', { className: 'thread' },
+                  (t.support_messages || []).map(function (m) {
+                    return h('li', { key: m.id, className: m.sender === 'customer' ? 'from-customer' : 'from-support' },
+                      h('div', { className: 'bubble' },
+                        h('p', null, m.body),
+                        h('small', null, m.sender === 'customer' ? 'Customer' : 'Support', ' \u00B7 ', MG.util.timeAgo(m.created_at))));
+                  })) : null,
+                t.status !== 'resolved' ? h('div', { className: 'filter-bar', style: { marginTop: 8 } },
+                  h('input', { className: 'input', placeholder: 'Write a reply\u2026', value: replies[t.id] || '',
+                    onChange: function (e) { var n = Object.assign({}, replies); n[t.id] = e.target.value; setReplies(n); },
+                    style: { flex: 3 } }),
+                  h('button', { className: 'btn btn-primary', onClick: function () {
                     var msg = (replies[t.id] || '').trim();
                     if (msg.length < 2) return;
                     MGA.api.replyTicket(t.id, msg).then(function () {
-                      MG.util.toast('Reply posted.', 'ok');
+                      MG.ui.toast('Reply posted.', 'ok');
                       reload(function (x) { return x + 1; });
-                    }).catch(function (e) { MG.util.toast(MG.util.errMessage(e), 'err'); });
-                  },
-                }, 'Reply'),
-                h(MG.ui.Button, {
-                  variant: 'ghost', onClick: function () {
+                    }).catch(function (e) { MG.ui.toast(MG.util.errMessage(e), 'err'); });
+                  } }, h(MG.ui.Icon, { name: 'send', size: 14 }), ' Reply'),
+                  h('button', { className: 'btn btn-ghost', onClick: function () {
                     MGA.api.resolveTicket(t.id).then(function () {
-                      MG.util.toast('Ticket resolved.', 'ok');
+                      MG.ui.toast('Ticket resolved.', 'ok');
                       reload(function (x) { return x + 1; });
-                    }).catch(function (e) { MG.util.toast(MG.util.errMessage(e), 'err'); });
-                  },
-                }, 'Resolve')) : null);
-          }));
+                    }).catch(function (e) { MG.ui.toast(MG.util.errMessage(e), 'err'); });
+                  } }, 'Resolve')) : null);
+            })));
   };
 
   /* ------------------------------------------------------------------ roles */
@@ -538,52 +542,58 @@
     var _r = React.useState(0); var reload = _r[1];
     var state = MG.ui.useAsync(function () { return MGA.api.roles(); }, [_r[0]]);
     var _a = React.useState({ clerkUserId: '', roleId: 'support', displayName: '' }); var assign = _a[0]; var setAssign = _a[1];
-    if (state.loading) return h(MG.ui.LoadingPanel);
+    if (state.loading) return h(MG.ui.PageSkeleton, { variant: 'page' });
     if (state.error) return h(MG.ui.ErrorPanel, { error: state.error, onRetry: function () { location.reload(); } });
     var d = state.data || {};
     var allPerms = [];
     (d.roles || []).forEach(function (r) { (r.permissions || []).forEach(function (p) { if (allPerms.indexOf(p) < 0) allPerms.push(p); }); });
     allPerms.sort();
-    return h('div', { className: 'view-stack' },
-      h(MG.ui.Card, { title: 'Assign a role' },
-        h('p', { className: 'muted' }, 'Requires the Clerk user id (user_…). The backend verifies the identity exists in Clerk before granting administrative power.'),
+    return h(React.Fragment, null,
+      h(MG.ui.PageHead, {
+        icon: 'key', title: 'Admin roles',
+        sub: 'Role model with server-side permission enforcement.' }),
+
+      h(MG.ui.Notice, { tone: 'info', icon: 'shield-check' },
+        h('p', null, h('b', null, '\u201CBlocked\u201D means enforced in the service layer'),
+          ' \u2014 not merely hidden from the UI. Every role, including Super Administrator, is rejected with HTTP 403 when attempting a financial mutation.')),
+
+      h(MG.ui.Card, { title: h('h3', { className: 'panel-title' }, h(MG.ui.Icon, { name: 'key', size: 15 }), ' Assign a role') },
+        h('p', { className: 'muted' }, 'Requires the Clerk user id (user_\u2026). The backend verifies the identity exists in Clerk before granting administrative power.'),
         h('div', { className: 'filter-bar' },
-          h(MG.ui.Input, { placeholder: 'Clerk user id (user_…)', value: assign.clerkUserId,
-            onChange: function (e) { setAssign(Object.assign({}, assign, { clerkUserId: e.target.value })); } }),
-          h(MG.ui.Select, {
-            value: assign.roleId, onChange: function (e) { setAssign(Object.assign({}, assign, { roleId: e.target.value })); },
-            options: (d.roles || []).map(function (r) { return { value: r.id, label: r.id }; }),
-          }),
-          h(MG.ui.Button, {
-            variant: 'primary', onClick: function () {
-              MGA.api.assignRole(assign.clerkUserId, assign.roleId, assign.displayName || undefined).then(function () {
-                MG.util.toast('Role assigned.', 'ok');
-                reload(function (x) { return x + 1; });
-              }).catch(function (e) { MG.util.toast(MG.util.errMessage(e), 'err'); });
-            },
-          }, 'Assign')),
-        h(MG.ui.Table, {
-          columns: [{ label: 'Holder' }, { label: 'Role' }, { label: 'Assigned' }, { label: '' }],
-          rows: d.holders || [], emptyTitle: 'No administrators assigned yet',
-          renderRow: function (u) {
-            return h('tr', { key: u.clerk_user_id },
-              h('td', null, (u.display_name || '') + ' ', h('small', { className: 'muted' }, u.clerk_user_id)),
-              h('td', null, h('span', { className: 'adm-chip' }, u.role_id)),
-              h('td', null, MG.util.date(u.assigned_at)),
-              h('td', null, h(MG.ui.Button, {
-                variant: 'ghost', size: 'sm',
-                onClick: function () {
-                  MGA.api.revokeRole(u.clerk_user_id).then(function () {
-                    MG.util.toast('Role revoked.', 'ok');
-                    reload(function (x) { return x + 1; });
-                  }).catch(function (e) { MG.util.toast(MG.util.errMessage(e), 'err'); });
-                },
-              }, 'Revoke')));
-          },
-        })),
-      h(MG.ui.Card, { title: 'Permission matrix (enforced server-side on every request)' },
+          h('div', { className: 'field', style: { flex: 1 } },
+            h('label', null, 'Clerk user id'),
+            h('input', { placeholder: 'user_\u2026', value: assign.clerkUserId,
+              onChange: function (e) { setAssign(Object.assign({}, assign, { clerkUserId: e.target.value })); } })),
+          h('div', { className: 'field' },
+            h('label', null, 'Role'),
+            h('select', { value: assign.roleId, onChange: function (e) { setAssign(Object.assign({}, assign, { roleId: e.target.value })); } },
+              (d.roles || []).map(function (r) { return h('option', { key: r.id, value: r.id }, r.id); }))),
+          h('button', { className: 'btn btn-primary', onClick: function () {
+            MGA.api.assignRole(assign.clerkUserId, assign.roleId, assign.displayName || undefined).then(function () {
+              MG.ui.toast('Role assigned.', 'ok');
+              reload(function (x) { return x + 1; });
+            }).catch(function (e) { MG.ui.toast(MG.util.errMessage(e), 'err'); });
+          } }, 'Assign')),
+        h(MG.ui.DataTable, {
+          compact: true, rows: d.holders || [], rowKey: function (u) { return u.clerk_user_id; },
+          empty: h(MG.ui.Empty, { icon: 'key', title: 'No administrators assigned yet', note: 'Assigned roles will appear here.' }),
+          columns: [
+            { th: 'Holder', td: function (u) { return h('div', null, h('b', null, u.display_name || ''), h('small', { className: 'muted', style: { display: 'block' } }, u.clerk_user_id)); } },
+            { th: 'Role', td: function (u) { return h('span', { className: 'chip chip-currency' }, u.role_id); } },
+            { th: 'Assigned', td: function (u) { return h('span', { className: 'td-date' }, MG.util.date(u.assigned_at)); } },
+            { th: '', align: 'right', td: function (u) {
+              return h('button', { className: 'btn btn-ghost btn-sm', onClick: function () {
+                MGA.api.revokeRole(u.clerk_user_id).then(function () {
+                  MG.ui.toast('Role revoked.', 'ok');
+                  reload(function (x) { return x + 1; });
+                }).catch(function (e) { MG.ui.toast(MG.util.errMessage(e), 'err'); });
+              } }, 'Revoke'); } },
+          ] })),
+
+      h(MG.ui.Card, { title: h('h3', { className: 'panel-title' }, h(MG.ui.Icon, { name: 'shield-check', size: 15 }), ' Permission matrix') },
+        h('p', { className: 'panel-note' }, 'Enforced server-side on every request.'),
         h('div', { className: 'table-wrap' },
-          h('table', { className: 'table matrix' },
+          h('table', null,
             h('thead', null, h('tr', null,
               h('th', null, 'Role'),
               allPerms.map(function (p) { return h('th', { key: p }, p); }))),
@@ -592,7 +602,8 @@
                 h('td', null, h('b', null, r.id)),
                 allPerms.map(function (p) {
                   var has = (r.permissions || []).indexOf(p) >= 0;
-                  return h('td', { key: p, className: has ? 'yes' : 'no' }, has ? '✓' : '—');
+                  return h('td', { key: p, style: { textAlign: 'center' } },
+                    has ? h('span', { className: 'mtx m-full' }, 'Full') : h('span', { className: 'mtx m-none' }, '\u2014'));
                 }));
             }))))));
   };
@@ -609,43 +620,49 @@
       if (k !== 'page') next.page = 1;
       setFilters(next);
     }
-    return h('div', { className: 'view-stack' },
-      h(MG.ui.Card, null,
-        h('div', { className: 'filter-bar' },
-          h(MG.ui.Input, { placeholder: 'Search action, actor or target…', value: filters.q,
-            onChange: function (e) { set('q', e.target.value); }, passThrough: { style: { flex: 2 } } }),
-          h(MG.ui.Select, {
-            value: filters.result, onChange: function (e) { set('result', e.target.value); },
-            options: [
-              { value: '', label: 'All results' }, { value: 'allowed', label: 'Allowed' },
-              { value: 'denied', label: 'Denied' },
-            ],
-          }))),
-      h(MG.ui.Card, { title: 'Audit log (append-only)' },
-        state.loading ? h(MG.ui.Skeleton, { lines: 8 })
-          : state.error ? h(MG.ui.ErrorPanel, { error: state.error, onRetry: function () { location.reload(); } })
-          : (state.data || []).length === 0
-            ? h(MG.ui.Empty, { title: 'No entries match' })
-            : h(React.Fragment, null,
-                h(MG.ui.Table, {
-                  columns: [{ label: 'When' }, { label: 'Actor' }, { label: 'Action' }, { label: 'Target' }, { label: 'Result' }, { label: 'Detail' }],
-                  rows: state.data || [],
-                  renderRow: function (l) {
-                    return h('tr', { key: l.id, className: l.result === 'denied' ? 'denied-row' : '' },
-                      h('td', null, MG.util.dateTime(l.created_at)),
-                      h('td', null, l.actor_id),
-                      h('td', null, l.action),
-                      h('td', null, (l.target_type || '') + (l.target_id ? ' · ' + String(l.target_id).slice(0, 18) : '')),
-                      h('td', null, h(MG.ui.Badge, { status: l.result })),
-                      h('td', null, l.detail ? JSON.stringify(l.detail).slice(0, 60) : '—'));
-                  },
-                }),
-                meta.pages > 1 ? h('div', { className: 'pager' },
-                  h(MG.ui.Button, { variant: 'ghost', disabled: filters.page <= 1,
-                    onClick: function () { set('page', filters.page - 1); } }, '← Previous'),
-                  h('span', { className: 'pager-info' }, 'Page ' + (meta.page || filters.page) + ' of ' + meta.pages),
-                  h(MG.ui.Button, { variant: 'ghost', disabled: filters.page >= (meta.pages || 1),
-                    onClick: function () { set('page', filters.page + 1); } }, 'Next →')) : null)));
+    var rows = (state.data && Array.isArray(state.data)) ? state.data : ((state.data && state.data.data) || []);
+    var denied = rows.filter(function (a) { return a.result === 'denied'; }).length;
+    return h(React.Fragment, null,
+      h(MG.ui.PageHead, {
+        icon: 'history', title: 'Audit logs',
+        sub: 'Every administrative action \u2014 allowed and denied \u2014 with actor, target and reason.',
+        actions: h('span', { className: 'panel-chip' },
+          state.loading ? 'Loading\u2026' : (rows.length + ' entries \u00B7 ' + denied + ' denied')) }),
+
+      h('div', { className: 'filter-bar' },
+        h('div', { className: 'field field-search' },
+          h('label', { htmlFor: 'au-search' }, 'Search'),
+          h('input', { id: 'au-search', type: 'search', placeholder: 'Action, actor or target\u2026',
+            value: filters.q, onChange: function (e) { set('q', e.target.value); } })),
+        h('div', { className: 'field' },
+          h('label', null, 'Result'),
+          h('select', { value: filters.result, onChange: function (e) { set('result', e.target.value); } },
+            h('option', { value: '' }, 'All results'),
+            h('option', { value: 'allowed' }, 'Allowed'),
+            h('option', { value: 'denied' }, 'Denied')))),
+
+      state.loading ? h(MG.ui.PageSkeleton, { variant: 'list' })
+        : state.error ? h(MG.ui.ErrorPanel, { error: state.error, onRetry: function () { location.reload(); } })
+        : h(React.Fragment, null,
+            h(MG.ui.DataTable, {
+              rows: rows,
+              rowKey: function (l) { return l.id; },
+              rowClass: function (l) { return l.result === 'denied' ? 'tr-denied' : ''; },
+              empty: h(MG.ui.Empty, { icon: 'history', title: 'No entries match', note: 'No audit entries match the current filters.' }),
+              columns: [
+                { th: 'When', td: function (l) { return h('span', { className: 'td-date' }, MG.util.dateTime(l.created_at)); } },
+                { th: 'Actor', td: function (l) { return l.actor_id; } },
+                { th: 'Action', td: function (l) { return h('span', { className: 'chip chip-mono' }, l.action); } },
+                { th: 'Target', td: function (l) { return h('span', { className: 'td-plain' }, (l.target_type || '') + (l.target_id ? ' \u00B7 ' + String(l.target_id).slice(0, 18) : '')); } },
+                { th: 'Result', td: function (l) { return h(MG.ui.Badge, { status: l.result === 'denied' ? 'failed' : 'successful', label: l.result }); } },
+                { th: 'Detail', td: function (l) { return h('span', { className: 'td-desc' }, l.detail ? JSON.stringify(l.detail).slice(0, 60) : '\u2014'); } },
+              ] }),
+            meta.pages > 1 ? h('div', { className: 'pager' },
+              h(MG.ui.Button, { variant: 'ghost', disabled: filters.page <= 1,
+                onClick: function () { set('page', filters.page - 1); } }, '\u2190 Previous'),
+              h('span', { className: 'pager-info' }, 'Page ' + (meta.page || filters.page) + ' of ' + meta.pages),
+              h(MG.ui.Button, { variant: 'ghost', disabled: filters.page >= (meta.pages || 1),
+                onClick: function () { set('page', filters.page + 1); } }, 'Next \u2192')) : null));
   };
 
   /* --------------------------------------------------------------- settings */
@@ -660,27 +677,41 @@
         if (found) setMaintenance(found.value === true || found.value === 'true');
       }
     }, [state.data]);
-    if (state.loading) return h(MG.ui.LoadingPanel);
+    if (state.loading) return h(MG.ui.PageSkeleton, { variant: 'page' });
     if (state.error) return h(MG.ui.ErrorPanel, { error: state.error, onRetry: function () { location.reload(); } });
-    return h(MG.ui.Card, { title: 'Platform settings' },
-      h('label', { className: 'pref-line' },
-        h('input', {
-          type: 'checkbox', checked: Boolean(maintenance),
-          onChange: function (e) { setMaintenance(e.target.checked); },
-        }),
-        h('span', null, h('b', null, 'Maintenance mode'), ' — shows a maintenance notice in the customer application')),
-      h(MG.ui.Button, {
-        variant: 'primary', busy: busy, style: { marginTop: 12 },
-        onClick: function () {
-          setBusy(true);
-          MGA.api.updateSettings({ maintenanceMode: Boolean(maintenance) }).then(function () {
-            setBusy(false);
-            MG.util.toast('Settings updated.', 'ok');
-            reload(function (x) { return x + 1; });
-          }).catch(function (e) { setBusy(false); MG.util.toast(MG.util.errMessage(e), 'err'); });
-        },
-      }, 'Save settings'),
-      h('p', { className: 'muted', style: { marginTop: 14 } },
-        'All settings changes are audit-logged. Support email and platform name are managed in the database settings table by the deployment runbook.'));
+
+    return h(React.Fragment, null,
+      h(MG.ui.PageHead, {
+        icon: 'settings', title: 'Settings',
+        sub: 'Platform-wide configuration. Changes apply immediately and are audit-logged.' }),
+
+      h('div', { className: 'grid-side' },
+        h('div', { className: 'grid-side-main' },
+          h(MG.ui.Card, { title: h('h3', { className: 'panel-title' }, h(MG.ui.Icon, { name: 'settings', size: 15 }), ' Platform settings') },
+            h('div', { className: 'switch-row' },
+              h('label', { className: 'switch' },
+                h('input', { type: 'checkbox', checked: Boolean(maintenance),
+                  onChange: function (e) { setMaintenance(e.target.checked); } }),
+                h('span', { className: 'switch-track', 'aria-hidden': 'true' }),
+                h('span', { className: 'switch-label' }, 'Maintenance mode')),
+              h('p', { className: 'hint' }, 'Shows a maintenance notice in the customer application.')),
+            h('button', { className: 'btn btn-primary' + (busy ? ' is-busy' : ''), disabled: busy, style: { marginTop: 12 },
+              onClick: function () {
+                setBusy(true);
+                MGA.api.updateSettings({ maintenanceMode: Boolean(maintenance) }).then(function () {
+                  setBusy(false);
+                  MG.ui.toast('Settings updated.', 'ok');
+                  reload(function (x) { return x + 1; });
+                }).catch(function (e) { setBusy(false); MG.ui.toast(MG.util.errMessage(e), 'err'); });
+              } }, 'Save settings'))),
+        h('div', { className: 'grid-side-aside' },
+          h(MG.ui.Card, { title: h('h3', { className: 'panel-title' }, h(MG.ui.Icon, { name: 'info', size: 15 }), ' Read-only') },
+            h('dl', { className: 'detail-grid detail-stack' },
+              h('div', null, h('dt', null, 'Console'), h('dd', null, 'Hong Kong International Fintech (design 2)')),
+              h('div', null, h('dt', null, 'Data'), h('dd', null, 'Connected service')),
+              h('div', null, h('dt', null, 'Currency availability'), h('dd', null, 'Managed in Currency Management'))),
+            h('p', { className: 'panel-note' }, 'All settings changes are audit-logged. Support email and platform name are managed in the database settings table.')),
+          h(MG.ui.Notice, { tone: 'warn', icon: 'alert' },
+            h('p', null, 'All settings and data are managed through the connected backend service.')))));
   };
 })();
