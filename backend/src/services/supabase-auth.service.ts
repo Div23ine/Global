@@ -44,19 +44,10 @@ export async function verifySupabaseAccessToken(headerValue: string): Promise<Su
 export async function getLinkedProfileByEmail(email: string): Promise<LinkedAuthProfile> {
   const db = getServiceClient();
   const normalizedEmail = email.trim().toLowerCase();
+
   // PostgREST ilike patterns treat '%' and '_' as wildcards. Escape them so
   // a role assignment always targets the literal email the admin supplied.
-  const emailPattern = normalizedEmail.replace(/[\\%_]/g, '\\  const db = getServiceClient();
-  const { data, error } = await db
-    .from('profiles')
-    .select('id, email, first_name, last_name, supabase_user_id, status')
-    .ilike('email', email.trim())
-    .maybeSingle();
-  if (error) throw new Error(error.message);
-  if (!data || !data.supabase_user_id || data.status !== 'active') {
-    throw notFound('An active Supabase Auth user with this verified email must sign in before a role can be assigned.');
-  }
-  return data as LinkedAuthProfile;');
+  const emailPattern = normalizedEmail.replace(/[\\%_]/g, '\\$&');
   const { data, error } = await db
     .from('profiles')
     .select('id, email, first_name, last_name, supabase_user_id, status')
