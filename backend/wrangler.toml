@@ -1,7 +1,8 @@
 # Meridian Global Accounts API — Cloudflare Workers
 # Docs: https://developers.cloudflare.com/workers/
 
-name = "meridian-api"
+# Keep this name aligned with the existing Cloudflare dashboard Worker.
+name = "global"
 main = "src/worker.ts"
 compatibility_date = "2024-11-12"
 compatibility_flags = ["nodejs_compat"]
@@ -17,6 +18,32 @@ RESEND_FROM_NAME = "Meridian Global Accounts"
 # CORS_ORIGIN must list the Cloudflare Pages frontend origin(s), e.g.:
 # CORS_ORIGIN = "https://app.meridian.example.com,https://meridian-global.pages.dev"
 CORS_ORIGIN = "https://meridian-global.pages.dev"
+
+# Cloudflare Workers Rate Limiting bindings. Each namespace ID must be unique
+# within this Cloudflare account. These are approximate per-location limits.
+[[ratelimits]]
+name = "GLOBAL_RATE_LIMITER"
+namespace_id = "675001"
+
+[ratelimits.simple]
+limit = 300
+period = 60
+
+[[ratelimits]]
+name = "DEPOSIT_RATE_LIMITER"
+namespace_id = "675002"
+
+[ratelimits.simple]
+limit = 10
+period = 60
+
+[[ratelimits]]
+name = "SUPPORT_RATE_LIMITER"
+namespace_id = "675003"
+
+[ratelimits.simple]
+limit = 5
+period = 60
 
 # Secrets (set with: npx wrangler secret put NAME)
 # CLERK_SECRET_KEY
