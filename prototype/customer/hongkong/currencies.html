@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en" data-concept="hongkong">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Supported Currencies — Meridian Global Accounts</title>
+  <meta name="description" content="NGN, USD, GBP, EUR and CHF supported side by side, with indicative demo rates and the country-to-default-currency mapping used at registration.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/theme.css">
+</head>
+<body data-page="currencies">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div id="gl-header"></div>
+  <main id="main">
+
+    <section class="page-hero">
+      <div class="container">
+        <p class="eyebrow"><span class="eyebrow-dot" aria-hidden="true"></span>Currencies</p>
+        <h1>Five currencies, held side by side</h1>
+        <p class="lead">Meridian supports five currencies at launch. Each activated currency keeps its own separate balance, transaction history and deposit records — nothing is converted automatically, and activating a new currency always starts at zero.</p>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container">
+        <div class="sec-head">
+          <h2>Supported platform currencies</h2>
+          <span class="demo-tag"><span aria-hidden="true">●</span> Availability is live in the demo</span>
+        </div>
+        <div class="cur-grid" data-currencies-grid></div>
+      </div>
+    </section>
+
+    <section class="section section-alt">
+      <div class="container">
+        <div class="sec-head"><h2>Indicative demo rates</h2></div>
+        <div data-rates-table></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container">
+        <div class="sec-head">
+          <h2>Countries and default currencies</h2>
+          <span class="demo-tag"><span aria-hidden="true">●</span> Configurable mapping</span>
+        </div>
+        <div data-country-table></div>
+      </div>
+    </section>
+
+    <section class="section section-tight">
+      <div class="container">
+        <div class="cta-band">
+          <h2>Activate your first currency</h2>
+          <p>Your country's currency activates automatically after verification — the rest are one click away in the app.</p>
+          <div class="cta-actions">
+            <a class="btn btn-light btn-lg" href="app.html#/register">Create your account</a>
+            <a class="btn btn-outline btn-lg" href="app.html#/activate">See the activate screen</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+  <div id="gl-footer"></div>
+  <script src="../../shared/icons.js"></script>
+  <script src="../../shared/data.js"></script>
+  <script src="../../shared/api.js"></script>
+  <script src="../../shared/site-core.js"></script>
+  <script src="assets/components.js"></script>
+  <script src="../../shared/demo-panel.js"></script>
+</body>
+</html>

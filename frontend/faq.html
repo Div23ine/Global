@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en" data-concept="hongkong">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FAQ — Meridian Global Accounts</title>
+  <meta name="description" content="Frequently asked questions about Meridian Global Accounts platform accounts.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/theme.css">
+</head>
+<body data-page="faq">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div id="gl-header"></div>
+  <main id="main">
+
+    <section class="section">
+      <div class="container narrow">
+        <div class="sec-head"><h1>Frequently asked questions</h1></div>
+        <div class="acc-list"><div class="acc-item" data-acc-item>
+          <button class="acc-btn" data-acc-btn aria-expanded="false">Is Meridian a bank?<span class="acc-x" aria-hidden="true">+</span></button>
+          <div class="acc-body" data-acc-body hidden><p>No. Meridian provides platform accounts — multi-currency records inside our application. Money movement is executed exclusively by appropriately licensed financial partners.</p></div>
+        </div><div class="acc-item" data-acc-item>
+          <button class="acc-btn" data-acc-btn aria-expanded="false">Which currencies can I hold?<span class="acc-x" aria-hidden="true">+</span></button>
+          <div class="acc-body" data-acc-body hidden><p>EUR, GBP, USD, CHF and PLN today. The supported set is configuration-driven and can grow.</p></div>
+        </div><div class="acc-item" data-acc-item>
+          <button class="acc-btn" data-acc-btn aria-expanded="false">What happens when I activate a currency?<span class="acc-x" aria-hidden="true">+</span></button>
+          <div class="acc-body" data-acc-body hidden><p>A new account for that currency opens with a zero balance. Nothing is converted and no existing balance changes.</p></div>
+        </div><div class="acc-item" data-acc-item>
+          <button class="acc-btn" data-acc-btn aria-expanded="false">When is a deposit credited?<span class="acc-x" aria-hidden="true">+</span></button>
+          <div class="acc-body" data-acc-body hidden><p>Only after our licensed payment partner confirms it. Until then the deposit shows as pending — never as success. Failed or cancelled deposits are never credited.</p></div>
+        </div><div class="acc-item" data-acc-item>
+          <button class="acc-btn" data-acc-btn aria-expanded="false">Can administrators move my money?<span class="acc-x" aria-hidden="true">+</span></button>
+          <div class="acc-body" data-acc-body hidden><p>No. The administrative surface is financially read-only by construction — there is no code path that lets staff edit balances, transactions or deposit outcomes. Every attempt is refused and logged.</p></div>
+        </div><div class="acc-item" data-acc-item>
+          <button class="acc-btn" data-acc-btn aria-expanded="false">How do you protect my account?<span class="acc-x" aria-hidden="true">+</span></button>
+          <div class="acc-body" data-acc-body hidden><p>Verified email and phone, optional multi-factor sign-in, visible device sessions you can revoke, and a complete security event history. Identity is managed by a dedicated provider (Clerk) — we never store passwords.</p></div>
+        </div><div class="acc-item" data-acc-item>
+          <button class="acc-btn" data-acc-btn aria-expanded="false">What does it cost?<span class="acc-x" aria-hidden="true">+</span></button>
+          <div class="acc-body" data-acc-body hidden><p>Pricing will be published with the commercial launch and depends on the operating jurisdiction and partner agreements. Nothing is charged in this deployment.</p></div>
+        </div><div class="acc-item" data-acc-item>
+          <button class="acc-btn" data-acc-btn aria-expanded="false">Which countries can register?<span class="acc-x" aria-hidden="true">+</span></button>
+          <div class="acc-body" data-acc-body hidden><p>Customers across Europe, plus the United States. The registration country determines your default currency; you can activate the others at any time.</p></div>
+        </div></div>
+      </div>
+    </section>
+  </main>
+  <div id="gl-footer"></div>
+  <script src="js/config.js"></script>
+  <script src="js/util.js"></script>
+  <script src="js/site.js"></script>
+</body>
+</html>

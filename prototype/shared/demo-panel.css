@@ -1,0 +1,75 @@
+/* MERIDIAN GLOBAL ACCOUNTS — shared/demo-panel.css
+   Meta tooling styling only — deliberately looks like a dev overlay, never
+   part of any of the three design systems. */
+
+#gl-demo-panel { position: fixed; right: 16px; bottom: 16px; z-index: 9999; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; color: #E7ECF3; }
+#gl-demo-panel * { box-sizing: border-box; }
+
+#gl-demo-chip {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: #14181F; color: #E7ECF3; border: 1px solid #2A313D; border-radius: 999px;
+  padding: 8px 14px; cursor: pointer; letter-spacing: .08em; font: inherit; font-size: 11px; font-weight: 700;
+  box-shadow: 0 6px 24px rgba(9, 12, 18, .35);
+}
+#gl-demo-chip:hover { border-color: #3D4757; }
+.gl-demo-dot { width: 8px; height: 8px; border-radius: 50%; background: #F5A623; box-shadow: 0 0 0 3px rgba(245, 166, 35, .18); }
+
+#gl-demo-body {
+  width: 296px; max-height: min(70vh, 560px); overflow: auto;
+  background: #14181F; border: 1px solid #2A313D; border-radius: 14px;
+  padding: 14px; margin-bottom: 10px; box-shadow: 0 18px 50px rgba(9, 12, 18, .5);
+}
+.gl-demo-head { padding-bottom: 10px; border-bottom: 1px solid #232A35; margin-bottom: 4px; }
+.gl-demo-head b { display: block; font-size: 12px; letter-spacing: .04em; }
+.gl-demo-head span { color: #8B94A3; font-size: 10.5px; }
+
+.gl-demo-sec { padding: 10px 0; border-bottom: 1px solid #1C222C; }
+.gl-demo-sec:last-child { border-bottom: 0; }
+.gl-demo-sec > label { display: block; color: #AAB4C3; font-size: 10px; text-transform: uppercase; letter-spacing: .1em; margin-bottom: 6px; }
+
+.gl-demo-otp { background: #0E1116; border: 1px dashed #2E3642; border-radius: 8px; padding: 8px 10px; line-height: 1.5; }
+.gl-demo-otp b { color: #F5A623; font-size: 13px; letter-spacing: .12em; }
+.gl-demo-muted { color: #78818F; }
+
+#gl-demo-panel select {
+  width: 100%; background: #0E1116; color: #E7ECF3; border: 1px solid #2E3642;
+  border-radius: 8px; padding: 7px 8px; font: inherit; font-size: 11.5px;
+}
+.gl-demo-note { color: #78818F; font-size: 10px; line-height: 1.45; margin: 6px 0 0; }
+
+.gl-demo-cur { display: flex; flex-wrap: wrap; gap: 6px; }
+.gl-demo-cur button {
+  font: inherit; font-size: 10.5px; font-weight: 700; cursor: pointer; border-radius: 6px; padding: 5px 9px;
+  border: 1px solid #2E3642; background: #0E1116; color: #8B94A3;
+}
+.gl-demo-cur button.on { color: #7CE3A1; border-color: #24523A; background: rgba(36, 82, 58, .18); }
+.gl-demo-cur button.off { color: #F08A8A; border-color: #5A2B2B; background: rgba(90, 43, 43, .18); text-decoration: line-through; }
+
+.gl-demo-switch { display: grid; gap: 5px; }
+.gl-demo-switch a {
+  color: #AFC6E8; text-decoration: none; font-size: 11px; padding: 7px 9px; border-radius: 8px;
+  background: #0E1116; border: 1px solid #232A35; display: block;
+}
+.gl-demo-switch a:hover { border-color: #3D4757; color: #fff; }
+.gl-demo-switch a.cur { border-color: #2E5A9E; color: #fff; background: rgba(46, 90, 158, .16); }
+.gl-demo-switch a.sel { color: #F5A623; }
+
+.gl-demo-danger {
+  width: 100%; font: inherit; font-size: 11px; font-weight: 700; cursor: pointer;
+  background: rgba(90, 43, 43, .25); color: #F0A0A0; border: 1px solid #5A2B2B; border-radius: 8px; padding: 8px;
+}
+.gl-demo-danger:hover { background: rgba(90, 43, 43, .45); color: #fff; }
+
+@media (max-width: 640px) {
+  #gl-demo-panel { right: 10px; bottom: 10px; }
+  #gl-demo-body { width: calc(100vw - 20px - 12px); }
+}
+
+/* shared chart tooltip (used by GL.charts) */
+.gl-chart-tip {
+  position: fixed; z-index: 9998; pointer-events: none; opacity: 0; transition: opacity .12s;
+  background: #14181F; color: #E7ECF3; border: 1px solid #2A313D; border-radius: 8px;
+  padding: 6px 9px; font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  box-shadow: 0 8px 24px rgba(9, 12, 18, .4);
+}
+.gl-chart-tip b { color: #fff; }
