@@ -105,6 +105,24 @@ app.html/admin.html origins. Never expose the service-role key in the frontend.
 7. Only after explicit owner approval, merge/deploy and apply migration 0007
    to production using the approved backup/rollback plan.
 
+## Earlier deployment workflow results (PR #1 merge)
+
+PR #1 merged the Worker compatibility/API URL groundwork into development at
+commit 143b6f58a7ab35e334080b9f2befdb486aaa4f0b. The automated workflows then
+ran and both failed before a successful deployment:
+
+- Pages workflow run 44956098040 failed because CLOUDFLARE_API_TOKEN was not
+  available to the non-interactive Wrangler process. Add a properly scoped
+  CLOUDFLARE_API_TOKEN GitHub Actions secret before relying on Pages CI deploys.
+- Worker workflow run 44956097936 failed during npm ci because
+  backend/package-lock.json is missing package entries (including packages
+  from existing Wrangler/Workerd dependency trees). Typecheck, unit tests and
+  Worker deployment were skipped. Regenerate and verify the lockfile from
+  backend/package.json before the next Worker CI attempt.
+
+Neither run confirms a Pages or Worker deployment. The current Supabase Auth
+branch remains unmerged; migration 0007 has not been applied.
+
 ## Verification status
 
 | Check | Status |
