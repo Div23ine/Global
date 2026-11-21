@@ -1,6 +1,6 @@
 /**
  * Twilio SMS — transactional notifications only.
- * OTP / phone verification for authentication is owned by Clerk (which is
+ * OTP / phone verification for authentication is owned by Supabase Auth (which is
  * configured with Twilio itself); this service never sends verification
  * codes, so no code ever appears in logs or payloads.
  *
