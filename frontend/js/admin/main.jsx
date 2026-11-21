@@ -113,6 +113,11 @@
       return function () { document.body.style.overflow = ''; };
     }, [navOpen]);
 
+    if (!MG.configLoaded) {
+      return h('div', { className: 'auth-viewport' },
+        h('div', { className: 'auth-wrap' },
+          h('div', { className: 'auth-card' }, h(MG.ui.PageSkeleton, { variant: 'page' }))));
+    }
     if (!MG.isConfigured()) {
       return h('div', { className: 'auth-viewport' },
         h('div', { className: 'auth-wrap' },
