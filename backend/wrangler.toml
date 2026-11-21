@@ -10,17 +10,17 @@ compatibility_date = "2024-11-12"
 # compatibility-date default; keep nodejs_compat for the other Node APIs.
 compatibility_flags = ["nodejs_compat", "enable_nodejs_http_modules", "enable_nodejs_http_server_modules"]
 
-# Account / routes configured via dashboard or:
-# routes = [{ pattern = "api.meridian.example.com/*", zone_name = "meridian.example.com" }]
+# Production API hostname: api.meridian.uk.com
+# Attach this hostname to the "global" Worker as a Custom Domain in Cloudflare.
+# Do not add a competing CNAME record manually; Cloudflare creates the DNS record.
 
 [vars]
 NODE_ENV = "production"
 LOG_LEVEL = "info"
 PAYMENT_PROVIDER = "manual-bank-transfer"
 RESEND_FROM_NAME = "Meridian Global Accounts"
-# CORS_ORIGIN must list the Cloudflare Pages frontend origin(s), e.g.:
-# CORS_ORIGIN = "https://app.meridian.example.com,https://meridian-global.pages.dev"
-CORS_ORIGIN = "https://meridian-global.pages.dev"
+# Keep this list synchronized with the public Pages origins used by customers/admins.
+CORS_ORIGIN = "https://meridian.uk.com,https://www.meridian.uk.com"
 
 # Cloudflare Workers Rate Limiting bindings. Each namespace ID must be unique
 # within this Cloudflare account. These are approximate per-location limits.
