@@ -46,7 +46,7 @@ export async function getLinkedProfileByEmail(email: string): Promise<LinkedAuth
   const { data, error } = await db
     .from('profiles')
     .select('id, email, first_name, last_name, supabase_user_id, status')
-    .eq('email', email.trim().toLowerCase())
+    .ilike('email', email.trim())
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (!data || !data.supabase_user_id || data.status !== 'active') {
