@@ -131,7 +131,7 @@
       try { window.localStorage.setItem('mg_customer_login_email', normalizedEmail); } catch (e) {}
       return requireClient().auth.signInWithOtp({
         email: normalizedEmail,
-        options: { shouldCreateUser: false, emailRedirectTo: window.location.origin + window.location.pathname },
+        options: { shouldCreateUser: false, emailRedirectTo: window.location.origin + window.location.pathname + '?customer_login=1' },
       });
     },
 
@@ -146,7 +146,8 @@
       try {
         var pending = window.localStorage.getItem('mg_customer_login_email');
         var current = state.user && state.user.email;
-        return Boolean(pending && current && pending === current.trim().toLowerCase());
+        var callbackFlow = new URLSearchParams(window.location.search).get('customer_login') === '1';
+        return Boolean(current && ((pending && pending === current.trim().toLowerCase()) || callbackFlow));
       } catch (e) { return false; }
     },
 
@@ -173,6 +174,9 @@
       }).then(function (result) {
         if (!result.error) {
           try { window.localStorage.removeItem('mg_customer_login_email'); } catch (e) {}
+          if (new URLSearchParams(window.location.search).has('customer_login')) {
+            window.history.replaceState(null, '', window.location.pathname);
+          }
         }
         return result;
       });
