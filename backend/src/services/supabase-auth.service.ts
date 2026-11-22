@@ -55,7 +55,28 @@ export async function verifySupabaseAccessToken(headerValue: string): Promise<Su
       (factor) => factor.factor_type === 'totp' && factor.status === 'verified',
     ),
   );
-  if (hasVerifiedTotp) {
+
+  // Admin access follows the agreed email-magic-link-only flow. Optional
+  // customer MFA is enforced only for identities that do not hold an admin role.
+  const db = getServiceClient();
+  const { data: profile, error: profileError } = await db
+    .from('profiles')
+    .select('id')
+    .eq('supabase_user_id', data.user.id)
+    .maybeSingle();
+  if (profileError) throw new Error(profileError.message);
+  let isAdmin = false;
+  if (profile) {
+    const { data: admin, error: adminError } = await db
+      .from('admin_users')
+      .select('profile_id')
+      .eq('profile_id', profile.id)
+      .maybeSingle();
+    if (adminError) throw new Error(adminError.message);
+    isAdmin = Boolean(admin);
+  }
+
+  if (hasVerifiedTotp && !isAdmin) {
     const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(match[1]);
     if (claimsError || claimsData?.claims?.aal !== 'aal2') {
       throw new Error('Additional multi-factor verification is required');
