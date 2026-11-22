@@ -216,7 +216,7 @@
               h('span', { 'aria-hidden': 'true',
                 dangerouslySetInnerHTML: { __html: MG.ui.icon('logout', 15) } }),
               ' Sign out'),
-            h('p', { className: 'sidenav-note' }, 'Demo environment \u2014 sample data only.'))),
+            h('p', { className: 'sidenav-note' }, 'Connected service'))),
         /* main */
         h('div', { className: 'shell-main' },
           h('header', { className: 'topbar' },
@@ -229,7 +229,7 @@
             h('div', { className: 'topbar-actions' },
               h('span', { className: 'preview-chip' },
                 h('span', { className: 'dot', 'aria-hidden': 'true' }),
-                ' Demo environment \u2014 sample data'),
+                ' Connected service'),
               h('span', { className: 'user-chip' },
                 h('span', { className: 'avatar' }, MG.util.initials(adminName)),
                 h('span', { className: 'user-chip-name' }, adminName),
