@@ -289,7 +289,7 @@
               h('div', { className: 'field' },
                 h('label', { htmlFor: 'admin-email' }, 'Administrator email address'),
                 h('input', { id: 'admin-email', className: 'input', type: 'email', required: true,
-                  autoComplete: 'email', value: email, readOnly: true })),
+                  autoComplete: 'email', value: email, onChange: function (event) { setEmail(event.target.value.trim()); }, autoCapitalize: 'none' })),
               sent ? h('div', { className: 'field' },
                 h('label', { htmlFor: 'admin-email-code' }, 'One-time email code'),
                 h('input', { id: 'admin-email-code', className: 'input', type: 'text', required: true,
