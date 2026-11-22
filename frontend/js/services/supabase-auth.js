@@ -139,7 +139,7 @@
     verifyEmailOtp: function (email, token) {
       return requireClient().auth.verifyOtp({
         email: email.trim().toLowerCase(),
-        token: String(token).replace(/\\s+/g, ''),
+        token: String(token).replace(/\s+/g, ''),
         type: 'email',
       });
     },
