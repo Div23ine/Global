@@ -51,7 +51,9 @@ function ensureHandler(env: Env) {
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    const h = ensureHandler(env);
+    const h = ensureHandler(env) as unknown as {
+      fetch: (request: Request, env: Env, ctx: ExecutionContext) => Promise<Response>;
+    };
     return h.fetch(request, env, ctx);
   },
 };
