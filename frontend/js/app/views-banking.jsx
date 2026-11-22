@@ -50,12 +50,6 @@
       return palette[i % palette.length] + ' ' + start.toFixed(2) + 'deg ' + angle.toFixed(2) + 'deg';
     });
 
-    var chips = list.map(function (a) {
-      return h('a', { key: a.id, className: 'ov-chip', href: '#/account/' + a.currency_code },
-        h('b', { 'aria-hidden': 'true' }, (a.currency_symbol || a.currency_code || '').slice(0, 2)),
-        a.currency_code);
-    });
-
     return h('div', { className: 'view-stack' },
       /* Hero */
       h('section', { className: 'ov-hero', 'aria-label': 'Total balance' },
@@ -67,7 +61,7 @@
           h('p', { className: 'ov-sub' },
             'Across ' + list.length + ' currency account' + (list.length === 1 ? '' : 's') +
             (activeCount ? ' · ' + activeCount + ' active' : '')),
-          chips.length ? h('div', { className: 'ov-chips' }, chips) : null),
+          null),
         h('div', { className: 'ov-hero-side' },
           h('a', { className: 'btn btn-primary', href: '#/deposits' },
             MG.icon ? MG.icon('arrow-up', 15) : null, ' Deposit'),
@@ -118,7 +112,8 @@
                 action: h('a', { className: 'btn btn-primary', href: '#/activate' }, 'Activate a currency'),
               })
             : h('div', { className: 'curcards' }, list.map(function (a) {
-                return h('a', { key: a.id, className: 'curcard', href: '#/account/' + a.currency_code },
+                return h('a', { key: a.id, className: 'curcard', href: '#/account/' + a.currency_code,
+                  'aria-label': 'Open ' + (a.currency_name || a.currency_code) + ' account' },
                   h('div', { className: 'curcard-head' },
                     h('span', { className: 'curcard-sym', 'aria-hidden': 'true' },
                       a.currency_symbol || a.currency_code),
@@ -126,12 +121,14 @@
                       h('b', null, a.currency_code),
                       h('small', null, a.currency_name || '')),
                     h(MG.ui.Badge, { status: a.status })),
-                  h('p', { className: 'curcard-bal' }, MG.util.money(a.balance, a.currency_code)),
+                  h('span', { className: 'curcard-balance-label' }, 'Available balance'),
+                  h('span', { className: 'curcard-balance-label' }, 'Available balance'),
+              h('p', { className: 'curcard-bal' }, MG.util.money(a.balance, a.currency_code)),
                   a.equivalent_eur != null
                     ? h('p', { className: 'curcard-eq' }, '≈ ' + MG.util.money(a.equivalent_eur, 'EUR'))
                     : null,
                   h('span', { className: 'curcard-link' },
-                    MG.icon ? MG.icon('arrow-r', 14) : null, ' View account'));
+                    MG.icon ? MG.icon('arrow-r', 14) : null, ' Open account'));
               }))),
         h(MG.ui.Card, {
           title: 'Balance distribution',
@@ -240,7 +237,8 @@
             title: 'No accounts yet', hint: 'Activate your first currency to get started.',
             action: h('a', { className: 'btn btn-primary', href: '#/activate' }, 'Activate a currency') }))
         : h('div', { className: 'curcards' }, list.map(function (a) {
-            return h('a', { key: a.id, className: 'curcard', href: '#/account/' + a.currency_code },
+            return h('a', { key: a.id, className: 'curcard', href: '#/account/' + a.currency_code,
+              'aria-label': 'Open ' + (a.currency_name || a.currency_code) + ' account' },
               h('div', { className: 'curcard-head' },
                 h('span', { className: 'curcard-sym', 'aria-hidden': 'true' }, a.currency_symbol || a.currency_code),
                 h('div', null,
