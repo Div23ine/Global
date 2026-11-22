@@ -1,6 +1,6 @@
 # Meridian passwordless email authentication
 
-Meridian customer and administrator sign-in now use Supabase email OTP / magic-link authentication. Password sign-in has been removed from the login screens.
+Meridian uses separate customer and administrator authentication flows. Customer registration stores a password but verifies email and phone ownership; customer login uses an email magic link followed by a second email OTP. Admin login uses an email magic link only. Password sign-in, customer/admin self-registration for admins, and password-recovery screens are not part of these login flows.
 
 ## Supabase dashboard configuration
 
@@ -26,7 +26,7 @@ Subject: `Confirm your Meridian account`
 <p>If you did not request this account, you can ignore this email.</p>
 ```
 
-### Magic link or OTP
+### Customer sign-in (magic link then OTP)
 
 Subject: `Your Meridian sign-in code`
 
@@ -39,7 +39,7 @@ Subject: `Your Meridian sign-in code`
 <p>This code and link are single-use. If you did not request them, ignore this email.</p>
 ```
 
-5. Save the templates. In **Authentication → Providers → Email**, ensure email signups/confirmations are enabled. Use a verified custom SMTP provider before public launch for reliable delivery.
+5. Save the templates. In **Authentication → Providers → Email**, ensure email signups/confirmations are enabled. Use a verified custom SMTP provider before public launch for reliable delivery.\n6. In **Authentication → Providers → Phone**, enable phone authentication and configure the Supabase project's SMS provider (Twilio credentials and message template). The backend's transactional SMS settings do not configure Supabase Auth phone OTP.
 
 ## Initial administrator
 
