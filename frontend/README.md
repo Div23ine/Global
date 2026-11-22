@@ -31,8 +31,7 @@ index.html + 9 pages   public marketing site (static, design 02)
 app.html               customer application (React CDN SPA, hash-routed)
 admin.html             administrator console (React CDN SPA, role-gated)
 assets/theme.css       the approved design system
-js/config.local.js     public runtime values (Supabase URL + anon key)
-js/config.js           non-secret configuration
+js/config.js           non-secret configuration + API-managed public Supabase runtime config
 js/util.js             formatting / toast / download helpers
 js/site.js             public-site chrome + behaviours
 js/services/           supabase-auth.js (Supabase Auth), http.js (fetch+envelope), api.js (resources)
