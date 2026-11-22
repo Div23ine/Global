@@ -437,7 +437,6 @@
       return h('div', { className: 'auth-page-root' }, authView);
     }
     document.body.classList.remove('auth-page');
-    if (route.view === 'reset-password') return h(UpdatePasswordView);
 
     // Resolve view lazily so each view module registers itself.
     function resolveView(r) {
