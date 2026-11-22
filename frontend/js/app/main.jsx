@@ -433,16 +433,7 @@
       document.body.classList.add('auth-page');
       var authView;
       if (route.view === 'register') authView = h(SignUpView);
-      else if (route.view === 'forgot-password') authView = h(ForgotPasswordView);
-      else if (route.view === 'reset-password') {
-        authView = h('div', { className: 'auth-wrap' },
-          h('div', { className: 'auth-card' },
-            h('h1', null, 'Password reset link unavailable'),
-            h('p', { className: 'muted' }, 'Open the reset link from your email on this device, or request a new one.'),
-            h('a', { className: 'btn btn-primary', href: '#/forgot-password' }, 'Request another link')));
-      } else {
-        authView = h(SignInView);
-      }
+      else authView = h(SignInView);
       return h('div', { className: 'auth-page-root' }, authView);
     }
     document.body.classList.remove('auth-page');
