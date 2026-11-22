@@ -2525,3 +2525,24 @@ label.field input:focus,
   .shell .notif-row > .btn { align-self:flex-start; }
   .shell .ticket { padding:13px; }
 }
+
+
+/* Structured deposit workflow */
+.shell .deposit-form { display:flex; flex-direction:column; gap:13px; }
+.shell .deposit-form-grid {
+  display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px 16px;
+}
+.shell .deposit-form-grid > * { min-width:0; }
+.shell .deposit-form-grid .field { margin:0; }
+.shell .deposit-notes { grid-column:1 / -1; }
+.shell .deposit-form-actions { display:flex; justify-content:flex-start; padding-top:2px; }
+.shell .deposit-form-actions .btn { min-width:210px; }
+.shell .deposit-disclaimer {
+  max-width:760px; margin:0; padding:12px 14px; border-radius:10px;
+  background:#F6F8FB; color:#758198; font-size:11px; line-height:1.7;
+}
+@media (max-width:640px) {
+  .shell .deposit-form-grid { grid-template-columns:minmax(0,1fr); gap:10px; }
+  .shell .deposit-notes { grid-column:auto; }
+  .shell .deposit-form-actions .btn { width:100%; }
+}
