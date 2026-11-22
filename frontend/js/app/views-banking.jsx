@@ -459,31 +459,35 @@
         }));
     } else {
       wizard = h(MG.ui.Card, { title: 'Request a deposit' },
-        h('form', { onSubmit: submit },
-          err ? h('p', { className: 'form-error' }, err) : null,
-          h('label', null, 'Currency'),
-          h(MG.ui.Select, {
-            value: form && form.currency || '',
-            onChange: function (e) { setForm(Object.assign({}, form || {}, { currency: e.target.value })); },
-            options: [{ value: '', label: 'Select currency…' }].concat(
-              accounts.map(function (a) { return { value: a.currency_code, label: a.currency_code + ' — ' + (a.currency_name || '') }; })
-            ),
-          }),
-          h('label', null, 'Amount'),
-          h(MG.ui.Input, {
-            type: 'text', placeholder: '0.00',
-            value: form && form.amount || '',
-            onChange: function (e) { setForm(Object.assign({}, form || {}, { amount: e.target.value })); },
-          }),
-          h('label', null, 'Optional notes'),
-          h(MG.ui.Input, {
-            type: 'text', placeholder: 'Payment notes for the operations team',
-            value: form && form.notes || '',
-            onChange: function (e) { setForm(Object.assign({}, form || {}, { notes: e.target.value })); },
-          }),
-          h(MG.ui.Button, { type: 'submit', variant: 'primary', size: 'lg', busy: busy }, 'Submit deposit request'),
-          h('p', { className: 'muted', style: { marginTop: 10 } },
-            'After you submit, an administrator will provide receiving bank details. Transfer the funds using those details and include your unique deposit reference. Your Meridian balance is credited only after the administrator verifies the incoming payment.')));
+        h('form', { className: 'deposit-form', onSubmit: submit },
+          err ? h('p', { className: 'form-error', role: 'alert' }, err) : null,
+          h('div', { className: 'deposit-form-grid' },
+            h(MG.ui.Field, { id: 'deposit-currency', label: 'Currency', hint: 'Choose the account you want to fund.' },
+              h(MG.ui.Select, {
+                id: 'deposit-currency',
+                value: form && form.currency || '',
+                onChange: function (e) { setForm(Object.assign({}, form || {}, { currency: e.target.value })); },
+                options: [{ value: '', label: 'Select currency…' }].concat(
+                  accounts.map(function (a) { return { value: a.currency_code, label: a.currency_code + ' — ' + (a.currency_name || '') }; })
+                ),
+              })),
+            h(MG.ui.Field, { id: 'deposit-amount', label: 'Amount', hint: 'Enter the amount in the selected currency.' },
+              h(MG.ui.Input, {
+                id: 'deposit-amount', type: 'text', inputMode: 'decimal', placeholder: '0.00',
+                value: form && form.amount || '',
+                onChange: function (e) { setForm(Object.assign({}, form || {}, { amount: e.target.value })); },
+              })),
+            h('div', { className: 'deposit-notes' },
+              h(MG.ui.Field, { id: 'deposit-notes', label: 'Optional notes', hint: 'Add a note for the operations team if needed.' },
+                h(MG.ui.Input, {
+                  id: 'deposit-notes', type: 'text', placeholder: 'Payment notes for the operations team',
+                  value: form && form.notes || '',
+                  onChange: function (e) { setForm(Object.assign({}, form || {}, { notes: e.target.value })); },
+                })))),
+          h('div', { className: 'deposit-form-actions' },
+            h(MG.ui.Button, { type: 'submit', variant: 'primary', size: 'lg', busy: busy }, 'Submit deposit request')),
+          h('p', { className: 'deposit-disclaimer' },
+            'After you submit, an administrator will provide receiving bank details. Transfer only after those details appear, include your unique deposit reference, and wait for verification before expecting a balance credit.')));
     }
 
     return h('div', { className: 'view-stack' },
