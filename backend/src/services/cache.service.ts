@@ -11,7 +11,8 @@
  */
 export interface CacheKVBinding {
   get<T = unknown>(key: string, type: 'json'): Promise<T | null>;
-  put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>;\n  delete?(key: string): Promise<void>;
+  put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>;
+  delete?(key: string): Promise<void>;
 }
 
 export interface MeridianCacheBindings {
