@@ -246,29 +246,28 @@
 
   function SignInInline() {
     var _e = React.useState(''); var email = _e[0]; var setEmail = _e[1];
-    var _p = React.useState(''); var password = _p[0]; var setPassword = _p[1];
+    var _c = React.useState(''); var code = _c[0]; var setCode = _c[1];
+    var _s = React.useState(false); var sent = _s[0]; var setSent = _s[1];
     var _b = React.useState(false); var busy = _b[0]; var setBusy = _b[1];
     var _x = React.useState(''); var error = _x[0]; var setError = _x[1];
     var _m = React.useState(''); var message = _m[0]; var setMessage = _m[1];
 
-    function submit(event) {
-      event.preventDefault(); setBusy(true); setError(''); setMessage('');
-      MG.auth.signIn(email, password).then(function (result) {
+    function sendLink(event) {
+      if (event) event.preventDefault();
+      setBusy(true); setError(''); setMessage('');
+      MG.auth.signIn(email).then(function (result) {
         if (result.error) throw result.error;
-      }).catch(function (err) { setError(err.message || 'Sign in failed.'); })
+        setSent(true);
+        setMessage('A secure administrator sign-in link and one-time code have been sent to your email.');
+      }).catch(function (err) { setError(err.message || 'Could not send the sign-in email.'); })
         .finally(function () { setBusy(false); });
     }
 
-    function recover() {
-      if (!email) {
-        setError('Enter your email address first.');
-        return;
-      }
-      setBusy(true); setError(''); setMessage('');
-      MG.auth.resetPassword(email).then(function (result) {
+    function verifyCode(event) {
+      event.preventDefault(); setBusy(true); setError(''); setMessage('');
+      MG.auth.verifyEmailOtp(email, code).then(function (result) {
         if (result.error) throw result.error;
-        setMessage('If the address is registered, a password-reset link will arrive by email.');
-      }).catch(function (err) { setError(err.message || 'Could not send the reset email.'); })
+      }).catch(function (err) { setError(err.message || 'The code is invalid or expired.'); })
         .finally(function () { setBusy(false); });
     }
 
@@ -285,24 +284,24 @@
               h('span', { className: 'auth-ic', 'aria-hidden': 'true',
                 dangerouslySetInnerHTML: { __html: MG.ui.icon('shield-check', 26) } }),
               h('h2', null, 'Administrator sign in'),
-              h('p', null, 'Meridian Global Accounts · operations console')),
-            h('form', { onSubmit: submit },
+              h('p', null, 'Passwordless access · magic link or email OTP')),
+            h('form', { onSubmit: sent ? verifyCode : sendLink },
               h('div', { className: 'field' },
-                h('label', { htmlFor: 'admin-email' }, 'Email address'),
+                h('label', { htmlFor: 'admin-email' }, 'Administrator email address'),
                 h('input', { id: 'admin-email', className: 'input', type: 'email', required: true,
                   autoComplete: 'email', value: email,
                   onChange: function (event) { setEmail(event.target.value); } })),
-              h('div', { className: 'field' },
-                h('label', { htmlFor: 'admin-password' }, 'Password'),
-                h('input', { id: 'admin-password', className: 'input', type: 'password', required: true,
-                  autoComplete: 'current-password', value: password,
-                  onChange: function (event) { setPassword(event.target.value); } })),
+              sent ? h('div', { className: 'field' },
+                h('label', { htmlFor: 'admin-email-code' }, 'One-time email code'),
+                h('input', { id: 'admin-email-code', className: 'input', type: 'text', required: true,
+                  autoComplete: 'one-time-code', inputMode: 'numeric', maxLength: 8, value: code,
+                  onChange: function (event) { setCode(event.target.value.replace(/\\D/g, '').slice(0, 8)); } })) : null,
               error ? h('p', { className: 'form-error', role: 'alert' }, error) : null,
               message ? h('p', { className: 'form-success', role: 'status' }, message) : null,
               h('button', { className: 'btn btn-primary btn-block', type: 'submit', disabled: busy },
-                busy ? 'Signing in…' : 'Sign in')),
-            h('button', { type: 'button', className: 'btn btn-ghost btn-block',
-              disabled: busy, onClick: recover }, 'Forgot password?')))));
+                busy ? 'Please wait…' : (sent ? 'Verify code and continue' : 'Email sign-in link'))),
+            sent ? h('button', { type: 'button', className: 'btn btn-ghost btn-block',
+              disabled: busy, onClick: sendLink }, 'Resend email') : null)));
   }
 
   function UpdatePasswordInline() {
