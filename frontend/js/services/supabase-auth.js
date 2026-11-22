@@ -126,18 +126,29 @@
       });
     },
 
-    signIn: function (email, password) {
-      return requireClient().auth.signInWithPassword({
+    signIn: function (email) {
+      return requireClient().auth.signInWithOtp({
         email: email.trim().toLowerCase(),
-        password: password,
+        options: {
+          shouldCreateUser: false,
+          emailRedirectTo: window.location.origin + window.location.pathname,
+        },
+      });
+    },
+
+    verifyEmailOtp: function (email, token) {
+      return requireClient().auth.verifyOtp({
+        email: email.trim().toLowerCase(),
+        token: String(token).replace(/\\s+/g, ''),
+        type: 'email',
       });
     },
 
     signUp: function (payload) {
-      return requireClient().auth.signUp({
+      return requireClient().auth.signInWithOtp({
         email: payload.email.trim().toLowerCase(),
-        password: payload.password,
         options: {
+          shouldCreateUser: true,
           data: {
             first_name: payload.firstName,
             last_name: payload.lastName,
