@@ -36,6 +36,19 @@
     var activeCount = list.filter(function (a) { return a.status === 'active'; }).length;
     var recent = txns.data || [];
     var notifPreview = (notifs.data || []).slice(0, 4);
+    /* Distribution uses only server-provided EUR equivalents. Never compare
+       raw balances across different currencies or manufacture chart values. */
+    var distribution = list.map(function (a) {
+      return { code: a.currency_code, value: Number(a.equivalent_eur) || 0 };
+    }).filter(function (a) { return a.value > 0; });
+    var distributionTotal = distribution.reduce(function (sum, a) { return sum + a.value; }, 0);
+    var palette = ['#1F6FEB', '#6172F3', '#12B76A', '#F79009', '#7A5AF8', '#06A6A6'];
+    var angle = 0;
+    var distributionStops = distribution.map(function (a, i) {
+      var start = angle;
+      angle += (a.value / (distributionTotal || 1)) * 360;
+      return palette[i % palette.length] + ' ' + start.toFixed(2) + 'deg ' + angle.toFixed(2) + 'deg';
+    });
 
     var chips = list.map(function (a) {
       return h('a', { key: a.id, className: 'ov-chip', href: '#/account/' + a.currency_code },
@@ -92,34 +105,74 @@
               h('p', { className: 'stat-val' }, 'Protected'),
               h('p', { className: 'stat-sub' }, 'Supabase Auth session active'))))),
 
-      /* Currency cards */
-      h('section', { 'aria-label': 'Currency accounts' },
-        h('div', { className: 'section-head' },
-          h('h2', { className: 'section-title' }, 'Your currencies'),
-          h('a', { className: 'text-link', href: '#/accounts' }, 'View all →')),
-        list.length === 0
-          ? h(MG.ui.Empty, {
-              title: 'No currencies yet',
-              hint: 'Activate your first currency to get started.',
-              action: h('a', { className: 'btn btn-primary', href: '#/activate' }, 'Activate a currency'),
-            })
-          : h('div', { className: 'curcards' }, list.map(function (a) {
-              return h('a', { key: a.id, className: 'curcard', href: '#/account/' + a.currency_code },
-                h('div', { className: 'curcard-head' },
-                  h('span', { className: 'curcard-sym', 'aria-hidden': 'true' },
-                    a.currency_symbol || a.currency_code),
-                  h('div', null,
-                    h('b', null, a.currency_code),
-                    h('small', null, a.currency_name || '')),
-                  h(MG.ui.Badge, { status: a.status })),
-                h('p', { className: 'curcard-bal' }, MG.util.money(a.balance, a.currency_code)),
-                a.equivalent_eur != null
-                  ? h('p', { className: 'curcard-eq' }, '≈ ' + MG.util.money(a.equivalent_eur, 'EUR'))
-                  : null,
-                h('span', { className: 'curcard-link' },
-                  MG.icon ? MG.icon('arrow-r', 14) : null, ' View account'));
-            }))),
-
+      /* Currency cards + live balance distribution — Hong Kong reference layout */
+      h('div', { className: 'ov-grid2' },
+        h(MG.ui.Card, {
+          title: 'My currencies',
+          action: h('a', { className: 'text-link', href: '#/accounts' }, 'Manage accounts →'),
+        },
+          list.length === 0
+            ? h(MG.ui.Empty, {
+                title: 'No currencies yet',
+                hint: 'Activate your first currency to get started.',
+                action: h('a', { className: 'btn btn-primary', href: '#/activate' }, 'Activate a currency'),
+              })
+            : h('div', { className: 'curcards' }, list.map(function (a) {
+                return h('a', { key: a.id, className: 'curcard', href: '#/account/' + a.currency_code },
+                  h('div', { className: 'curcard-head' },
+                    h('span', { className: 'curcard-sym', 'aria-hidden': 'true' },
+                      a.currency_symbol || a.currency_code),
+                    h('div', null,
+                      h('b', null, a.currency_code),
+                      h('small', null, a.currency_name || '')),
+                    h(MG.ui.Badge, { status: a.status })),
+                  h('p', { className: 'curcard-bal' }, MG.util.money(a.balance, a.currency_code)),
+                  a.equivalent_eur != null
+                    ? h('p', { className: 'curcard-eq' }, '≈ ' + MG.util.money(a.equivalent_eur, 'EUR'))
+                    : null,
+                  h('span', { className: 'curcard-link' },
+                    MG.icon ? MG.icon('arrow-r', 14) : null, ' View account'));
+              }))),
+        h(MG.ui.Card, {
+          title: 'Balance distribution',
+          action: h('span', { className: 'muted' }, 'EUR equivalent'),
+        },
+          distributionTotal > 0
+            ? h('div', { style: { display: 'grid', justifyItems: 'center', gap: '18px', padding: '12px 4px 4px' } },
+                h('div', {
+                  role: 'img',
+                  'aria-label': 'Currency balance distribution by EUR equivalent',
+                  style: {
+                    width: 'min(100%, 190px)', aspectRatio: '1', borderRadius: '50%',
+                    background: 'conic-gradient(' + distributionStops.join(', ') + ')',
+                    display: 'grid', placeItems: 'center',
+                  },
+                },
+                  h('div', { style: {
+                    width: '62%', height: '62%', borderRadius: '50%', background: 'var(--surface)',
+                    display: 'grid', placeContent: 'center', textAlign: 'center',
+                  } },
+                    h('small', { className: 'muted' }, 'TOTAL'),
+                    h('b', { style: { fontSize: '17px', fontVariantNumeric: 'tabular-nums' } },
+                      MG.util.money(distributionTotal, 'EUR')))),
+                h('div', { style: { width: '100%', display: 'grid', gap: '9px' } },
+                  distribution.map(function (a, i) {
+                    return h('div', {
+                      key: a.code,
+                      style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', fontSize: '12px' },
+                    },
+                      h('span', { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
+                        h('span', { 'aria-hidden': 'true', style: {
+                          width: '9px', height: '9px', borderRadius: '3px',
+                          background: palette[i % palette.length], display: 'inline-block',
+                        } }),
+                        a.code),
+                      h('b', { style: { fontVariantNumeric: 'tabular-nums' } }, MG.util.money(a.value, 'EUR')));
+                  })))
+            : h(MG.ui.Empty, {
+                title: 'Distribution unavailable',
+                hint: 'A currency breakdown will appear when the service provides EUR-equivalent balances.',
+              }))),
       /* Two-column: recent txns + notifications */
       h('div', { className: 'ov-grid' },
         h(MG.ui.Card, {
