@@ -43,6 +43,25 @@ export async function verifySupabaseAccessToken(headerValue: string): Promise<Su
   if (data.user.phone && !data.user.phone_confirmed_at) {
     throw new Error('Phone number has not been verified');
   }
+
+  // If the customer enrolled a verified TOTP factor, every protected API
+  // request must carry an AAL2 token. The browser UI is not the security
+  // boundary; this check prevents bypassing the MFA challenge with AAL1.
+  const userWithFactors = data.user as typeof data.user & {
+    factors?: Array<{ factor_type?: string; status?: string }>;
+  };
+  const hasVerifiedTotp = Boolean(
+    userWithFactors.factors?.some(
+      (factor) => factor.factor_type === 'totp' && factor.status === 'verified',
+    ),
+  );
+  if (hasVerifiedTotp) {
+    const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(match[1]);
+    if (claimsError || claimsData?.claims?.aal !== 'aal2') {
+      throw new Error('Additional multi-factor verification is required');
+    }
+  }
+
   return { sub: data.user.id, email: data.user.email };
 }
 
