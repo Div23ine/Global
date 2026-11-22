@@ -13,14 +13,14 @@
         h('div', { className: 'brand brand-center' },
           h('span', { className: 'brand-mark', 'aria-hidden': 'true' }, '◎'),
           h('span', { className: 'brand-text' }, 'Meridian ', h('small', null, 'GLOBAL ACCOUNTS'))),
-        h('h1', null, 'Configuration required'),
+        h('h1', null, 'Service temporarily unavailable'),
         h('p', { className: 'muted' },
-          'This deployment has not been connected to Supabase Auth and the Meridian API yet. ',
-          'Set ', h('code', null, 'SUPABASE_URL'), ', ', h('code', null, 'SUPABASE_ANON_KEY'),
-          ' and ', h('code', null, 'API_BASE_URL'), ' in ', h('code', null, 'js/config.js'), '.'),
-        h('p', { className: 'muted' },
-          'For security reasons the application never runs on simulated data: without real services ',
-          'it stops here instead of showing fake accounts.')));
+          'We could not establish a secure connection to Meridian services. Please try again in a moment.'),
+        h('button', {
+          className: 'btn btn-primary btn-block',
+          type: 'button',
+          onClick: function () { window.location.reload(); }
+        }, 'Retry connection')));
   }
 
   /* --------------------------------------------------------- Supabase Auth */
