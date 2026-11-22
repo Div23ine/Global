@@ -37,6 +37,12 @@ export async function verifySupabaseAccessToken(headerValue: string): Promise<Su
   if (error || !data.user || !data.user.email || !data.user.email_confirmed_at) {
     throw new Error('Invalid token or unverified email');
   }
+  // New Meridian registrations require verified email and phone ownership.
+  // Existing accounts without an Auth phone remain compatible; once a phone
+  // is attached to an Auth identity, it must be confirmed before API access.
+  if (data.user.phone && !data.user.phone_confirmed_at) {
+    throw new Error('Phone number has not been verified');
+  }
   return { sub: data.user.id, email: data.user.email };
 }
 
