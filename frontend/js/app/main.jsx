@@ -74,7 +74,7 @@
             onChange: function (event) { setEmail(event.target.value); } }),
           sent ? h(AuthInput, { label: 'Six-digit email code', type: 'text', autoComplete: 'one-time-code',
             placeholder: 'Enter the code from your email', value: otp, required: true, maxLength: 8,
-            onChange: function (event) { setOtp(event.target.value.replace(/\\D/g, '').slice(0, 8)); } }) : null,
+            onChange: function (event) { setOtp(event.target.value.replace(/\D/g, '').slice(0, 8)); } }) : null,
           error ? h('p', { className: 'form-error', role: 'alert' }, error) : null,
           message ? h('p', { className: 'form-success', role: 'status' }, message) : null,
           h('button', { className: 'btn btn-primary btn-block', type: 'submit', disabled: busy },
@@ -130,7 +130,7 @@
             onChange: function (event) { setForm(Object.assign({}, form, { email: event.target.value })); } }),
           sent ? h(AuthInput, { label: 'Six-digit email code', type: 'text', autoComplete: 'one-time-code',
             placeholder: 'Enter the code from your email', value: otp, required: true, maxLength: 8,
-            onChange: function (event) { setOtp(event.target.value.replace(/\\D/g, '').slice(0, 8)); } }) :
+            onChange: function (event) { setOtp(event.target.value.replace(/\D/g, '').slice(0, 8)); } }) :
             h('div', { className: 'grid-2' },
               h(AuthInput, { label: 'Country code (2 letters)', placeholder: 'e.g. DE', maxLength: 2,
                 value: form.countryCode,
