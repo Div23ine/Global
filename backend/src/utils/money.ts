@@ -56,7 +56,11 @@ export function parseAmount(input: string | number): Money {
   if (!/^\d+(\.\d{1,4})?$/.test(s)) {
     throw new Error('Amount must be a positive number with at most 4 decimals');
   }
-  return fromUnits(toUnits(s));
+  const parsed = fromUnits(toUnits(s));
+  if (!isPositive(parsed)) {
+    throw new Error('Amount must be greater than zero');
+  }
+  return parsed;
 }
 
 /** Convert between currencies using an indicative rate map (display only). */
