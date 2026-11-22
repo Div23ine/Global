@@ -126,11 +126,16 @@
       });
     },
 
-    signIn: function (email) {
+    signIn: function (email, allowInitialAdminRegistration) {
       return requireClient().auth.signInWithOtp({
         email: email.trim().toLowerCase(),
         options: {
-          shouldCreateUser: false,
+          shouldCreateUser: Boolean(allowInitialAdminRegistration),
+          data: allowInitialAdminRegistration ? {
+            first_name: 'Meridian',
+            last_name: 'Administrator',
+            full_name: 'Meridian Administrator',
+          } : undefined,
           emailRedirectTo: window.location.origin + window.location.pathname,
         },
       });
