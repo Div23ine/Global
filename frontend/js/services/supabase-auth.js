@@ -216,22 +216,13 @@
       });
     },
 
-    resetPassword: function (email) {
-      var redirectTo = window.location.origin + window.location.pathname + '#/reset-password';
-      return requireClient().auth.resetPasswordForEmail(email.trim().toLowerCase(), {
-        redirectTo: redirectTo,
-      });
-    },
-
-    updatePassword: function (password) {
-      return requireClient().auth.updateUser({ password: password });
-    },
-
     signOut: function (options) {
       var scope = options && options.scope ? options.scope : 'local';
       return requireClient().auth.signOut({ scope: scope }).then(function (result) {
-        // "others" retains this browser's session; local/global sign-out do not.
-        if (!result.error && scope !== 'others') publish(null, null);
+        if (!result.error && scope !== 'others') {
+          try { window.localStorage.removeItem('mg_customer_login_email'); } catch (e) {}
+          publish(null, null);
+        }
         return result;
       });
     },
