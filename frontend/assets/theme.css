@@ -2631,3 +2631,14 @@ body:not(.shell) .site-drawer { box-shadow:0 20px 40px rgba(15,35,62,.16); }
  body:not(.shell) .hero-cta { display:flex; flex-wrap:wrap; }
  body:not(.shell) .hero-cta .btn { flex:1 1 100%; justify-content:center; }
 }
+
+/* Homepage editorial section */
+body:not(.shell) .home-about-grid { display:grid; grid-template-columns:minmax(0,1.35fr) minmax(260px,.8fr); align-items:center; gap:clamp(28px,6vw,82px); }
+body:not(.shell) .home-about-grid h2 { max-width:650px; margin:0 0 15px; color:#172B49; font:800 clamp(27px,3.5vw,40px)/1.16 var(--font-display); letter-spacing:-.045em; }
+body:not(.shell) .home-about-grid > div:first-child > p:not(.section-kicker) { max-width:620px; color:#697A90; font-size:14px; line-height:1.85; }
+body:not(.shell) .home-about-note { padding:27px; border:1px solid #DFE7F1; border-radius:17px; background:linear-gradient(145deg,#F7F9FC,#EEF3F9); }
+body:not(.shell) .home-about-mark { display:grid; place-items:center; width:42px; height:42px; margin-bottom:24px; border-radius:13px; background:#1D3D64; color:#fff; font:800 18px var(--font-display); }
+body:not(.shell) .home-about-note b { display:block; color:#1B304F; font:750 16px/1.4 var(--font-display); }
+body:not(.shell) .home-about-note p { color:#687990; font-size:12.5px; line-height:1.8; }
+body:not(.shell) .home-about-note a { color:#2B5D95; font-size:12px; font-weight:750; text-decoration:none; }
+@media(max-width:700px){body:not(.shell) .home-about-grid{grid-template-columns:1fr;}}
