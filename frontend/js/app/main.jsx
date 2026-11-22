@@ -36,79 +36,114 @@
   }
 
   function SignInView() {
-    var _f = useState({ email: '', password: '' }); var form = _f[0]; var setForm = _f[1];
+    var _e = useState(''); var email = _e[0]; var setEmail = _e[1];
+    var _o = useState(''); var otp = _o[0]; var setOtp = _o[1];
+    var _s = useState(false); var sent = _s[0]; var setSent = _s[1];
     var _b = useState(false); var busy = _b[0]; var setBusy = _b[1];
-    var _e = useState(''); var error = _e[0]; var setError = _e[1];
-    function submit(event) {
-      event.preventDefault(); setError(''); setBusy(true);
-      MG.auth.signIn(form.email, form.password).then(function (result) {
+    var _x = useState(''); var error = _x[0]; var setError = _x[1];
+    var _m = useState(''); var message = _m[0]; var setMessage = _m[1];
+
+    function sendLink(event) {
+      if (event) event.preventDefault();
+      setBusy(true); setError(''); setMessage('');
+      MG.auth.signIn(email).then(function (result) {
         if (result.error) throw result.error;
-        location.hash = '#/overview';
-      }).catch(function (err) { setError(err.message || 'Sign in failed.'); })
+        setSent(true);
+        setMessage('We sent a secure sign-in link and a one-time code to your email. Open the link or enter the code below.');
+      }).catch(function (err) { setError(err.message || 'Could not send the sign-in email.'); })
         .finally(function () { setBusy(false); });
     }
+
+    function verifyCode(event) {
+      event.preventDefault(); setBusy(true); setError(''); setMessage('');
+      MG.auth.verifyEmailOtp(email, otp).then(function (result) {
+        if (result.error) throw result.error;
+        location.hash = '#/overview';
+      }).catch(function (err) { setError(err.message || 'The code is invalid or expired.'); })
+        .finally(function () { setBusy(false); });
+    }
+
     return h('div', { className: 'auth-wrap' },
       h('div', { className: 'auth-card' },
         h('p', { className: 'auth-brand' }, 'Meridian Global Accounts'),
         h('h1', null, 'Welcome back'),
-        h('p', { className: 'muted' }, 'Sign in securely to your Meridian account.'),
-        h('form', { onSubmit: submit },
+        h('p', { className: 'muted' }, 'Sign in without a password using your email magic link or one-time code.'),
+        h('form', { onSubmit: sent ? verifyCode : sendLink },
           h(AuthInput, { label: 'Email address', type: 'email', autoComplete: 'email',
-            value: form.email, required: true,
-            onChange: function (event) { setForm(Object.assign({}, form, { email: event.target.value })); } }),
-          h(AuthInput, { label: 'Password', type: 'password', autoComplete: 'current-password',
-            value: form.password, required: true,
-            onChange: function (event) { setForm(Object.assign({}, form, { password: event.target.value })); } }),
+            value: email, required: true,
+            onChange: function (event) { setEmail(event.target.value); } }),
+          sent ? h(AuthInput, { label: 'Six-digit email code', type: 'text', autoComplete: 'one-time-code',
+            placeholder: 'Enter the code from your email', value: otp, required: true, maxLength: 8,
+            onChange: function (event) { setOtp(event.target.value.replace(/\\D/g, '').slice(0, 8)); } }) : null,
           error ? h('p', { className: 'form-error', role: 'alert' }, error) : null,
+          message ? h('p', { className: 'form-success', role: 'status' }, message) : null,
           h('button', { className: 'btn btn-primary btn-block', type: 'submit', disabled: busy },
-            busy ? 'Signing in…' : 'Sign in')),
-        h('p', { className: 'muted auth-links' },
-          h('a', { href: '#/forgot-password' }, 'Forgot password?'), ' · ',
-          h('a', { href: '#/register' }, 'Create an account'))));
+            busy ? 'Please wait…' : (sent ? 'Verify code and sign in' : 'Email me a sign-in link'))),
+        sent ? h('button', { type: 'button', className: 'btn btn-ghost btn-block', disabled: busy,
+          onClick: sendLink }, 'Resend email') : null,
+        h('p', { className: 'muted auth-links' }, h('a', { href: '#/register' }, 'Create an account'))));
   }
 
   function SignUpView() {
-    var _f = useState({ firstName: '', lastName: '', email: '', phone: '', countryCode: '', password: '' });
+    var _f = useState({ firstName: '', lastName: '', email: '', phone: '', countryCode: '' });
     var form = _f[0]; var setForm = _f[1];
+    var _o = useState(''); var otp = _o[0]; var setOtp = _o[1];
+    var _s = useState(false); var sent = _s[0]; var setSent = _s[1];
     var _b = useState(false); var busy = _b[0]; var setBusy = _b[1];
     var _e = useState(''); var error = _e[0]; var setError = _e[1];
     var _m = useState(''); var message = _m[0]; var setMessage = _m[1];
+
     function submit(event) {
       event.preventDefault(); setError(''); setMessage(''); setBusy(true);
       MG.auth.signUp(form).then(function (result) {
         if (result.error) throw result.error;
         if (result.data && result.data.session) location.hash = '#/overview';
-        else setMessage('Account created. Check your email and confirm your address before signing in.');
-      }).catch(function (err) { setError(err.message || 'Registration failed.'); })
+        else {
+          setSent(true);
+          setMessage('We sent a confirmation magic link and one-time code. Open the link or enter the code below to activate your account.');
+        }
+      }).catch(function (err) { setError(err.message || 'Could not start registration.'); })
         .finally(function () { setBusy(false); });
     }
+
+    function verifyCode(event) {
+      event.preventDefault(); setBusy(true); setError(''); setMessage('');
+      MG.auth.verifyEmailOtp(form.email, otp).then(function (result) {
+        if (result.error) throw result.error;
+        location.hash = '#/overview';
+      }).catch(function (err) { setError(err.message || 'The code is invalid or expired.'); })
+        .finally(function () { setBusy(false); });
+    }
+
     return h('div', { className: 'auth-wrap' },
       h('div', { className: 'auth-card' },
         h('p', { className: 'auth-brand' }, 'Meridian Global Accounts'),
         h('h1', null, 'Create your account'),
-        h('p', { className: 'muted' }, 'Confirm your email to activate your account. Your country sets the default currency.'),
-        h('form', { onSubmit: submit },
-          h('div', { className: 'grid-2' },
+        h('p', { className: 'muted' }, 'Register with your email. No password is required.'),
+        h('form', { onSubmit: sent ? verifyCode : submit },
+          sent ? null : h('div', { className: 'grid-2' },
             h(AuthInput, { label: 'First name', value: form.firstName, required: true,
               onChange: function (event) { setForm(Object.assign({}, form, { firstName: event.target.value })); } }),
             h(AuthInput, { label: 'Last name', value: form.lastName, required: true,
               onChange: function (event) { setForm(Object.assign({}, form, { lastName: event.target.value })); } })),
           h(AuthInput, { label: 'Email address', type: 'email', autoComplete: 'email', value: form.email, required: true,
             onChange: function (event) { setForm(Object.assign({}, form, { email: event.target.value })); } }),
-          h(AuthInput, { label: 'Password (minimum 8 characters)', type: 'password', autoComplete: 'new-password',
-            minLength: 8, value: form.password, required: true,
-            onChange: function (event) { setForm(Object.assign({}, form, { password: event.target.value })); } }),
-          h('div', { className: 'grid-2' },
-            h(AuthInput, { label: 'Country code (2 letters)', placeholder: 'e.g. DE', maxLength: 2,
-              value: form.countryCode,
-              onChange: function (event) { setForm(Object.assign({}, form, { countryCode: event.target.value.toUpperCase() })); } }),
-            h(AuthInput, { label: 'Phone (optional)', type: 'tel', placeholder: '+49123456789',
-              value: form.phone,
-              onChange: function (event) { setForm(Object.assign({}, form, { phone: event.target.value })); } })),
+          sent ? h(AuthInput, { label: 'Six-digit email code', type: 'text', autoComplete: 'one-time-code',
+            placeholder: 'Enter the code from your email', value: otp, required: true, maxLength: 8,
+            onChange: function (event) { setOtp(event.target.value.replace(/\\D/g, '').slice(0, 8)); } }) :
+            h('div', { className: 'grid-2' },
+              h(AuthInput, { label: 'Country code (2 letters)', placeholder: 'e.g. DE', maxLength: 2,
+                value: form.countryCode,
+                onChange: function (event) { setForm(Object.assign({}, form, { countryCode: event.target.value.toUpperCase() })); } }),
+              h(AuthInput, { label: 'Phone (optional)', type: 'tel', placeholder: '+49123456789',
+                value: form.phone,
+                onChange: function (event) { setForm(Object.assign({}, form, { phone: event.target.value })); } })),
           error ? h('p', { className: 'form-error', role: 'alert' }, error) : null,
           message ? h('p', { className: 'form-success', role: 'status' }, message) : null,
           h('button', { className: 'btn btn-primary btn-block', type: 'submit', disabled: busy },
-            busy ? 'Creating account…' : 'Create account')),
+            busy ? 'Please wait…' : (sent ? 'Verify code and create account' : 'Continue with email'))),
+        sent ? h('button', { type: 'button', className: 'btn btn-ghost btn-block', disabled: busy,
+          onClick: submit }, 'Resend confirmation email') : null,
         h('p', { className: 'muted auth-links' }, 'Already registered? ', h('a', { href: '#/login' }, 'Sign in'))));
   }
 
