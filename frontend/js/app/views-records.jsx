@@ -22,13 +22,20 @@
       setTouched(true);
       var next = Object.assign({}, filters);
       next[k] = v;
+      if (k !== 'page') next.page = 1;
       setFilters(next);
     }
 
     var meta = state.data ? state.data.meta || (state.data.meta = {}) : {};
 
     return h('div', { className: 'view-stack' },
-      h(MG.ui.Card, null,
+      h('div', { className: 'section-head' }, h('div', null,
+        h('h2', { className: 'section-title' }, 'Transactions'),
+        h('p', { className: 'muted' }, 'Review, search and filter the activity recorded on your accounts.'))),
+      h(MG.ui.Card, { className: 'filter-panel' },
+        h('div', { className: 'filter-panel-intro' },
+          h('b', null, 'Find a transaction'),
+          h('span', { className: 'muted' }, 'Narrow results by reference, currency, status or date.')),
         h('form', {
           className: 'filter-bar', noValidate: true,
           onSubmit: function (e) { e.preventDefault(); },
@@ -148,6 +155,9 @@
     }
 
     return h('div', { className: 'view-stack' },
+      h('div', { className: 'section-head' }, h('div', null,
+        h('h2', { className: 'section-title' }, 'Statements'),
+        h('p', { className: 'muted' }, 'Create account-period records and download your available statements.'))),
       h(MG.ui.Card, { title: 'Generate a statement' },
         h('div', { className: 'filter-bar' },
           h(MG.ui.Select, {
