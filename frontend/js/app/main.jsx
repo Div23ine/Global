@@ -37,7 +37,6 @@
 
   function SignInView() {
     var _e = useState(''); var email = _e[0]; var setEmail = _e[1];
-    var _o = useState(''); var otp = _o[0]; var setOtp = _o[1];
     var _s = useState(false); var sent = _s[0]; var setSent = _s[1];
     var _b = useState(false); var busy = _b[0]; var setBusy = _b[1];
     var _x = useState(''); var error = _x[0]; var setError = _x[1];
@@ -49,17 +48,8 @@
       MG.auth.signIn(email).then(function (result) {
         if (result.error) throw result.error;
         setSent(true);
-        setMessage('We sent a secure sign-in link and a one-time code to your email. Open the link or enter the code below.');
-      }).catch(function (err) { setError(err.message || 'Could not send the sign-in email.'); })
-        .finally(function () { setBusy(false); });
-    }
-
-    function verifyCode(event) {
-      event.preventDefault(); setBusy(true); setError(''); setMessage('');
-      MG.auth.verifyEmailOtp(email, otp).then(function (result) {
-        if (result.error) throw result.error;
-        location.hash = '#/overview';
-      }).catch(function (err) { setError(err.message || 'The code is invalid or expired.'); })
+        setMessage('A secure sign-in link has been sent to your email. Open it on this device to continue.');
+      }).catch(function (err) { setError(err.message || 'Could not send the sign-in link.'); })
         .finally(function () { setBusy(false); });
     }
 
@@ -67,140 +57,180 @@
       h('div', { className: 'auth-card' },
         h('p', { className: 'auth-brand' }, 'Meridian Global Accounts'),
         h('h1', null, 'Welcome back'),
-        h('p', { className: 'muted' }, 'Sign in without a password using your email magic link or one-time code.'),
-        h('form', { onSubmit: sent ? verifyCode : sendLink },
+        h('p', { className: 'muted' }, 'Enter your registered email. We will send you a secure sign-in link, followed by an email verification code.'),
+        h('form', { onSubmit: sendLink },
           h(AuthInput, { label: 'Email address', type: 'email', autoComplete: 'email',
             value: email, required: true,
             onChange: function (event) { setEmail(event.target.value); } }),
-          sent ? h(AuthInput, { label: 'Six-digit email code', type: 'text', autoComplete: 'one-time-code',
-            placeholder: 'Enter the code from your email', value: otp, required: true, maxLength: 6,
-            onChange: function (event) { setOtp(event.target.value.replace(/\D/g, '').slice(0, 6)); } }) : null,
           error ? h('p', { className: 'form-error', role: 'alert' }, error) : null,
           message ? h('p', { className: 'form-success', role: 'status' }, message) : null,
           h('button', { className: 'btn btn-primary btn-block', type: 'submit', disabled: busy },
-            busy ? 'Please wait…' : (sent ? 'Verify code and sign in' : 'Email me a sign-in link'))),
-        sent ? h('button', { type: 'button', className: 'btn btn-ghost btn-block', disabled: busy,
-          onClick: sendLink }, 'Resend email') : null,
+            busy ? 'Please wait…' : (sent ? 'Resend sign-in link' : 'Continue with email'))),
         h('p', { className: 'muted auth-links' }, h('a', { href: '#/register' }, 'Create an account'))));
   }
 
-  function SignUpView() {
-    var _f = useState({ firstName: '', lastName: '', email: '', phone: '', countryCode: '' });
-    var form = _f[0]; var setForm = _f[1];
+  function PostLinkOtpView() {
     var _o = useState(''); var otp = _o[0]; var setOtp = _o[1];
-    var _s = useState(false); var sent = _s[0]; var setSent = _s[1];
     var _b = useState(false); var busy = _b[0]; var setBusy = _b[1];
+    var _s = useState(false); var sent = _s[0]; var setSent = _s[1];
     var _e = useState(''); var error = _e[0]; var setError = _e[1];
     var _m = useState(''); var message = _m[0]; var setMessage = _m[1];
 
-    function submit(event) {
-      event.preventDefault(); setError(''); setMessage(''); setBusy(true);
-      MG.auth.signUp(form).then(function (result) {
+    useEffect(function () {
+      var active = true;
+      MG.auth.sendPostLinkEmailOtp().then(function (result) {
         if (result.error) throw result.error;
-        if (result.data && result.data.session) location.hash = '#/overview';
-        else {
-          setSent(true);
-          setMessage('We sent a confirmation magic link and one-time code. Open the link or enter the code below to activate your account.');
-        }
-      }).catch(function (err) { setError(err.message || 'Could not start registration.'); })
-        .finally(function () { setBusy(false); });
-    }
+        if (active) { setSent(true); setMessage('We sent a one-time code to your email. Enter it below to finish signing in.'); }
+      }).catch(function (err) { if (active) setError(err.message || 'Could not send the verification code.'); });
+      return function () { active = false; };
+    }, []);
 
-    function verifyCode(event) {
+    function verify(event) {
       event.preventDefault(); setBusy(true); setError(''); setMessage('');
-      MG.auth.verifyEmailOtp(form.email, otp).then(function (result) {
+      MG.auth.verifyPostLinkEmailOtp(otp).then(function (result) {
         if (result.error) throw result.error;
         location.hash = '#/overview';
       }).catch(function (err) { setError(err.message || 'The code is invalid or expired.'); })
         .finally(function () { setBusy(false); });
     }
 
-    return h('div', { className: 'auth-wrap' },
-      h('div', { className: 'auth-card' },
-        h('p', { className: 'auth-brand' }, 'Meridian Global Accounts'),
-        h('h1', null, 'Create your account'),
-        h('p', { className: 'muted' }, 'Register with your email. No password is required.'),
-        h('form', { onSubmit: sent ? verifyCode : submit },
-          sent ? null : h('div', { className: 'grid-2' },
-            h(AuthInput, { label: 'First name', value: form.firstName, required: true,
-              onChange: function (event) { setForm(Object.assign({}, form, { firstName: event.target.value })); } }),
-            h(AuthInput, { label: 'Last name', value: form.lastName, required: true,
-              onChange: function (event) { setForm(Object.assign({}, form, { lastName: event.target.value })); } })),
-          h(AuthInput, { label: 'Email address', type: 'email', autoComplete: 'email', value: form.email, required: true,
-            onChange: function (event) { setForm(Object.assign({}, form, { email: event.target.value })); } }),
-          sent ? h(AuthInput, { label: 'Six-digit email code', type: 'text', autoComplete: 'one-time-code',
-            placeholder: 'Enter the code from your email', value: otp, required: true, maxLength: 6,
-            onChange: function (event) { setOtp(event.target.value.replace(/\D/g, '').slice(0, 6)); } }) :
-            h('div', { className: 'grid-2' },
-              h(AuthInput, { label: 'Country code (2 letters)', placeholder: 'e.g. DE', maxLength: 2,
-                value: form.countryCode,
-                onChange: function (event) { setForm(Object.assign({}, form, { countryCode: event.target.value.toUpperCase() })); } }),
-              h(AuthInput, { label: 'Phone (optional)', type: 'tel', placeholder: '+49123456789',
-                value: form.phone,
-                onChange: function (event) { setForm(Object.assign({}, form, { phone: event.target.value })); } })),
-          error ? h('p', { className: 'form-error', role: 'alert' }, error) : null,
-          message ? h('p', { className: 'form-success', role: 'status' }, message) : null,
-          h('button', { className: 'btn btn-primary btn-block', type: 'submit', disabled: busy },
-            busy ? 'Please wait…' : (sent ? 'Verify code and create account' : 'Continue with email'))),
-        sent ? h('button', { type: 'button', className: 'btn btn-ghost btn-block', disabled: busy,
-          onClick: submit }, 'Resend confirmation email') : null,
-        h('p', { className: 'muted auth-links' }, 'Already registered? ', h('a', { href: '#/login' }, 'Sign in'))));
-  }
-
-  function ForgotPasswordView() {
-    var _e = useState(''); var email = _e[0]; var setEmail = _e[1];
-    var _b = useState(false); var busy = _b[0]; var setBusy = _b[1];
-    var _m = useState(''); var message = _m[0]; var setMessage = _m[1];
-    var _x = useState(''); var error = _x[0]; var setError = _x[1];
-    function submit(event) {
-      event.preventDefault(); setBusy(true); setError(''); setMessage('');
-      MG.auth.resetPassword(email).then(function (result) {
+    function resend() {
+      setBusy(true); setError(''); setMessage('');
+      MG.auth.sendPostLinkEmailOtp().then(function (result) {
         if (result.error) throw result.error;
-        setMessage('If the address is registered, a password-reset link will arrive by email.');
-      }).catch(function (err) { setError(err.message || 'Could not send the reset email.'); })
+        setSent(true); setMessage('A new verification code has been sent.');
+      }).catch(function (err) { setError(err.message || 'Could not resend the code.'); })
         .finally(function () { setBusy(false); });
     }
+
     return h('div', { className: 'auth-wrap' },
       h('div', { className: 'auth-card' },
         h('p', { className: 'auth-brand' }, 'Meridian Global Accounts'),
-        h('h1', null, 'Reset your password'),
-        h('form', { onSubmit: submit },
-          h(AuthInput, { label: 'Email address', type: 'email', value: email, required: true,
-            onChange: function (event) { setEmail(event.target.value); } }),
+        h('h1', null, 'Verify your sign-in'),
+        h('p', { className: 'muted' }, 'Your email link was accepted. Enter the additional one-time code sent to the same registered email address.'),
+        h('form', { onSubmit: verify },
+          h(AuthInput, { label: 'Six-digit email code', type: 'text', autoComplete: 'one-time-code',
+            placeholder: 'Enter the code from your email', value: otp, required: true, maxLength: 6,
+            onChange: function (event) { setOtp(event.target.value.replace(/\\D/g, '').slice(0, 6)); } }),
           error ? h('p', { className: 'form-error', role: 'alert' }, error) : null,
           message ? h('p', { className: 'form-success', role: 'status' }, message) : null,
-          h('button', { className: 'btn btn-primary btn-block', type: 'submit', disabled: busy },
-            busy ? 'Sending…' : 'Send reset link')),
-        h('p', { className: 'muted auth-links' }, h('a', { href: '#/login' }, 'Back to sign in'))));
+          h('button', { className: 'btn btn-primary btn-block', type: 'submit', disabled: busy || !sent },
+            busy ? 'Verifying…' : 'Verify and sign in')),
+        h('button', { type: 'button', className: 'btn btn-ghost btn-block', disabled: busy, onClick: resend }, 'Resend code')));
   }
 
-  function UpdatePasswordView() {
-    var _p = useState(''); var password = _p[0]; var setPassword = _p[1];
+  function SignUpView() {
+    var _f = useState({ fullName: '', email: '', country: '', countryCode: '', callingCode: '', phone: '', password: '', confirmPassword: '' });
+    var form = _f[0]; var setForm = _f[1];
+    var _step = useState('details'); var step = _step[0]; var setStep = _step[1];
+    var _emailOtp = useState(''); var emailOtp = _emailOtp[0]; var setEmailOtp = _emailOtp[1];
+    var _phoneOtp = useState(''); var phoneOtp = _phoneOtp[0]; var setPhoneOtp = _phoneOtp[1];
+    var _phone = useState(''); var fullPhone = _phone[0]; var setFullPhone = _phone[1];
     var _b = useState(false); var busy = _b[0]; var setBusy = _b[1];
     var _e = useState(''); var error = _e[0]; var setError = _e[1];
     var _m = useState(''); var message = _m[0]; var setMessage = _m[1];
+
+    function update(key, value) { setForm(Object.assign({}, form, { [key]: value })); }
+
+    function normalizePhone() {
+      var calling = form.callingCode.replace(/[^+0-9]/g, '');
+      var national = form.phone.replace(/[^0-9]/g, '').replace(/^0+/, '');
+      if (!/^\\+[1-9][0-9]{0,3}$/.test(calling) || national.length < 6 || national.length > 14) {
+        throw new Error('Enter a valid country calling code and phone number.');
+      }
+      return calling + national;
+    }
+
     function submit(event) {
-      event.preventDefault(); setBusy(true); setError(''); setMessage('');
-      MG.auth.updatePassword(password).then(function (result) {
+      event.preventDefault(); setError(''); setMessage('');
+      if (form.password.length < 8) { setError('Use a password with at least 8 characters.'); return; }
+      if (form.password !== form.confirmPassword) { setError('Your passwords do not match.'); return; }
+      var phone;
+      try { phone = normalizePhone(); } catch (err) { setError(err.message); return; }
+      setFullPhone(phone); setBusy(true);
+      MG.auth.signUp({
+        fullName: form.fullName, email: form.email, countryCode: form.countryCode,
+        callingCode: form.callingCode, phone: phone, password: form.password,
+      }).then(function (result) {
         if (result.error) throw result.error;
-        setMessage('Password updated successfully.');
-        setPassword('');
-        setTimeout(function () { location.hash = '#/overview'; }, 900);
-      }).catch(function (err) { setError(err.message || 'Could not update the password.'); })
+        setStep('email');
+        setMessage('Enter the email verification code sent to ' + form.email + '.');
+      }).catch(function (err) { setError(err.message || 'Could not start registration.'); })
         .finally(function () { setBusy(false); });
     }
+
+    function verifyEmail(event) {
+      event.preventDefault(); setBusy(true); setError(''); setMessage('');
+      MG.auth.verifyEmailOtp(form.email, emailOtp).then(function (result) {
+        if (result.error) throw result.error;
+        return MG.auth.beginPhoneVerification(fullPhone).then(function (phoneResult) {
+          if (phoneResult.error) throw phoneResult.error;
+          setStep('phone');
+          setMessage('Email verified. A separate SMS code has been sent to ' + fullPhone + '.');
+        });
+      }).catch(function (err) { setError(err.message || 'Email verification failed.'); })
+        .finally(function () { setBusy(false); });
+    }
+
+    function verifyPhone(event) {
+      event.preventDefault(); setBusy(true); setError(''); setMessage('');
+      MG.auth.verifyPhoneOtp(fullPhone, phoneOtp).then(function (result) {
+        if (result.error) throw result.error;
+        location.hash = '#/overview';
+      }).catch(function (err) { setError(err.message || 'Phone verification failed.'); })
+        .finally(function () { setBusy(false); });
+    }
+
+    var content;
+    if (step === 'details') {
+      content = h('form', { onSubmit: submit },
+        h(AuthInput, { label: 'Full name', value: form.fullName, required: true, autoComplete: 'name',
+          onChange: function (event) { update('fullName', event.target.value); } }),
+        h(AuthInput, { label: 'Email address', type: 'email', value: form.email, required: true, autoComplete: 'email',
+          onChange: function (event) { update('email', event.target.value); } }),
+        h('div', { className: 'grid-2' },
+          h(AuthInput, { label: 'Country', value: form.country, required: true, placeholder: 'e.g. Nigeria',
+            onChange: function (event) { update('country', event.target.value); } }),
+          h(AuthInput, { label: 'Country code (ISO-2)', value: form.countryCode, required: true, placeholder: 'e.g. NG', maxLength: 2,
+            onChange: function (event) { update('countryCode', event.target.value.toUpperCase()); } })),
+        h('div', { className: 'grid-2' },
+          h(AuthInput, { label: 'Country calling code', value: form.callingCode, required: true, placeholder: '+234',
+            onChange: function (event) { update('callingCode', event.target.value); } }),
+          h(AuthInput, { label: 'Phone number', type: 'tel', value: form.phone, required: true, placeholder: '8012345678',
+            onChange: function (event) { update('phone', event.target.value); } })),
+        h(AuthInput, { label: 'Password (minimum 8 characters)', type: 'password', value: form.password, required: true, minLength: 8, autoComplete: 'new-password',
+          onChange: function (event) { update('password', event.target.value); } }),
+        h(AuthInput, { label: 'Confirm password', type: 'password', value: form.confirmPassword, required: true, autoComplete: 'new-password',
+          onChange: function (event) { update('confirmPassword', event.target.value); } }),
+        error ? h('p', { className: 'form-error', role: 'alert' }, error) : null,
+        h('button', { className: 'btn btn-primary btn-block', type: 'submit', disabled: busy },
+          busy ? 'Creating account…' : 'Sign Up'));
+    } else if (step === 'email') {
+      content = h('form', { onSubmit: verifyEmail },
+        h(AuthInput, { label: 'Email verification code', value: emailOtp, required: true, maxLength: 6, autoComplete: 'one-time-code',
+          onChange: function (event) { setEmailOtp(event.target.value.replace(/\\D/g, '').slice(0, 6)); } }),
+        h('p', { className: 'muted' }, 'Check your inbox and enter the six-digit code. Phone verification follows after email confirmation.'),
+        error ? h('p', { className: 'form-error', role: 'alert' }, error) : null,
+        h('button', { className: 'btn btn-primary btn-block', type: 'submit', disabled: busy },
+          busy ? 'Verifying email…' : 'Verify email'));
+    } else {
+      content = h('form', { onSubmit: verifyPhone },
+        h(AuthInput, { label: 'SMS verification code', value: phoneOtp, required: true, maxLength: 6, autoComplete: 'one-time-code',
+          onChange: function (event) { setPhoneOtp(event.target.value.replace(/\\D/g, '').slice(0, 6)); } }),
+        h('p', { className: 'muted' }, 'Enter the code sent to ' + fullPhone + '. Your account becomes available after both email and phone are verified.'),
+        error ? h('p', { className: 'form-error', role: 'alert' }, error) : null,
+        h('button', { className: 'btn btn-primary btn-block', type: 'submit', disabled: busy },
+          busy ? 'Verifying phone…' : 'Verify phone and activate account'));
+    }
+
     return h('div', { className: 'auth-wrap' },
       h('div', { className: 'auth-card' },
         h('p', { className: 'auth-brand' }, 'Meridian Global Accounts'),
-        h('h1', null, 'Choose a new password'),
-        h('form', { onSubmit: submit },
-          h(AuthInput, { label: 'New password (minimum 8 characters)', type: 'password',
-            autoComplete: 'new-password', minLength: 8, value: password, required: true,
-            onChange: function (event) { setPassword(event.target.value); } }),
-          error ? h('p', { className: 'form-error', role: 'alert' }, error) : null,
-          message ? h('p', { className: 'form-success', role: 'status' }, message) : null,
-          h('button', { className: 'btn btn-primary btn-block', type: 'submit', disabled: busy },
-            busy ? 'Updating…' : 'Update password'))));
+        h('h1', null, step === 'details' ? 'Create your account' : step === 'email' ? 'Verify your email' : 'Verify your phone'),
+        h('p', { className: 'muted' }, step === 'details' ? 'Create your Meridian account with your contact details and a password.' : message),
+        content,
+        step !== 'details' && message ? h('p', { className: 'form-success', role: 'status' }, message) : null,
+        h('p', { className: 'muted auth-links' }, 'Already registered? ', h('a', { href: '#/login' }, 'Sign in'))));
   }
 
   /* ------------------------------------------------------------------ shell */
