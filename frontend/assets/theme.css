@@ -2393,3 +2393,135 @@ label.field input:focus,
   .shell .curcards { grid-template-columns: minmax(0,1fr); }
   .shell .curcard { min-height: 145px; }
 }
+
+
+/* --------------------------------------------------------------------------
+   Meridian customer experience — consistent page architecture and controls
+   -------------------------------------------------------------------------- */
+.shell .section-head {
+  display:flex; align-items:flex-end; justify-content:space-between;
+  gap:16px; padding:2px 2px 3px; margin:0;
+}
+.shell .section-head > div { min-width:0; }
+.shell .section-head .section-title {
+  margin:0; color:var(--ink); font:800 clamp(20px,2vw,25px)/1.18 var(--font-display);
+  letter-spacing:-.035em;
+}
+.shell .section-head .muted { max-width:680px; margin:7px 0 0; color:#68778F; font-size:12.5px; line-height:1.65; }
+.shell .info-strip {
+  display:flex; align-items:flex-start; gap:11px; padding:14px 16px;
+  border:1px solid #DCE7F6; border-radius:13px; background:#F5F8FD; color:#31527E;
+}
+.shell .info-strip > svg { flex:0 0 auto; margin-top:2px; }
+.shell .info-strip p { margin:0; color:#526783; font-size:12.5px; line-height:1.65; }
+.shell .filter-panel-intro { display:flex; flex-direction:column; gap:4px; margin:0 0 15px; }
+.shell .filter-panel-intro b { color:var(--ink); font:750 13px/1.3 var(--font-display); }
+.shell .filter-panel-intro .muted { color:#77849A; font-size:11.5px; }
+.shell .filter-panel .filter-bar { display:grid; grid-template-columns:minmax(190px,2fr) repeat(4,minmax(125px,1fr)) auto; align-items:end; gap:11px; }
+.shell .filter-panel .filter-bar > * { min-width:0; width:100%; }
+.shell .filter-panel .filter-bar .btn { width:auto; white-space:nowrap; }
+.shell .detail-list {
+  display:grid; grid-template-columns:minmax(130px,.7fr) minmax(0,1.3fr);
+  gap:0; margin:0; border-top:1px solid #EDF1F6;
+}
+.shell .detail-list dt, .shell .detail-list dd {
+  min-width:0; margin:0; padding:12px 4px; border-bottom:1px solid #EDF1F6;
+  font-size:12.5px; line-height:1.5;
+}
+.shell .detail-list dt { color:#7A879B; font-weight:600; }
+.shell .detail-list dd { color:#1C2D49; font-weight:650; overflow-wrap:anywhere; }
+.shell .pref-list { display:grid; gap:0; margin:0; padding:0; list-style:none; }
+.shell .pref-list li {
+  display:flex; align-items:center; justify-content:space-between; gap:18px;
+  padding:15px 2px; border-bottom:1px solid #EDF1F6;
+}
+.shell .pref-list li:first-child { padding-top:2px; }
+.shell .pref-list li:last-child { padding-bottom:2px; border-bottom:0; }
+.shell .pref-list li > div { min-width:0; }
+.shell .pref-list li b { color:#1C2D49; font-size:12.5px; }
+.shell .pref-list li p { margin:4px 0 0; font-size:11.5px; line-height:1.5; }
+.shell .switch { flex:0 0 auto; }
+.shell .notif-list { display:grid; gap:0; margin:0; padding:0; list-style:none; }
+.shell .notif-list li {
+  padding:15px 4px; border-bottom:1px solid #EDF1F6; background:transparent;
+}
+.shell .notif-list li:last-child { border-bottom:0; }
+.shell .notif-list li.unread, .shell .notif-list li.is-unread {
+  padding-left:13px; border-left:3px solid #3979D8; background:#F7FAFF;
+}
+.shell .notif-row { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; }
+.shell .notif-row > div { min-width:0; }
+.shell .notif-row b, .shell .notif-body b { display:block; color:#1D2D49; font-size:12.5px; line-height:1.45; }
+.shell .notif-row p, .shell .notif-body p { margin:5px 0; color:#65748B; font-size:12px; line-height:1.65; }
+.shell .notif-row small, .shell .notif-body small { color:#8A96A8; font-size:10.5px; }
+.shell .ticket {
+  margin:0 0 13px; padding:16px; border:1px solid #E6ECF4;
+  border-radius:13px; background:#fff; box-shadow:0 3px 12px rgba(20,42,78,.025);
+}
+.shell .ticket:last-child { margin-bottom:0; }
+.shell .ticket-head { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.shell .ticket-head b { color:#1D2D49; font-size:13px; }
+.shell .ticket > small { display:block; margin-top:6px; color:#8793A5; font-size:10.5px; }
+.shell .thread { display:grid; gap:9px; margin:14px 0 0; padding:0; list-style:none; }
+.shell .thread .msg { max-width:92%; padding:11px 13px; border-radius:11px; background:#F3F6FA; }
+.shell .thread .msg-customer { margin-left:auto; background:#EEF4FF; }
+.shell .thread .msg small { color:#7E8BA0; font-size:10px; }
+.shell .thread .msg p { margin:5px 0 0; color:#35445D; font-size:12px; line-height:1.65; overflow-wrap:anywhere; }
+.shell .acc-head { display:flex; align-items:center; justify-content:space-between; gap:18px; }
+.shell .acc-head h3 { margin:0 0 8px; color:#1B2B47; font:800 18px/1.2 var(--font-display); }
+.shell .acc-head h3 small { font-size:11px; font-weight:550; }
+.shell .acc-balance { color:#142746; font:800 clamp(21px,2.5vw,29px)/1.2 var(--font-display); letter-spacing:-.035em; font-variant-numeric:tabular-nums; }
+.shell .bank-details-panel {
+  display:grid; gap:8px; margin-top:16px; padding:18px;
+  border:1px solid #D9E5F4; border-radius:14px; background:linear-gradient(145deg,#F8FBFF,#F1F6FD);
+}
+.shell .bank-details-panel h4 { margin:0 0 5px; color:#1B2F50; font:800 14px var(--font-display); }
+.shell .bank-details-panel p { margin:0; color:#53647D; font-size:12px; line-height:1.6; overflow-wrap:anywhere; }
+.shell .bank-details-panel p b { color:#263B5B; }
+.shell .bank-details-panel code { user-select:all; }
+.shell .deposit-status {
+  display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+  margin:0 0 14px; padding:12px 14px; border-radius:11px;
+  background:#F5F8FD; color:#1C3152; font-weight:750; font-variant-numeric:tabular-nums;
+}
+.shell .panel form > label { display:block; margin:0 0 6px; color:#35445D; font-size:12px; font-weight:650; }
+.shell .panel form > label + .input,
+.shell .panel form > label + select,
+.shell .panel form > label + div { margin-bottom:14px; }
+.shell .panel form .form-error { padding:10px 12px; border-radius:9px; background:#FFF3F1; }
+.shell .grid-3 { align-items:stretch; gap:14px; }
+.shell .grid-3 > * { min-width:0; }
+.shell .grid-3 .panel { height:100%; }
+.shell .grid-3 .panel h3 { color:#1D2D49; font:800 17px var(--font-display); }
+.shell .table-wrap { border:1px solid #E9EEF5; border-radius:12px; }
+.shell .table-wrap table thead th { position:sticky; top:0; background:#F7F9FC; color:#78869B; font-size:10px; letter-spacing:.055em; text-transform:uppercase; }
+.shell .table-wrap table tbody tr { transition:background .15s ease; }
+.shell .table-wrap table tbody tr:hover { background:#F8FAFD; }
+.shell .table-wrap table td { vertical-align:middle; }
+.shell .pager { display:flex; align-items:center; justify-content:flex-end; gap:10px; padding-top:15px; }
+.shell .pager-info { color:#7B879A; font-size:11.5px; font-variant-numeric:tabular-nums; }
+.shell .view-stack .panel { min-width:0; }
+.shell .view-stack .panel p { line-height:1.65; }
+.shell .view-stack .btn-row { align-items:center; }
+.shell button, .shell a, .shell input, .shell select, .shell textarea { -webkit-tap-highlight-color:transparent; }
+.shell button:focus-visible, .shell a:focus-visible, .shell input:focus-visible, .shell select:focus-visible, .shell textarea:focus-visible {
+  outline:3px solid rgba(31,111,235,.24); outline-offset:2px;
+}
+@media (max-width:900px) {
+  .shell .filter-panel .filter-bar { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .shell .filter-panel .filter-bar > :first-child { grid-column:1 / -1; }
+}
+@media (max-width:640px) {
+  .shell .section-head { align-items:flex-start; flex-direction:column; }
+  .shell .section-head > .btn, .shell .section-head > a { width:100%; justify-content:center; }
+  .shell .filter-panel .filter-bar { grid-template-columns:minmax(0,1fr); }
+  .shell .filter-panel .filter-bar > :first-child { grid-column:auto; }
+  .shell .filter-panel .filter-bar .btn { width:100%; }
+  .shell .detail-list { grid-template-columns:minmax(100px,.72fr) minmax(0,1.28fr); }
+  .shell .detail-list dt, .shell .detail-list dd { padding:10px 2px; font-size:11.5px; }
+  .shell .acc-head { align-items:flex-start; flex-direction:column; gap:9px; }
+  .shell .acc-balance { font-size:24px; }
+  .shell .notif-row { flex-direction:column; }
+  .shell .notif-row > .btn { align-self:flex-start; }
+  .shell .ticket { padding:13px; }
+}
