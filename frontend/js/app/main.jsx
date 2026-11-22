@@ -187,6 +187,7 @@
 
     function submit(event) {
       event.preventDefault(); setError(''); setMessage('');
+      if (!/^[A-Z]{2}$/.test(form.countryCode)) { setError('Enter the two-letter ISO country code for the selected country.'); return; }
       if (form.password.length < 8) { setError('Use a password with at least 8 characters.'); return; }
       if (form.password !== form.confirmPassword) { setError('Your passwords do not match.'); return; }
       var phone;
