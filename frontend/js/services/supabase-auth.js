@@ -171,14 +171,6 @@
         email: email.trim().toLowerCase(),
         token: String(token).replace(/\s+/g, ''),
         type: 'email',
-      }).then(function (result) {
-        if (!result.error) {
-          try { window.localStorage.removeItem('mg_customer_login_email'); } catch (e) {}
-          if (new URLSearchParams(window.location.search).has('customer_login')) {
-            window.history.replaceState(null, '', window.location.pathname);
-          }
-        }
-        return result;
       });
     },
 
@@ -218,6 +210,44 @@
         token: String(token).replace(/\s+/g, ''),
         type: 'phone_change',
       });
+    },
+
+    getMfaAssurance: function () {
+      return requireClient().auth.mfa.getAuthenticatorAssuranceLevel();
+    },
+
+    listMfaFactors: function () {
+      return requireClient().auth.mfa.listFactors();
+    },
+
+    enrollTotp: function () {
+      return requireClient().auth.mfa.enroll({
+        factorType: 'totp',
+        friendlyName: 'Meridian Global Accounts',
+      });
+    },
+
+    challengeTotp: function (factorId) {
+      return requireClient().auth.mfa.challenge({ factorId: factorId });
+    },
+
+    verifyTotp: function (factorId, challengeId, code) {
+      return requireClient().auth.mfa.verify({
+        factorId: factorId,
+        challengeId: challengeId,
+        code: String(code).replace(/\s+/g, ''),
+      });
+    },
+
+    unenrollTotp: function (factorId) {
+      return requireClient().auth.mfa.unenroll({ factorId: factorId });
+    },
+
+    completeCustomerLogin: function () {
+      try { window.localStorage.removeItem('mg_customer_login_email'); } catch (e) {}
+      if (new URLSearchParams(window.location.search).has('customer_login')) {
+        window.history.replaceState(null, '', window.location.pathname);
+      }
     },
 
     updatePassword: function (password) {
