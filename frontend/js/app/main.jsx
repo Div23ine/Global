@@ -111,7 +111,7 @@
         h('form', { onSubmit: verify },
           h(AuthInput, { label: 'Six-digit email code', type: 'text', autoComplete: 'one-time-code',
             placeholder: 'Enter the code from your email', value: otp, required: true, maxLength: 6,
-            onChange: function (event) { setOtp(event.target.value.replace(/\\D/g, '').slice(0, 6)); } }),
+            onChange: function (event) { setOtp(event.target.value.replace(/\D/g, '').slice(0, 6)); } }),
           error ? h('p', { className: 'form-error', role: 'alert' }, error) : null,
           message ? h('p', { className: 'form-success', role: 'status' }, message) : null,
           h('button', { className: 'btn btn-primary btn-block', type: 'submit', disabled: busy || !sent },
@@ -135,7 +135,7 @@
     function normalizePhone() {
       var calling = form.callingCode.replace(/[^+0-9]/g, '');
       var national = form.phone.replace(/[^0-9]/g, '').replace(/^0+/, '');
-      if (!/^\\+[1-9][0-9]{0,3}$/.test(calling) || national.length < 6 || national.length > 14) {
+      if (!/^\+[1-9][0-9]{0,3}$/.test(calling) || national.length < 6 || national.length > 14) {
         throw new Error('Enter a valid country calling code and phone number.');
       }
       return calling + national;
@@ -208,7 +208,7 @@
     } else if (step === 'email') {
       content = h('form', { onSubmit: verifyEmail },
         h(AuthInput, { label: 'Email verification code', value: emailOtp, required: true, maxLength: 6, autoComplete: 'one-time-code',
-          onChange: function (event) { setEmailOtp(event.target.value.replace(/\\D/g, '').slice(0, 6)); } }),
+          onChange: function (event) { setEmailOtp(event.target.value.replace(/\D/g, '').slice(0, 6)); } }),
         h('p', { className: 'muted' }, 'Check your inbox and enter the six-digit code. Phone verification follows after email confirmation.'),
         error ? h('p', { className: 'form-error', role: 'alert' }, error) : null,
         h('button', { className: 'btn btn-primary btn-block', type: 'submit', disabled: busy },
@@ -216,7 +216,7 @@
     } else {
       content = h('form', { onSubmit: verifyPhone },
         h(AuthInput, { label: 'SMS verification code', value: phoneOtp, required: true, maxLength: 6, autoComplete: 'one-time-code',
-          onChange: function (event) { setPhoneOtp(event.target.value.replace(/\\D/g, '').slice(0, 6)); } }),
+          onChange: function (event) { setPhoneOtp(event.target.value.replace(/\D/g, '').slice(0, 6)); } }),
         h('p', { className: 'muted' }, 'Enter the code sent to ' + fullPhone + '. Your account becomes available after both email and phone are verified.'),
         error ? h('p', { className: 'form-error', role: 'alert' }, error) : null,
         h('button', { className: 'btn btn-primary btn-block', type: 'submit', disabled: busy },
