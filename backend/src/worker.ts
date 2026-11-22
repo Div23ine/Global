@@ -17,8 +17,9 @@ import { httpServerHandler } from 'cloudflare:node';
 import { createApp } from './app';
 import { applyWorkerEnv, assertProductionReadiness } from './config/env';
 import type { RateLimitBindings } from './middleware/rateLimit';
+import type { CacheKVBinding } from './services/cache.service';
 
-type Env = Record<string, unknown> & RateLimitBindings;
+type Env = Record<string, unknown> & RateLimitBindings & { CACHE_KV?: CacheKVBinding };
 
 let handler: ReturnType<typeof httpServerHandler> | null = null;
 let envApplied = false;
@@ -39,7 +40,7 @@ function ensureHandler(env: Env) {
       GLOBAL_RATE_LIMITER: env.GLOBAL_RATE_LIMITER,
       DEPOSIT_RATE_LIMITER: env.DEPOSIT_RATE_LIMITER,
       SUPPORT_RATE_LIMITER: env.SUPPORT_RATE_LIMITER,
-    });
+    }, env.CACHE_KV);
     const server = createServer(app);
     // Port is virtual inside the Worker isolate
     server.listen(8080);
