@@ -76,7 +76,7 @@
           toggle.setAttribute('aria-expanded', String(open));
           scrim.hidden = !open;
         });
-        if (scrim) scrim.addEventListener('click', closeDrawer);
+        if (scrim) scrim.addEventListener('click', closeDrawer);\n        panel.querySelectorAll('a').forEach(function (link) { link.addEventListener('click', closeDrawer); });\n        document.addEventListener('keydown', function (event) { if (event.key === 'Escape') closeDrawer(); });
       }
     }
 
@@ -136,17 +136,24 @@
   function wireContactForm() {
     var form = document.querySelector('[data-contact-form]');
     if (!form) return;
-    var success = document.querySelector('[data-form-success]');
+    var status = document.querySelector('[data-form-status]');
     form.addEventListener('submit', function (e) {
       e.preventDefault();
-      // Static site: validate locally, then reveal the confirmation panel.
-      var name = form.name && String(form.name.value || '').trim();
-      var email = form.email && String(form.email.value || '').trim();
-      var message = form.message && String(form.message.value || '').trim();
-      if (!name || !email || !message) return;
-      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return;
-      form.hidden = true;
-      if (success) success.hidden = false;
+      var name = form.elements.name && String(form.elements.name.value || '').trim();
+      var email = form.elements.email && String(form.elements.email.value || '').trim();
+      var message = form.elements.message && String(form.elements.message.value || '').trim();
+      if (!name || !email || !message) {
+        if (status) { status.hidden = false; status.textContent = 'Complete your name, a valid email address and message before continuing.'; }
+        return;
+      }
+      if (!/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(email)) {
+        if (status) { status.hidden = false; status.textContent = 'Enter a valid email address.'; }
+        return;
+      }
+      if (status) {
+        status.hidden = false;
+        status.textContent = 'Your message is valid, but this public form is not connected to a delivery service yet. Nothing has been sent.';
+      }
     });
   }
 
