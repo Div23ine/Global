@@ -31,9 +31,10 @@
 
     var list = accounts.data || [];
     var totalEur = list.reduce(function (acc, a) {
-      return acc + (Number(a.equivalent_eur) || Number(a.balance) || 0);
+      return acc + (a.equivalent_eur == null ? 0 : (Number(a.equivalent_eur) || 0));
     }, 0);
     var activeCount = list.filter(function (a) { return a.status === 'active'; }).length;
+    var totalEurAvailable = list.length === 0 || list.every(function (a) { return a.equivalent_eur != null; });
     var recent = txns.data || [];
     var notifPreview = (notifs.data || []).slice(0, 4);
     /* Distribution uses only server-provided EUR equivalents. Never compare
@@ -57,7 +58,7 @@
         h('div', { className: 'ov-hero-main' },
           h('p', { className: 'ov-label' },
             MG.icon ? MG.icon('wallet', 15) : null, ' Total balance · EUR equivalent (indicative)'),
-          h('p', { className: 'ov-total' }, MG.util.money(totalEur, 'EUR')),
+          h('p', { className: 'ov-total' }, totalEurAvailable ? MG.util.money(totalEur, 'EUR') : 'Unavailable'),
           h('p', { className: 'ov-sub' },
             'Across ' + list.length + ' currency account' + (list.length === 1 ? '' : 's') +
             (activeCount ? ' · ' + activeCount + ' active' : '')),
@@ -81,9 +82,9 @@
           h('div', { className: 'stat-info' },
             h('span', { className: 'stat-ic', 'aria-hidden': 'true' }, MG.icon ? MG.icon('receipt', 17) : null),
             h('div', null,
-              h('p', { className: 'stat-label' }, 'Recent activity'),
+              h('p', { className: 'stat-label' }, 'Latest entries'),
               h('p', { className: 'stat-val' }, String(recent.length)),
-              h('p', { className: 'stat-sub' }, 'latest ledger entries')))),
+              h('p', { className: 'stat-sub' }, 'loaded for preview')))),
         h('div', { className: 'stat-card' },
           h('div', { className: 'stat-info' },
             h('span', { className: 'stat-ic', 'aria-hidden': 'true' }, MG.icon ? MG.icon('bell', 17) : null),
