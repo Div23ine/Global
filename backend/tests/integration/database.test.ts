@@ -372,8 +372,8 @@ describe('deposit state machine', () => {
     const ref = await svc!.query('SELECT next_dep_reference() AS r');
     const reference = ref.rows[0].r as string;
     await svc!.query(
-      `INSERT INTO deposits (reference, profile_id, account_id, currency_code, amount, method, status)
-       VALUES ($1, $2, $3, 'EUR', '50.0000', 'card', 'pending')`,
+      `INSERT INTO deposits (reference, profile_id, account_id, currency_code, amount, requested_amount, method, status)
+       VALUES ($1, $2, $3, 'EUR', '50.0000', '50.0000', 'card', 'pending')`,
       [reference, USER_A, accountId],
     );
 
@@ -412,6 +412,29 @@ describe('deposit state machine', () => {
       "UPDATE deposits SET status = 'pending' WHERE reference = $1", [reference],
     )).rejects.toThrow('illegal deposit transition');
 
+    // Terminal states are final: no rewind to any open or failed state.
+    // (Regression for 0014: 0006 had dropped the transition matrix, which
+    // allowed a completed deposit to be re-opened and re-credited.)
+    for (const illegal of ['pending', 'pending_admin_action', 'awaiting_payment',
+                           'payment_reported', 'under_verification', 'failed']) {
+      await expect(svc!.query(
+        'UPDATE deposits SET status = $2 WHERE reference = $1', [reference, illegal],
+      )).rejects.toThrow('illegal deposit transition');
+    }
+
+    // Legal workflow transitions stay open: awaiting_payment -> completed.
+    const legalRef = await svc!.query('SELECT next_dep_reference() AS r');
+    const legalReference = legalRef.rows[0].r as string;
+    await svc!.query(
+      `INSERT INTO deposits (reference, profile_id, account_id, currency_code, amount, requested_amount, method, status)
+       VALUES ($1, $2, $3, 'EUR', '30.0000', '30.0000', 'bank_transfer', 'awaiting_payment')`,
+      [legalReference, USER_A, accountId],
+    );
+    const credited = await svc!.query('SELECT admin_credit_deposit_payment($1,$2,$3,$4,$5,$6,$7,$8) AS result',
+      [ (await svc!.query('SELECT id FROM deposits WHERE reference = $1', [legalReference])).rows[0].id,
+        '30', 'EUR', null, `LEGAL-TXN-${Date.now()}`, 'REF', 'admin_test', null ]);
+    expect(credited.rows[0].result.status).toBe('completed');
+
     // Amount immutability.
     await expect(svc!.query(
       'UPDATE deposits SET amount = 999 WHERE reference = $1', [reference],
@@ -427,8 +450,8 @@ describe('deposit state machine', () => {
     const ref = await svc!.query('SELECT next_dep_reference() AS r');
     const reference = ref.rows[0].r as string;
     await svc!.query(
-      `INSERT INTO deposits (reference, profile_id, account_id, currency_code, amount, method, status)
-       VALUES ($1, $2, $3, 'EUR', '25.0000', 'bank_transfer', 'pending')`,
+      `INSERT INTO deposits (reference, profile_id, account_id, currency_code, amount, requested_amount, method, status)
+       VALUES ($1, $2, $3, 'EUR', '25.0000', '25.0000', 'bank_transfer', 'pending')`,
       [reference, USER_A, accountId],
     );
 
@@ -447,8 +470,8 @@ describe('deposit state machine', () => {
     const ref2 = await svc!.query('SELECT next_dep_reference() AS r');
     const reference2 = ref2.rows[0].r as string;
     await svc!.query(
-      `INSERT INTO deposits (reference, profile_id, account_id, currency_code, amount, method, status)
-       VALUES ($1, $2, $3, 'EUR', '10.0000', 'gateway', 'pending')`,
+      `INSERT INTO deposits (reference, profile_id, account_id, currency_code, amount, requested_amount, method, status)
+       VALUES ($1, $2, $3, 'EUR', '10.0000', '10.0000', 'gateway', 'pending')`,
       [reference2, USER_A, accountId],
     );
     const cancelled = await svc!.query('SELECT cancel_deposit($1,$2)', [USER_A, reference2]);
