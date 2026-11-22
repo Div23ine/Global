@@ -12,7 +12,7 @@ import { badRequest, ok } from '../utils/httpError';
 export const notificationsRouter = Router();
 export const supportRouter = Router();
 
-notificationsRouter.use(requireAuth);
+notificationsRouter.use('/notifications', requireAuth);
 
 notificationsRouter.get('/notifications', async (req, res, next) => {
   try {
@@ -40,7 +40,7 @@ notificationsRouter.post('/notifications/:id/read', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-supportRouter.use(requireAuth);
+supportRouter.use('/support', requireAuth);
 
 supportRouter.get('/support/tickets', async (req, res, next) => {
   try {

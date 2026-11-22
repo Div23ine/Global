@@ -9,7 +9,7 @@ import { badRequest, notFound, ok } from '../utils/httpError';
 
 export const statementsRouter = Router();
 
-statementsRouter.use(requireAuth);
+statementsRouter.use('/statements', requireAuth);
 
 statementsRouter.get('/statements', async (req, res, next) => {
   try {

@@ -26,6 +26,12 @@ export interface AdminInfo extends AuthInfo {
   permissions: string[];
 }
 
+/** Admin-gate handler that reports the permissions it enforces. */
+export interface AdminGateHandler {
+  (req: Request, res: Response, next: NextFunction): Promise<void>;
+  readonly requiredPermissions: readonly string[];
+}
+
 declare module 'express-serve-static-core' {
   interface Request {
     auth?: AuthInfo;
@@ -117,9 +123,13 @@ async function loadAdmin(auth: AuthInfo): Promise<AdminInfo | null> {
 /**
  * Admin gate. Usage: requireAdmin('users.read') — the caller's role must
  * include EVERY listed permission (AND semantics). Deny by default.
+ *
+ * The returned handler carries `requiredPermissions` so route-permission
+ * audits and contract tests can assert which permission guards each admin
+ * route without executing the middleware.
  */
-export function requireAdmin(...requiredPermissions: string[]) {
-  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+export function requireAdmin(...requiredPermissions: string[]): AdminGateHandler {
+  const handler = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       if (!req.auth) throw unauthenticated();
       let admin: AdminInfo | null = req.admin ?? null;
@@ -150,4 +160,6 @@ export function requireAdmin(...requiredPermissions: string[]) {
       next(err);
     }
   };
+  handler.requiredPermissions = Object.freeze([...requiredPermissions]);
+  return handler;
 }

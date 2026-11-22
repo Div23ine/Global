@@ -37,7 +37,7 @@ import {
 } from '../services/refunds.service';
 
 export const adminRouter = Router();
-adminRouter.use(requireAuth, requireAdmin());
+adminRouter.use('/admin', requireAuth, requireAdmin());
 
 const ctxOf = (req: { admin?: { roleId: string }; ip?: string; get(h: string): string | undefined }) => ({
   role: req.admin?.roleId ?? null,
@@ -567,7 +567,7 @@ const bankSchema = z.object({
   displayOrder: z.number().int().optional(),
 }).strict();
 
-adminRouter.post('/admin/receiving-banks', requireAdmin('deposits.read'), validate(bankSchema), async (req, res, next) => {
+adminRouter.post('/admin/receiving-banks', requireAdmin('deposits.manage'), validate(bankSchema), async (req, res, next) => {
   try {
     const bank = await upsertReceivingBank(req.auth!.userId, req.body);
     res.status(201);
@@ -600,7 +600,7 @@ adminRouter.get('/admin/deposits/queue', requireAdmin('deposits.read'), async (r
 
 const assignBankSchema = z.object({ bankAccountId: z.string().uuid() }).strict();
 
-adminRouter.post('/admin/deposits/:id/assign-bank', requireAdmin('deposits.read'), validate(assignBankSchema), async (req, res, next) => {
+adminRouter.post('/admin/deposits/:id/assign-bank', requireAdmin('deposits.manage'), validate(assignBankSchema), async (req, res, next) => {
   try {
     const deposit = await assignReceivingBank(
       req.auth!.userId, String(req.params.id), req.body.bankAccountId, ctxOf(req),
@@ -618,7 +618,7 @@ const verifyCreditSchema = z.object({
   notes: z.string().max(2000).optional(),
 }).strict();
 
-adminRouter.post('/admin/deposits/:id/verify-credit', requireAdmin('deposits.read'), validate(verifyCreditSchema), async (req, res, next) => {
+adminRouter.post('/admin/deposits/:id/verify-credit', requireAdmin('deposits.manage'), validate(verifyCreditSchema), async (req, res, next) => {
   try {
     const result = await verifyAndCreditPayment(
       req.auth!.userId, String(req.params.id), req.body, ctxOf(req),
@@ -629,7 +629,7 @@ adminRouter.post('/admin/deposits/:id/verify-credit', requireAdmin('deposits.rea
 
 const rejectDepSchema = z.object({ reason: z.string().min(3).max(1000) }).strict();
 
-adminRouter.post('/admin/deposits/:id/reject', requireAdmin('deposits.read'), validate(rejectDepSchema), async (req, res, next) => {
+adminRouter.post('/admin/deposits/:id/reject', requireAdmin('deposits.manage'), validate(rejectDepSchema), async (req, res, next) => {
   try {
     const deposit = await rejectDeposit(req.auth!.userId, String(req.params.id), req.body.reason, ctxOf(req));
     ok(res, deposit, 'Deposit rejected');
@@ -652,7 +652,7 @@ const createRefundSchema = z.object({
   notes: z.string().max(2000).optional(),
 }).strict();
 
-adminRouter.post('/admin/refunds', requireAdmin('deposits.read'), validate(createRefundSchema), async (req, res, next) => {
+adminRouter.post('/admin/refunds', requireAdmin('refunds.manage'), validate(createRefundSchema), async (req, res, next) => {
   try {
     const refund = await createRefundRequest(
       req.auth!.userId, req.body, true,
@@ -669,7 +669,7 @@ const approveRefundSchema = z.object({
   notes: z.string().max(2000).optional(),
 }).strict();
 
-adminRouter.post('/admin/refunds/:id/approve', requireAdmin('deposits.read'), validate(approveRefundSchema), async (req, res, next) => {
+adminRouter.post('/admin/refunds/:id/approve', requireAdmin('refunds.manage'), validate(approveRefundSchema), async (req, res, next) => {
   try {
     const result = await approveAndProcessRefund(
       req.auth!.userId, String(req.params.id), req.body.approvedAmount, req.body.notes, ctxOf(req),
@@ -680,7 +680,7 @@ adminRouter.post('/admin/refunds/:id/approve', requireAdmin('deposits.read'), va
 
 const rejectRefundSchema = z.object({ reason: z.string().min(3).max(1000) }).strict();
 
-adminRouter.post('/admin/refunds/:id/reject', requireAdmin('deposits.read'), validate(rejectRefundSchema), async (req, res, next) => {
+adminRouter.post('/admin/refunds/:id/reject', requireAdmin('refunds.manage'), validate(rejectRefundSchema), async (req, res, next) => {
   try {
     const refund = await rejectRefund(req.auth!.userId, String(req.params.id), req.body.reason, ctxOf(req));
     ok(res, refund, 'Refund rejected');

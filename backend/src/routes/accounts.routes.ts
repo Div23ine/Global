@@ -10,7 +10,7 @@ import { badRequest, invalidState, conflict, notFound, ok } from '../utils/httpE
 
 export const accountsRouter = Router();
 
-accountsRouter.use(requireAuth);
+accountsRouter.use(['/currencies', '/accounts'], requireAuth);
 
 /** Public (within auth) list of currencies with per-user activation flags. */
 accountsRouter.get('/currencies', async (req, res, next) => {

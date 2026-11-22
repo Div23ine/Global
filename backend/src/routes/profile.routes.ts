@@ -9,7 +9,7 @@ import { notFound, ok } from '../utils/httpError';
 
 export const profileRouter = Router();
 
-profileRouter.use(requireAuth);
+profileRouter.use('/profile', requireAuth);
 
 profileRouter.get('/profile', async (req, res, next) => {
   try {
@@ -58,4 +58,3 @@ profileRouter.patch('/profile', validate(patchSchema), async (req, res, next) =>
     ok(res, data, 'Profile updated');
   } catch (err) { next(err); }
 });
-

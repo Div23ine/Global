@@ -44,7 +44,7 @@ create records accept `Idempotency-Key`; replays return the original result.
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| GET | `/currencies` | none | available currencies + `activeForMe` flags |
+| GET | `/currencies` | customer | available currencies + `activeForMe` flags (auth is required because the per-caller activation flags need the verified profile) |
 | GET | `/accounts` | customer | all own accounts with balances, txCount, equivalents (EUR base) |
 | GET | `/accounts/:currency` | customer | one account + recent transactions + deposits |
 | POST | `/accounts/activate` | customer | `{ currencyCode }` → activates (guards: unavailable, already active, duplicate) |

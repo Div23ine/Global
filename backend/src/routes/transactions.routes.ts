@@ -7,7 +7,7 @@ import { badRequest, notFound, ok } from '../utils/httpError';
 
 export const transactionsRouter = Router();
 
-transactionsRouter.use(requireAuth);
+transactionsRouter.use('/transactions', requireAuth);
 
 transactionsRouter.get('/transactions', async (req, res, next) => {
   try {
