@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { requireAuth } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { getServiceClient, getUserClient } from '../services/supabase.service';
+import { getOrLoadReference, type CacheKVBinding } from '../services/cache.service';
 import { auditAllowed } from '../services/audit.service';
 import { badRequest, invalidState, conflict, notFound, ok } from '../utils/httpError';
 
@@ -15,14 +16,19 @@ accountsRouter.use(requireAuth);
 accountsRouter.get('/currencies', async (req, res, next) => {
   try {
     const db = getServiceClient();
+    const cacheKv = req.app.locals.cacheKv as CacheKVBinding | undefined;
     const [currencies, accounts] = await Promise.all([
-      db.from('currencies').select('*').order('display_order'),
+      getOrLoadReference('currency-catalog', 300, async () => {
+        const { data, error } = await db.from('currencies').select('*').order('display_order');
+        if (error) throw new Error(error.message);
+        return data ?? [];
+      }, cacheKv),
       db.from('accounts').select('currency_code, status').eq('profile_id', req.auth!.userId),
     ]);
-    if (currencies.error) throw new Error(currencies.error.message);
+    if (accounts.error) throw new Error(accounts.error.message);
     const mine = new Set((accounts.data ?? []).map((a: { currency_code: string }) => a.currency_code));
     ok(res,
-      (currencies.data ?? []).map((c: Record<string, unknown>) => ({
+      currencies.map((c: Record<string, unknown>) => ({
         ...c,
         activeForMe: mine.has(String(c.code)),
       })),
