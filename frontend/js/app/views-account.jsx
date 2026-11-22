@@ -67,6 +67,22 @@
   MG.views.security = function () {
     var _p = React.useState(''); var password = _p[0]; var setPassword = _p[1];
     var _b = React.useState(false); var busy = _b[0]; var setBusy = _b[1];
+    var _f = React.useState([]); var factors = _f[0]; var setFactors = _f[1];
+    var _e = React.useState(null); var enrollment = _e[0]; var setEnrollment = _e[1];
+    var _c = React.useState(''); var code = _c[0]; var setCode = _c[1];
+
+    function refreshFactors() {
+      return MG.auth.listMfaFactors().then(function (result) {
+        if (result.error) throw result.error;
+        setFactors((result.data && result.data.totp) || []);
+      });
+    }
+
+    React.useEffect(function () {
+      refreshFactors().catch(function (error) {
+        MG.util.toast(error.message || 'Could not load MFA settings.', 'err');
+      });
+    }, []);
 
     function updatePassword(event) {
       event.preventDefault();
@@ -84,21 +100,86 @@
       }).finally(function () { setBusy(false); });
     }
 
+    function enableMfa() {
+      setBusy(true);
+      MG.auth.enrollTotp().then(function (result) {
+        if (result.error) throw result.error;
+        setEnrollment({
+          id: result.data.id,
+          secret: result.data.totp && result.data.totp.secret,
+          qrCode: result.data.totp && result.data.totp.qr_code,
+        });
+        MG.util.toast('Authenticator enrollment started. Add Meridian to your authenticator app.', 'ok');
+      }).catch(function (error) {
+        MG.util.toast(error.message || 'Could not start MFA enrollment.', 'err');
+      }).finally(function () { setBusy(false); });
+    }
+
+    function verifyMfaEnrollment(event) {
+      event.preventDefault();
+      if (!enrollment || !code.trim()) return;
+      setBusy(true);
+      MG.auth.challengeTotp(enrollment.id).then(function (challenge) {
+        if (challenge.error) throw challenge.error;
+        return MG.auth.verifyTotp(enrollment.id, challenge.data.id, code);
+      }).then(function (result) {
+        if (result.error) throw result.error;
+        setEnrollment(null); setCode('');
+        return refreshFactors();
+      }).then(function () {
+        MG.util.toast('Authenticator MFA is now enabled.', 'ok');
+      }).catch(function (error) {
+        MG.util.toast(error.message || 'The authenticator code could not be verified.', 'err');
+      }).finally(function () { setBusy(false); });
+    }
+
+    function disableMfa() {
+      var active = factors.filter(function (factor) { return factor.status === 'verified'; })[0];
+      if (!active) return;
+      setBusy(true);
+      MG.auth.unenrollTotp(active.id).then(function (result) {
+        if (result.error) throw result.error;
+        return refreshFactors();
+      }).then(function () {
+        MG.util.toast('Authenticator MFA has been disabled.', 'ok');
+      }).catch(function (error) {
+        MG.util.toast(error.message || 'Could not disable MFA. Complete a fresh sign-in if step-up verification is required.', 'err');
+      }).finally(function () { setBusy(false); });
+    }
+
+    var activeFactor = factors.filter(function (factor) { return factor.status === 'verified'; })[0];
+
     return h('div', { className: 'view-stack' },
       h('div', { className: 'section-head' }, h('div', null,
         h('h2', { className: 'section-title' }, 'Security'),
         h('p', { className: 'muted' }, 'Protect your account and manage your sign-in credentials.'))),
       h(MG.ui.Card, { title: 'Password & sign-in security (Supabase Auth)' },
         h('p', { className: 'muted' },
-          'Your password, email confirmation and recovery are managed securely by Supabase Auth.'),
+          'Your password is stored and managed securely by Supabase Auth. Sign-in uses your email magic link and email verification code.'),
         h('form', { onSubmit: updatePassword },
-          h(MG.ui.Field, { id: 'security-new-password', label: 'New password' },
+          h(MG.ui.Field, { id: 'security-new-password', label: 'Change password' },
             h(MG.ui.Input, { id: 'security-new-password', type: 'password',
               autoComplete: 'new-password', value: password, required: true, minLength: 8,
               onChange: function (event) { setPassword(event.target.value); } })),
-          h(MG.ui.Button, { type: 'submit', variant: 'primary', busy: busy }, 'Update password')),
+          h(MG.ui.Button, { type: 'submit', variant: 'primary', busy: busy }, 'Update password'))),
+      h(MG.ui.Card, { title: 'Optional multi-factor authentication' },
         h('p', { className: 'muted' },
-          'Multi-factor enrollment and challenge screens are not yet exposed in Meridian. Do not treat MFA as enabled until it is configured in Supabase and implemented in the application.')),
+          'MFA is optional. Enable an authenticator app if you want an additional verification step after email sign-in. You can disable it again from this page.'),
+        activeFactor
+          ? h('div', null,
+              h('p', { className: 'form-success' }, 'Authenticator MFA is enabled on this account.'),
+              h(MG.ui.Button, { type: 'button', variant: 'danger', busy: busy, onClick: disableMfa }, 'Disable MFA'))
+          : enrollment
+            ? h('div', null,
+                h('p', { className: 'muted' }, 'Scan this QR code with your authenticator app, or enter the setup key manually.'),
+                enrollment.qrCode ? h('img', { src: enrollment.qrCode, alt: 'Authenticator setup QR code', style: { maxWidth: '220px', width: '100%' } }) : null,
+                h('p', { className: 'muted' }, 'Setup key: ', h('code', null, enrollment.secret || 'Unavailable')),
+                h('form', { onSubmit: verifyMfaEnrollment },
+                  h(MG.ui.Field, { id: 'mfa-enrollment-code', label: 'Six-digit authenticator code' },
+                    h(MG.ui.Input, { id: 'mfa-enrollment-code', value: code, required: true, maxLength: 8,
+                      autoComplete: 'one-time-code', onChange: function (event) { setCode(event.target.value.replace(/\\D/g, '').slice(0, 8)); } })),
+                  h(MG.ui.Button, { type: 'submit', variant: 'primary', busy: busy }, 'Verify and enable MFA')))
+            : h(MG.ui.Button, { type: 'button', variant: 'primary', busy: busy, onClick: enableMfa }, 'Enable authenticator MFA')),
       h(MG.ui.Card, { title: 'Security events' },
         h('p', { className: 'muted' },
           'Sign-in events, account suspensions and administrative actions are recorded in the platform security history. Contact support for a full report at any time.')));
