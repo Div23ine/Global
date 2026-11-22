@@ -89,7 +89,7 @@
         if (profile) setProfile(null);
         return;
       }
-      if (!profile && route.view !== 'reset-password') {
+      if (!profile) {
         MGA.api.overview().then(function () {
           setProfile({ admin: true });
         }).catch(function (err) {
