@@ -59,6 +59,15 @@ adminRouter.get('/admin/overview', requireAdmin(), async (_req, res, next) => {
         db.from('support_tickets').select('id', { count: 'exact', head: true }).eq('status', 'open'),
         db.from('security_events').select('id', { count: 'exact', head: true }).eq('severity', 'critical'),
       ]);
+
+    // Never turn a database failure into plausible-looking zero metrics.
+    // The dashboard must either show verified live counts or surface an error.
+    const metricResults = [
+      users, active, suspended, banned, pendingDeposits, openTickets, criticalEvents,
+    ];
+    const failedMetric = metricResults.find((result) => result.error);
+    if (failedMetric?.error) throw new Error(failedMetric.error.message);
+
     ok(res, {
       users: users.count ?? 0,
       active: active.count ?? 0,
