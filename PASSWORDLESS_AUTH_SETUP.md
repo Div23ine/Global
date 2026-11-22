@@ -82,6 +82,10 @@ The initial configured super-admin email remains managed by migration `0009_conf
 
 Customers can enable or disable TOTP authenticator MFA under **Account → Security**. It is opt-in, not mandatory for accounts without an enrolled factor. Once enrolled, the customer must complete the authenticator challenge during sign-in. The backend validates AAL2 for enrolled customer factors rather than relying on the frontend alone. Admin accounts retain the magic-link-only flow.
 
+## Required database migration
+
+Before enabling the updated registration flow, apply `backend/migrations/0012_customer_country_details.sql` to the Supabase database (after migrations `0001`–`0011`). It adds `country_name` and `country_calling_code` to customer profiles and updates profile bootstrap so both values are persisted for new registrations and linked legacy profiles. The API deployment does not automatically execute SQL migrations.
+
 ## Deployment and verification
 
 The frontend and backend changes are committed to the `development` branch. The Supabase email templates, redirect allow list, Email provider and Phone/SMS provider are project-level settings and must be configured in the Supabase dashboard before end-to-end testing. Cloudflare deployment requires a valid Pages API token with the correct project permissions and a successful Worker typecheck.
