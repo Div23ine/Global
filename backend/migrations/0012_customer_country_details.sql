@@ -63,6 +63,15 @@ BEGIN
   IF FOUND THEN
     UPDATE public.profiles
        SET supabase_user_id = p_user_id,
+           country_name = COALESCE(
+             NULLIF(trim(v_auth_user.raw_user_meta_data ->> 'country_name'), ''),
+             NULLIF(trim(v_auth_user.raw_user_meta_data ->> 'country'), ''),
+             country_name
+           ),
+           country_calling_code = COALESCE(
+             NULLIF(trim(v_auth_user.raw_user_meta_data ->> 'country_calling_code'), ''),
+             country_calling_code
+           ),
            updated_at = now()
      WHERE id = v_profile_id;
     RETURN v_profile_id;
