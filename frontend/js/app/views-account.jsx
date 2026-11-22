@@ -38,6 +38,9 @@
     }
 
     return h('div', { className: 'view-stack' },
+      h('div', { className: 'section-head' }, h('div', null,
+        h('h2', { className: 'section-title' }, 'Profile'),
+        h('p', { className: 'muted' }, 'Manage the personal information associated with your Meridian account.'))),
       h(MG.ui.Card, { title: 'Your details' },
         h('form', { onSubmit: save, noValidate: true },
           h('div', { className: 'grid-2' },
@@ -82,6 +85,9 @@
     }
 
     return h('div', { className: 'view-stack' },
+      h('div', { className: 'section-head' }, h('div', null,
+        h('h2', { className: 'section-title' }, 'Security'),
+        h('p', { className: 'muted' }, 'Protect your account and manage your sign-in credentials.'))),
       h(MG.ui.Card, { title: 'Password & sign-in security (Supabase Auth)' },
         h('p', { className: 'muted' },
           'Your password, email confirmation and recovery are managed securely by Supabase Auth.'),
@@ -113,6 +119,9 @@
     }
 
     return h('div', { className: 'view-stack' },
+    h('div', { className: 'section-head' }, h('div', null,
+      h('h2', { className: 'section-title' }, 'Active sessions'),
+      h('p', { className: 'muted' }, 'Choose where your Meridian account remains signed in.'))),
     h(MG.ui.Card, { title: 'Session controls' },
       h('p', { className: 'muted' },
         'Supabase Auth lets you sign out this device, other active sessions, or every session. Individual session inventories are not available in this screen.'),
@@ -136,8 +145,11 @@
     if (state.error) return h(MG.ui.ErrorPanel, { error: state.error, onRetry: function () { location.reload(); } });
     var list = state.data || [];
     return h('div', { className: 'view-stack' },
+    h('div', { className: 'section-head' }, h('div', null,
+      h('h2', { className: 'section-title' }, 'Notifications'),
+      h('p', { className: 'muted' }, 'Important updates about deposits, account activity and security.'))),
     h(MG.ui.Card, {
-      title: 'Notifications',
+      title: 'Your notification centre',
       action: h(MG.ui.Button, { variant: 'ghost', onClick: function () {
         MG.api.markNotificationRead('all').then(function () { reload(function (x) { return x + 1; }); });
       } }, 'Mark all read'),
@@ -183,7 +195,10 @@
     }
 
     return h('div', { className: 'view-stack' },
-      h(MG.ui.Card, { title: 'Open a ticket' },
+      h('div', { className: 'section-head' }, h('div', null,
+        h('h2', { className: 'section-title' }, 'Customer support'),
+        h('p', { className: 'muted' }, 'Contact the Meridian team and follow the progress of your requests.'))),
+      h(MG.ui.Card, { title: 'Create a support request' },
         h('form', { onSubmit: submit, noValidate: true },
           h(MG.ui.Field, { id: 'st-sub', label: 'Subject' },
             h(MG.ui.Input, { id: 'st-sub', value: form.subject, maxLength: 120,
@@ -254,6 +269,9 @@
       ['weeklySummary', 'Weekly summary', 'A weekly overview of account activity.'],
     ];
     return h('div', { className: 'view-stack' },
+      h('div', { className: 'section-head' }, h('div', null,
+        h('h2', { className: 'section-title' }, 'Preferences'),
+        h('p', { className: 'muted' }, 'Control how Meridian sends updates and review your account shortcuts.'))),
       h(MG.ui.Card, { title: 'Notification preferences' },
         h('ul', { className: 'pref-list' }, rows.map(function (r) {
           return h('li', { key: r[0] },
