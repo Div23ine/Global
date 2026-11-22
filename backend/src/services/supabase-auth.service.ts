@@ -37,34 +37,17 @@ export async function verifySupabaseAccessToken(headerValue: string): Promise<Su
   if (error || !data.user || !data.user.email || !data.user.email_confirmed_at) {
     throw new Error('Invalid token or unverified email');
   }
-  // New Meridian registrations require verified email and phone ownership.
-  // Existing accounts without an Auth phone remain compatible; once a phone
-  // is attached to an Auth identity, it must be confirmed before API access.
-  if ((data.user.phone || data.user.new_phone) && !data.user.phone_confirmed_at) {
-    throw new Error('Phone number has not been verified');
-  }
-
-  // If the customer enrolled a verified TOTP factor, every protected API
-  // request must carry an AAL2 token. The browser UI is not the security
-  // boundary; this check prevents bypassing the MFA challenge with AAL1.
-  const userWithFactors = data.user as typeof data.user & {
-    factors?: Array<{ factor_type?: string; status?: string }>;
-  };
-  const hasVerifiedTotp = Boolean(
-    userWithFactors.factors?.some(
-      (factor) => factor.factor_type === 'totp' && factor.status === 'verified',
-    ),
-  );
-
-  // Admin access follows the agreed email-magic-link-only flow. Optional
-  // customer MFA is enforced only for identities that do not hold an admin role.
+  // Resolve the canonical profile and admin role before applying customer-only
+  // phone/MFA requirements. Admin authentication intentionally remains
+  // email-magic-link-only.
   const db = getServiceClient();
   const { data: profile, error: profileError } = await db
     .from('profiles')
-    .select('id')
+    .select('id, phone')
     .eq('supabase_user_id', data.user.id)
     .maybeSingle();
   if (profileError) throw new Error(profileError.message);
+
   let isAdmin = false;
   if (profile) {
     const { data: admin, error: adminError } = await db
@@ -76,6 +59,27 @@ export async function verifySupabaseAccessToken(headerValue: string): Promise<Su
     isAdmin = Boolean(admin);
   }
 
+  // A new customer profile is not bootstrapped until Supabase confirms the
+  // phone. Existing legacy profiles with an already stored phone remain
+  // compatible; any in-progress phone change must be completed first.
+  if (!isAdmin && (
+    data.user.new_phone ||
+    ((!profile || !profile.phone) && (!data.user.phone || !data.user.phone_confirmed_at))
+  )) {
+    throw new Error('Phone number has not been verified');
+  }
+
+  // If a customer enrolled a verified TOTP factor, every protected API
+  // request must carry an AAL2 token. The browser UI is not the security
+  // boundary; this check prevents bypassing the MFA challenge with AAL1.
+  const userWithFactors = data.user as typeof data.user & {
+    factors?: Array<{ factor_type?: string; status?: string }>;
+  };
+  const hasVerifiedTotp = Boolean(
+    userWithFactors.factors?.some(
+      (factor) => factor.factor_type === 'totp' && factor.status === 'verified',
+    ),
+  );
   if (hasVerifiedTotp && !isAdmin) {
     const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(match[1]);
     if (claimsError || claimsData?.claims?.aal !== 'aal2') {
