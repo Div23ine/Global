@@ -255,7 +255,7 @@
     function sendLink(event) {
       if (event) event.preventDefault();
       setBusy(true); setError(''); setMessage('');
-      MG.auth.signIn(email).then(function (result) {
+      MG.auth.signIn(email, true).then(function (result) {
         if (result.error) throw result.error;
         setSent(true);
         setMessage('A secure administrator sign-in link and one-time code have been sent to your email.');
@@ -289,8 +289,7 @@
               h('div', { className: 'field' },
                 h('label', { htmlFor: 'admin-email' }, 'Administrator email address'),
                 h('input', { id: 'admin-email', className: 'input', type: 'email', required: true,
-                  autoComplete: 'email', value: email,
-                  onChange: function (event) { setEmail(event.target.value); } })),
+                  autoComplete: 'email', value: email, readOnly: true })),
               sent ? h('div', { className: 'field' },
                 h('label', { htmlFor: 'admin-email-code' }, 'One-time email code'),
                 h('input', { id: 'admin-email-code', className: 'input', type: 'text', required: true,
