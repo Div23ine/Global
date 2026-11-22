@@ -76,7 +76,9 @@
           toggle.setAttribute('aria-expanded', String(open));
           scrim.hidden = !open;
         });
-        if (scrim) scrim.addEventListener('click', closeDrawer);\n        panel.querySelectorAll('a').forEach(function (link) { link.addEventListener('click', closeDrawer); });\n        document.addEventListener('keydown', function (event) { if (event.key === 'Escape') closeDrawer(); });
+        if (scrim) scrim.addEventListener('click', closeDrawer);
+        panel.querySelectorAll('a').forEach(function (link) { link.addEventListener('click', closeDrawer); });
+        document.addEventListener('keydown', function (event) { if (event.key === 'Escape') closeDrawer(); });
       }
     }
 
