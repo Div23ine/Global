@@ -168,7 +168,7 @@
       }
       return requireClient().auth.verifyOtp({
         email: email.trim().toLowerCase(),
-        token: String(token).replace(/\\s+/g, ''),
+        token: String(token).replace(/\s+/g, ''),
         type: 'email',
       }).then(function (result) {
         if (!result.error) {
@@ -181,7 +181,7 @@
     verifyEmailOtp: function (email, token) {
       return requireClient().auth.verifyOtp({
         email: email.trim().toLowerCase(),
-        token: String(token).replace(/\\s+/g, ''),
+        token: String(token).replace(/\s+/g, ''),
         type: 'signup',
       });
     },
@@ -211,7 +211,7 @@
     verifyPhoneOtp: function (phone, token) {
       return requireClient().auth.verifyOtp({
         phone: phone,
-        token: String(token).replace(/\\s+/g, ''),
+        token: String(token).replace(/\s+/g, ''),
         type: 'phone_change',
       });
     },
