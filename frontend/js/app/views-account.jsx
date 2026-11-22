@@ -112,7 +112,8 @@
       }).finally(function () { setBusy(false); });
     }
 
-    return h(MG.ui.Card, { title: 'Session controls' },
+    return h('div', { className: 'view-stack' },
+    h(MG.ui.Card, { title: 'Session controls' },
       h('p', { className: 'muted' },
         'Supabase Auth lets you sign out this device, other active sessions, or every session. Individual session inventories are not available in this screen.'),
       h('div', { className: 'cta-actions' },
@@ -124,7 +125,7 @@
           'Sign out other devices'),
         h(MG.ui.Button, { variant: 'danger', disabled: busy,
           onClick: function () { signOut('global', 'All sessions have been signed out.'); } },
-          'Sign out everywhere')));
+          'Sign out everywhere'))));
   };
 
   /* --------------------------------------------------------- notifications */
@@ -134,7 +135,8 @@
     if (state.loading) return h(MG.ui.LoadingPanel);
     if (state.error) return h(MG.ui.ErrorPanel, { error: state.error, onRetry: function () { location.reload(); } });
     var list = state.data || [];
-    return h(MG.ui.Card, {
+    return h('div', { className: 'view-stack' },
+    h(MG.ui.Card, {
       title: 'Notifications',
       action: h(MG.ui.Button, { variant: 'ghost', onClick: function () {
         MG.api.markNotificationRead('all').then(function () { reload(function (x) { return x + 1; }); });
@@ -155,7 +157,7 @@
                     MG.api.markNotificationRead(n.id).then(function () { reload(function (x) { return x + 1; }); });
                   },
                 }, 'Mark read') : null));
-          })));
+          }))));
   };
 
   /* --------------------------------------------------------------- support */

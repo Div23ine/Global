@@ -104,13 +104,14 @@
       ['Status', ''], ['Method', (t.method || '—').replace('_', ' ')],
       ['Value date', MG.util.date(t.value_date)], ['Created', MG.util.dateTime(t.created_at)],
     ];
-    return h(MG.ui.Card, { title: 'Transaction detail' },
+    return h('div', { className: 'view-stack' },
+    h(MG.ui.Card, { title: 'Transaction detail' },
       h('a', { className: 'text-link', href: '#/transactions' }, '← Transactions'),
       h('dl', { className: 'detail-list' }, rows.map(function (r, i) {
         return h(React.Fragment, { key: i },
           h('dt', null, r[0]),
           h('dd', null, r[0] === 'Status' ? h(MG.ui.Badge, { status: t.status }) : r[1]));
-      })));
+      }))));
   };
 
   /* ------------------------------------------------------------ statements */

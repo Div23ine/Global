@@ -246,20 +246,38 @@
     var _d = useState(false); var drawer = _d[0]; var setDrawer = _d[1];
 
     useEffect(function () {
-      var onHash = function () { force(function (x) { return x + 1; }); };
+      var onHash = function () {
+        force(function (x) { return x + 1; });
+        setDrawer(false);
+      };
       window.addEventListener('hashchange', onHash);
       return function () { window.removeEventListener('hashchange', onHash); };
     }, []);
+
+    // Theme CSS keys off body.nav-open for the mobile drawer — keep body in sync.
+    useEffect(function () {
+      document.body.classList.toggle('nav-open', drawer);
+      document.body.classList.add('app-shell');
+      return function () {
+        document.body.classList.remove('nav-open', 'app-shell');
+      };
+    }, [drawer]);
 
     var title = TITLES[route.view] || (route.view === 'account' ? 'Currency Account'
       : route.view === 'txn' ? 'Transaction Detail' : 'Meridian');
     var View = props.resolveView(route);
     var unread = MG.app.unreadCount || 0;
-    var email = (user && (user.primaryEmailAddress && user.primaryEmailAddress.emailAddress)) || (user && user.email) || '';
-    var displayName = (user && (user.fullName || user.firstName)) || 'Customer';
+    var email = (user && user.email) ||
+      (user && user.primaryEmailAddress && user.primaryEmailAddress.emailAddress) ||
+      (user && user.user_metadata && user.user_metadata.email) || '';
+    var displayName =
+      (user && (user.user_metadata && (user.user_metadata.full_name || user.user_metadata.name))) ||
+      (user && user.fullName) ||
+      (user && user.firstName) ||
+      (email ? email.split('@')[0] : 'Customer');
 
     return h(React.Fragment, null,
-      h('div', { className: 'shell' + (drawer ? ' nav-open' : '') },
+      h('div', { className: 'shell' },
         h('aside', { className: 'sidenav', id: 'gl-sidenav', 'aria-label': 'Account navigation' },
           h('div', { className: 'sidenav-brand' },
             h('a', { href: 'index.html', className: 'brand brand-side' },
@@ -320,7 +338,8 @@
                 h('span', { className: 'topbar-chip-name' }, displayName.split(' ')[0])))),
 
           h('main', { className: 'content', id: 'gl-main' },
-            h(View, { route: route, user: user }))),
+            h('div', { className: 'page-frame' },
+              h(View, { key: route.view + (route.param || ''), route: route, user: user })))),
 
         h('div', {
           className: 'scrim' + (drawer ? '' : ' is-hidden'),
@@ -380,17 +399,23 @@
 
     var st = MG.auth.state;
     if (!st.signedIn || !st.user) {
-      if (route.view === 'register') return h(SignUpView);
-      if (route.view === 'forgot-password') return h(ForgotPasswordView);
-      if (route.view === 'reset-password') {
-        return h('div', { className: 'auth-wrap' },
+      document.body.classList.remove('app-shell', 'nav-open');
+      document.body.classList.add('auth-page');
+      var authView;
+      if (route.view === 'register') authView = h(SignUpView);
+      else if (route.view === 'forgot-password') authView = h(ForgotPasswordView);
+      else if (route.view === 'reset-password') {
+        authView = h('div', { className: 'auth-wrap' },
           h('div', { className: 'auth-card' },
             h('h1', null, 'Password reset link unavailable'),
             h('p', { className: 'muted' }, 'Open the reset link from your email on this device, or request a new one.'),
             h('a', { className: 'btn btn-primary', href: '#/forgot-password' }, 'Request another link')));
+      } else {
+        authView = h(SignInView);
       }
-      return h(SignInView);
+      return h('div', { className: 'auth-page-root' }, authView);
     }
+    document.body.classList.remove('auth-page');
     if (route.view === 'reset-password') return h(UpdatePasswordView);
 
     // Resolve view lazily so each view module registers itself.

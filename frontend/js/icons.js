@@ -82,7 +82,7 @@ window.GL = window.GL || {};
     pause:      '<path d="M9 5.5v13M15 5.5v13"/>',
     ban:        '<circle cx="12" cy="12" r="8.5"/><path d="m6.5 17.5 11-11"/>',
     grid:       '<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>',
-    book:       '<path d="M4 5.5A2 2 0 0 1 6 3.5h13v17H6a2 2 0 0 0-2 2z"/><path d="M4 18.5a2 2 0 0 1 2-2h13"/>'
+    book:       '<path d="M4 5.5A2 2 0 0 1 6 3.5h13v17H6a2 2 0 0 0-2 2z"/><path d="M4 18.5a2 2 0 0 1 2-2h13"/>',
     'arrow-up':     '<path d="M12 19V5m0 0 5.5 5.5M12 5 6.5 10.5"/>',
     'arrow-r':     '<path d="M5 12h14m0 0-5.5-5.5M19 12l-5.5 5.5"/>',
 
