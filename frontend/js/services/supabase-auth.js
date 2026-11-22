@@ -192,6 +192,8 @@
             first_name: payload.firstName || '',
             last_name: payload.lastName || '',
             phone: payload.phone,
+            country: payload.country.trim(),
+            country_name: payload.country.trim(),
             country_code: payload.countryCode.trim().toUpperCase(),
             country_calling_code: payload.callingCode.trim(),
           },
