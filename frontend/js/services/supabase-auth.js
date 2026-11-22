@@ -216,6 +216,10 @@
       });
     },
 
+    updatePassword: function (password) {
+      return requireClient().auth.updateUser({ password: password });
+    },
+
     signOut: function (options) {
       var scope = options && options.scope ? options.scope : 'local';
       return requireClient().auth.signOut({ scope: scope }).then(function (result) {
