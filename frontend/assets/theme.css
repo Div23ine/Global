@@ -2642,3 +2642,19 @@ body:not(.shell) .home-about-note b { display:block; color:#1B304F; font:750 16p
 body:not(.shell) .home-about-note p { color:#687990; font-size:12.5px; line-height:1.8; }
 body:not(.shell) .home-about-note a { color:#2B5D95; font-size:12px; font-weight:750; text-decoration:none; }
 @media(max-width:700px){body:not(.shell) .home-about-grid{grid-template-columns:1fr;}}
+
+/* Legal and policy page reading rhythm */
+body:not(.shell) .container.narrow > .sec-head { margin:0 0 18px; }
+body:not(.shell) .container.narrow > .sec-head h1 { margin:0; color:#172B49; font:800 clamp(32px,4vw,46px)/1.12 var(--font-display); letter-spacing:-.045em; }
+body:not(.shell) .container.narrow > .lead { margin:0 0 30px; color:#697A90; font-size:14px; line-height:1.8; }
+body:not(.shell) .container.narrow > h2 { margin:30px 0 8px; color:#1B304F; font:750 19px/1.35 var(--font-display); letter-spacing:-.02em; }
+body:not(.shell) .container.narrow > h2 + p { margin:0; color:#64758C; font-size:13px; line-height:1.9; }
+body:not(.shell) .container.narrow > h2 + p + h2 { margin-top:29px; }
+body:not(.shell) .container.narrow > h2 + p + h2 + p { margin-bottom:0; }
+body:not(.shell) .hero .hero-copy h1 { letter-spacing:-.055em; }
+body:not(.shell) .hero .hero-copy .lead { max-width:610px; line-height:1.8; }
+body:not(.shell) .platform-strip { border-top:1px solid #E7EDF5; border-bottom:1px solid #E7EDF5; }
+body:not(.shell) .feat-card, body:not(.shell) .value-card, body:not(.shell) .cur-card, body:not(.shell) .text-card { border-color:#E3EAF2; box-shadow:0 8px 25px rgba(21,43,74,.035); }
+body:not(.shell) .section .sec-head { margin-bottom:28px; }
+body:not(.shell) .section .sec-head h2 { letter-spacing:-.04em; }
+body:not(.shell) .site-footer .footer-grid { gap:clamp(25px,4vw,58px); }
