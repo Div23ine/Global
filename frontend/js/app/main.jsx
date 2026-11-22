@@ -194,8 +194,9 @@
       try { phone = normalizePhone(); } catch (err) { setError(err.message); return; }
       setFullPhone(phone); setBusy(true);
       MG.auth.signUp({
-        fullName: form.fullName, email: form.email, countryCode: form.countryCode,
-        callingCode: form.callingCode, phone: phone, password: form.password,
+        fullName: form.fullName, email: form.email, country: form.country,
+        countryCode: form.countryCode, callingCode: form.callingCode,
+        phone: phone, password: form.password,
       }).then(function (result) {
         if (result.error) throw result.error;
         setStep('email');
@@ -481,6 +482,16 @@
       else authView = h(SignInView);
       return h('div', { className: 'auth-page-root' }, authView);
     }
+
+    // Customer magic-link callbacks must complete the second email OTP
+    // before the customer shell or protected views can render. Admin auth
+    // lives in admin.html and intentionally does not use this customer gate.
+    if (MG.auth.hasPendingSecondFactor()) {
+      document.body.classList.remove('app-shell', 'nav-open');
+      document.body.classList.add('auth-page');
+      return h('div', { className: 'auth-page-root' }, h(PostLinkOtpView));
+    }
+
     document.body.classList.remove('auth-page');
 
     // Resolve view lazily so each view module registers itself.
