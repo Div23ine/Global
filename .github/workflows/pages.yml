@@ -31,3 +31,5 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: pages deploy frontend --project-name=meridian-global --branch=development
+
+# Manual deployment trigger: keep this workflow runnable via workflow_dispatch.
