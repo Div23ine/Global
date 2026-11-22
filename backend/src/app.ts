@@ -14,10 +14,12 @@ import { api, paymentsWebhookRouter } from './routes';
 import { globalLimiter, type RateLimitBindings } from './middleware/rateLimit';
 import { errorHandler, notFoundHandler } from './middleware/error';
 import { logger } from './utils/logger';
+import type { CacheKVBinding } from './services/cache.service';
 
-export function createApp(rateLimitBindings?: RateLimitBindings): Express {
+export function createApp(rateLimitBindings?: RateLimitBindings, cacheKv?: CacheKVBinding): Express {
   const app = express();
   app.locals.rateLimitBindings = rateLimitBindings ?? {};
+  app.locals.cacheKv = cacheKv;
   // When called by the Worker, missing bindings must fail closed rather than
   // silently falling back to per-isolate in-memory counters.
   app.locals.requireCloudflareRateLimits = rateLimitBindings !== undefined;
