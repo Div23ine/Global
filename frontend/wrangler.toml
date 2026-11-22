@@ -1,0 +1,16 @@
+# Meridian Global Accounts — Cloudflare Pages frontend
+# Pages project: global
+# Production website: https://meridian.uk.com
+#
+# IMPORTANT:
+# Cloudflare Pages custom domains are attached to the Pages project in the
+# Cloudflare dashboard; there is no custom-domain field in wrangler.toml.
+# Ensure meridian.uk.com is attached to project "global" and that
+# "development" is configured as its production branch in Cloudflare Pages.
+#
+# This is deliberately separate from ../backend/wrangler.toml, which configures
+# the API Worker at api.meridian.uk.com.
+
+name = "global"
+pages_build_output_dir = "."
+compatibility_date = "2026-11-22"
