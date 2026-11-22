@@ -126,43 +126,93 @@
       });
     },
 
-    signIn: function (email, allowInitialAdminRegistration) {
+    signIn: function (email) {
+      var normalizedEmail = email.trim().toLowerCase();
+      try { window.localStorage.setItem('mg_customer_login_email', normalizedEmail); } catch (e) {}
+      return requireClient().auth.signInWithOtp({
+        email: normalizedEmail,
+        options: { shouldCreateUser: false, emailRedirectTo: window.location.origin + window.location.pathname },
+      });
+    },
+
+    signInAdmin: function (email) {
       return requireClient().auth.signInWithOtp({
         email: email.trim().toLowerCase(),
-        options: {
-          shouldCreateUser: Boolean(allowInitialAdminRegistration),
-          data: allowInitialAdminRegistration ? {
-            first_name: 'Meridian',
-            last_name: 'Administrator',
-            full_name: 'Meridian Administrator',
-          } : undefined,
-          emailRedirectTo: window.location.origin + window.location.pathname,
-        },
+        options: { shouldCreateUser: false, emailRedirectTo: window.location.origin + window.location.pathname },
+      });
+    },
+
+    hasPendingSecondFactor: function () {
+      try {
+        var pending = window.localStorage.getItem('mg_customer_login_email');
+        var current = state.user && state.user.email;
+        return Boolean(pending && current && pending === current.trim().toLowerCase());
+      } catch (e) { return false; }
+    },
+
+    sendPostLinkEmailOtp: function () {
+      var email = state.user && state.user.email;
+      if (!email || !MG.auth.hasPendingSecondFactor()) {
+        return Promise.reject(new Error('Open your sign-in link before requesting the email code.'));
+      }
+      return requireClient().auth.signInWithOtp({
+        email: email.trim().toLowerCase(),
+        options: { shouldCreateUser: false },
+      });
+    },
+
+    verifyPostLinkEmailOtp: function (token) {
+      var email = state.user && state.user.email;
+      if (!email || !MG.auth.hasPendingSecondFactor()) {
+        return Promise.reject(new Error('There is no pending email verification.'));
+      }
+      return requireClient().auth.verifyOtp({
+        email: email.trim().toLowerCase(),
+        token: String(token).replace(/\\s+/g, ''),
+        type: 'email',
+      }).then(function (result) {
+        if (!result.error) {
+          try { window.localStorage.removeItem('mg_customer_login_email'); } catch (e) {}
+        }
+        return result;
       });
     },
 
     verifyEmailOtp: function (email, token) {
       return requireClient().auth.verifyOtp({
         email: email.trim().toLowerCase(),
-        token: String(token).replace(/\s+/g, ''),
-        type: 'email',
+        token: String(token).replace(/\\s+/g, ''),
+        type: 'signup',
       });
     },
 
     signUp: function (payload) {
-      return requireClient().auth.signInWithOtp({
+      return requireClient().auth.signUp({
         email: payload.email.trim().toLowerCase(),
+        password: payload.password,
         options: {
-          shouldCreateUser: true,
           data: {
-            first_name: payload.firstName,
-            last_name: payload.lastName,
-            full_name: [payload.firstName, payload.lastName].filter(Boolean).join(' '),
-            phone: payload.phone || '',
-            country_code: (payload.countryCode || '').trim().toUpperCase(),
+            full_name: payload.fullName.trim(),
+            first_name: payload.firstName || '',
+            last_name: payload.lastName || '',
+            phone: payload.phone,
+            country_code: payload.countryCode.trim().toUpperCase(),
+            country_calling_code: payload.callingCode.trim(),
           },
           emailRedirectTo: window.location.origin + window.location.pathname,
         },
+      });
+    },
+
+    beginPhoneVerification: function (phone) {
+      return requireClient().auth.updateUser({ phone: phone });
+    },
+
+    verifyPhoneOtp: function (phone, token) {
+      return requireClient().auth.verifyOtp({
+        phone: phone,
+        token: String(token).replace(/\\s+/g, ''),
+        type: 'phone_change',
       });
     },
 
