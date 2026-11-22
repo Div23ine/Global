@@ -122,7 +122,6 @@
                       h('small', null, a.currency_name || '')),
                     h(MG.ui.Badge, { status: a.status })),
                   h('span', { className: 'curcard-balance-label' }, 'Available balance'),
-                  h('span', { className: 'curcard-balance-label' }, 'Available balance'),
               h('p', { className: 'curcard-bal' }, MG.util.money(a.balance, a.currency_code)),
                   a.equivalent_eur != null
                     ? h('p', { className: 'curcard-eq' }, '≈ ' + MG.util.money(a.equivalent_eur, 'EUR'))
@@ -263,6 +262,11 @@
     if (state.error) return h(MG.ui.ErrorPanel, { error: state.error, onRetry: function () { location.reload(); } });
     var d = state.data || {};
     return h('div', { className: 'view-stack' },
+      h('div', { className: 'section-head' },
+        h('div', null,
+          h('h2', { className: 'section-title' }, d.account.currency_code + ' account'),
+          h('p', { className: 'muted' }, 'Account overview, recent activity and deposit records.')),
+        h('a', { className: 'btn btn-outline btn-sm', href: '#/deposits' }, 'Make a deposit')),
       h(MG.ui.Card, null,
         h('div', { className: 'acc-head' },
           h('div', null,
@@ -324,8 +328,13 @@
     }
 
     return h('div', { className: 'view-stack' },
-      h('p', { className: 'muted' },
-        'Activating a currency opens a new account with a zero balance. Existing balances are never converted.'),
+      h('div', { className: 'section-head' },
+        h('div', null,
+          h('h2', { className: 'section-title' }, 'Activate a currency'),
+          h('p', { className: 'muted' }, 'Choose which currency accounts to add to your Meridian profile.'))),
+      h('div', { className: 'info-strip' },
+        MG.icon ? MG.icon('info', 16) : null,
+        h('p', null, 'Activating a currency opens a separate account with a zero balance. Existing balances are never converted.')),
       h('div', { className: 'grid-3' }, (state.data || []).map(function (c) {
         var isDefault = c.code === MG.config.DEFAULT_CURRENCY;
         var card;
@@ -477,6 +486,10 @@
     }
 
     return h('div', { className: 'view-stack' },
+      h('div', { className: 'section-head' },
+        h('div', null,
+          h('h2', { className: 'section-title' }, 'Deposits'),
+          h('p', { className: 'muted' }, 'Request a deposit, follow transfer instructions and track verification.'))),
       wizard,
       selected ? h(MG.ui.Card, { title: 'Report payment — ' + selected.reference },
         h('p', { className: 'muted' },
