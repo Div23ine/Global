@@ -300,7 +300,7 @@
               h('button', { className: 'btn btn-primary btn-block', type: 'submit', disabled: busy },
                 busy ? 'Please wait…' : (sent ? 'Verify code and continue' : 'Email sign-in link'))),
             sent ? h('button', { type: 'button', className: 'btn btn-ghost btn-block',
-              disabled: busy, onClick: sendLink }, 'Resend email') : null)));
+              disabled: busy, onClick: sendLink }, 'Resend email') : null))));
   }
 
   function UpdatePasswordInline() {
