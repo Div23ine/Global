@@ -122,8 +122,10 @@
       return h('div', { className: 'auth-viewport' },
         h('div', { className: 'auth-wrap' },
           h('div', { className: 'auth-card' },
-            h('h1', null, 'Configuration required'),
-            h('p', { className: 'muted' }, 'The app could not retrieve its public Supabase configuration from api.meridian.uk.com. Check the Worker secrets and try again.'))));
+            h('h1', null, 'Service temporarily unavailable'),
+            h('p', { className: 'muted' }, 'We could not establish a secure connection to Meridian services. Please try again in a moment.'),
+            h('button', { className: 'btn btn-primary btn-block', type: 'button',
+              onClick: function () { window.location.reload(); } }, 'Retry connection'))));
     }
     if (!auth.ready) {
       return h('div', { className: 'auth-viewport' },
