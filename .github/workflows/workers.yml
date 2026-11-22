@@ -8,6 +8,13 @@ on:
       - '.github/workflows/workers.yml'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-worker-development
+  cancel-in-progress: true
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -15,16 +22,24 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
-          node-version: '20'
+          ref: development
+          fetch-depth: 0
+
+      - name: Fetch and reset to latest development
+        run: git fetch origin development && git checkout -B development FETCH_HEAD
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
           cache: npm
           cache-dependency-path: backend/package-lock.json
 
-      - name: Install
-        run: npm ci
+      - name: Install dependencies
+        run: npm install
 
       - name: Typecheck
         run: npm run typecheck
@@ -33,14 +48,11 @@ jobs:
         run: npm test -- --exclude tests/integration/**
 
       - name: Deploy Worker
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: backend
-          command: deploy
-        # Requires CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID in repo secrets.
-        # Worker secrets (Clerk, Supabase, Resend, …) are set once via wrangler secret put
-        # and persist across deploys — they are NOT in GitHub secrets for this workflow.
+        run: npx wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
-# Manual deployment trigger: keep this workflow runnable via workflow_dispatch.
+# Worker name is defined as "global" in backend/wrangler.toml.
+# Worker runtime secrets (Supabase, Resend, etc.) remain configured in Cloudflare
+# and are not copied into GitHub Actions.
