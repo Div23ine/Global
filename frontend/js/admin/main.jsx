@@ -295,7 +295,7 @@
                 h('label', { htmlFor: 'admin-email-code' }, 'One-time email code'),
                 h('input', { id: 'admin-email-code', className: 'input', type: 'text', required: true,
                   autoComplete: 'one-time-code', inputMode: 'numeric', maxLength: 8, value: code,
-                  onChange: function (event) { setCode(event.target.value.replace(/\\D/g, '').slice(0, 8)); } })) : null,
+                  onChange: function (event) { setCode(event.target.value.replace(/\D/g, '').slice(0, 8)); } })) : null,
               error ? h('p', { className: 'form-error', role: 'alert' }, error) : null,
               message ? h('p', { className: 'form-success', role: 'status' }, message) : null,
               h('button', { className: 'btn btn-primary btn-block', type: 'submit', disabled: busy },
