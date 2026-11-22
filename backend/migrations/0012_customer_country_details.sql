@@ -63,6 +63,77 @@ BEGIN
   IF FOUND THEN
     UPDATE public.profiles
        SET supabase_user_id = p_user_id,
+           country_code = CASE
+             WHEN upper(trim(COALESCE(v_auth_user.raw_user_meta_data ->> 'country_code', ''))) ~ '^[A-Z]{2}
+             NULLIF(trim(v_auth_user.raw_user_meta_data ->> 'country_name'), ''),
+             NULLIF(trim(v_auth_user.raw_user_meta_data ->> 'country'), ''),
+             country_name
+           ),
+           country_calling_code = COALESCE(
+             NULLIF(trim(v_auth_user.raw_user_meta_data ->> 'country_calling_code'), ''),
+             country_calling_code
+           ),
+           updated_at = now()
+     WHERE id = v_profile_id;
+    RETURN v_profile_id;
+  END IF;
+
+  v_first_name := COALESCE(NULLIF(v_auth_user.raw_user_meta_data ->> 'first_name', ''), '');
+  v_last_name := COALESCE(NULLIF(v_auth_user.raw_user_meta_data ->> 'last_name', ''), '');
+  v_full_name := COALESCE(
+    NULLIF(v_auth_user.raw_user_meta_data ->> 'full_name', ''),
+    trim(v_first_name || ' ' || v_last_name),
+    ''
+  );
+  v_phone := COALESCE(NULLIF(v_auth_user.phone, ''), NULLIF(v_auth_user.raw_user_meta_data ->> 'phone', ''));
+  v_country := upper(COALESCE(v_auth_user.raw_user_meta_data ->> 'country_code', ''));
+  v_country_name := trim(COALESCE(v_auth_user.raw_user_meta_data ->> 'country_name', v_auth_user.raw_user_meta_data ->> 'country', ''));
+  v_country_calling_code := trim(COALESCE(v_auth_user.raw_user_meta_data ->> 'country_calling_code', ''));
+
+  IF v_country !~ '^[A-Z]{2}$' THEN
+    v_country := '';
+  END IF;
+
+  SELECT cd.currency_code
+    INTO v_currency
+    FROM public.country_defaults AS cd
+   WHERE cd.country_code = v_country;
+
+  v_currency := COALESCE(v_currency, 'EUR');
+
+  INSERT INTO public.profiles (
+    id, supabase_user_id, email, full_name, first_name, last_name,
+    phone, country_code, country_name, country_calling_code, default_currency
+  )
+  VALUES (
+    p_user_id::text, p_user_id, v_email, v_full_name, v_first_name,
+    v_last_name, v_phone, v_country, v_country_name, v_country_calling_code, v_currency
+  )
+  RETURNING id INTO v_profile_id;
+
+  INSERT INTO public.accounts (profile_id, currency_code)
+  VALUES (v_profile_id, v_currency)
+  ON CONFLICT (profile_id, currency_code) DO NOTHING;
+
+  RETURN v_profile_id;
+EXCEPTION
+  WHEN unique_violation THEN
+    -- In particular, do not silently attach a second Auth identity to an email
+    -- already linked to a different Supabase user.
+    RAISE EXCEPTION 'AUTH_EMAIL_ALREADY_LINKED';
+END;
+$$;
+
+INSERT INTO public.schema_migrations (version)
+VALUES ('0012_customer_country_details')
+ON CONFLICT (version) DO NOTHING;
+
+COMMIT;
+
+             THEN upper(trim(v_auth_user.raw_user_meta_data ->> 'country_code'))
+             ELSE country_code
+           END,
+           phone = COALESCE(NULLIF(v_auth_user.phone, ''), phone),
            country_name = COALESCE(
              NULLIF(trim(v_auth_user.raw_user_meta_data ->> 'country_name'), ''),
              NULLIF(trim(v_auth_user.raw_user_meta_data ->> 'country'), ''),
