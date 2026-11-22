@@ -332,77 +332,18 @@ INSERT INTO schema_migrations (version) VALUES ('0006_deposit_refund_upgrade')
 ON CONFLICT (version) DO NOTHING;
 
 -- ---------------------------------------------------------------------------
--- Sample receiving bank accounts for the five supported currencies.
--- Illustrative European accounts — replace with real operational accounts
--- before production go-live.
+-- No receiving-bank accounts are seeded here. Production payment instructions
+-- must be populated only with bank details independently verified by Meridian.
 -- ---------------------------------------------------------------------------
-INSERT INTO receiving_bank_accounts (
-  label, bank_name, beneficiary_name, account_number, iban, swift_bic,
-  country_code, currency_code, transfer_instructions, is_active, display_order
-) VALUES
-  (
-    'EUR Main — Deutsche Bank',
-    'Deutsche Bank AG',
-    'Meridian Global Accounts Ltd',
-    NULL,
-    'DE89370400440532013000',
-    'DEUTDEFFXXX',
-    'DE',
-    'EUR',
-    'SEPA transfer only. Include the Meridian deposit reference (MGD-…) in the payment narration. Funds typically clear in 1 business day.',
-    true,
-    10
-  ),
-  (
-    'GBP Main — Barclays',
-    'Barclays Bank UK PLC',
-    'Meridian Global Accounts Ltd',
-    '12345678',
-    'GB29NWBK60161331926819',
-    'BARCGB22',
-    'GB',
-    'GBP',
-    'UK Faster Payments or CHAPS. Include the Meridian deposit reference in the payment reference field.',
-    true,
-    20
-  ),
-  (
-    'USD Correspondent — JPMorgan',
-    'JPMorgan Chase Bank N.A.',
-    'Meridian Global Accounts Ltd',
-    '987654321',
-    NULL,
-    'CHASUS33',
-    'US',
-    'USD',
-    'Wire transfer (SWIFT). Include the Meridian deposit reference in field 70 (remittance information). Intermediary bank may apply fees.',
-    true,
-    30
-  ),
-  (
-    'CHF Main — UBS',
-    'UBS Switzerland AG',
-    'Meridian Global Accounts Ltd',
-    NULL,
-    'CH9300762011623852957',
-    'UBSWCHZH80A',
-    'CH',
-    'CHF',
-    'SIC / SWIFT transfer. Include the Meridian deposit reference in the payment details.',
-    true,
-    40
-  ),
-  (
-    'PLN Main — PKO Bank Polski',
-    'Powszechna Kasa Oszczędności Bank Polski SA',
-    'Meridian Global Accounts Ltd',
-    NULL,
-    'PL61109010140000071219812874',
-    'BPKOPLPW',
-    'PL',
-    'PLN',
-    'Domestic ELIXIR or SWIFT. Include the Meridian deposit reference in the transfer title (tytuł przelewu).',
-    true,
-    50
-  )
-ON CONFLICT DO NOTHING;
+
+-- These SECURITY DEFINER RPCs mutate deposits and customer ledger balances.
+-- They are backend-only and must never be executable by browser roles.
+REVOKE ALL ON FUNCTION admin_credit_deposit_payment(uuid, numeric, text, uuid, text, text, text, text)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION admin_credit_deposit_payment(uuid, numeric, text, uuid, text, text, text, text)
+  TO service_role;
+
+REVOKE ALL ON FUNCTION process_internal_refund(uuid, text, numeric)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION process_internal_refund(uuid, text, numeric)
+  TO service_role;
