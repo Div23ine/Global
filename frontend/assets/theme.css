@@ -1804,3 +1804,100 @@ td b { font-weight: 700; }
   }
   .scrim.is-hidden { display: none; }
 }
+
+/* --------------------------------------------------------------------------
+   Customer application finish — shared Hong Kong treatment across every view
+   -------------------------------------------------------------------------- */
+.shell .content { min-width: 0; }
+.shell .content > * { min-width: 0; }
+.shell .view-stack { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.shell .view-stack > * { min-width: 0; }
+.shell .panel, .shell .stat-card, .shell .account-card, .shell .act-card,
+.shell .ticket, .shell .session-card { transition: border-color .16s var(--ease), box-shadow .16s var(--ease); }
+.shell .panel-head { min-width: 0; }
+.shell .panel-head > * { min-width: 0; }
+.shell .field { min-width: 0; }
+.shell .field .input, .shell .field input, .shell .field select,
+.shell .field textarea, .shell .filter-bar input, .shell .filter-bar select {
+  width: 100%; min-width: 0; max-width: 100%;
+}
+.shell input, .shell select, .shell textarea, .shell button { font: inherit; }
+.shell button:focus-visible, .shell a:focus-visible, .shell input:focus-visible,
+.shell select:focus-visible, .shell textarea:focus-visible {
+  outline: 3px solid rgba(31,111,235,.28); outline-offset: 2px;
+}
+.shell .panel .table-wrap { max-width: 100%; }
+.shell .filter-bar, .shell .filter-grid { min-width: 0; }
+.shell .filter-bar { display: flex; align-items: end; gap: 10px; flex-wrap: wrap; }
+.shell .filter-bar > * { min-width: 0; }
+.shell .detail-grid > div { min-width: 0; }
+.shell .sum-row dd { overflow-wrap: anywhere; }
+.shell .ticket, .shell .bubble, .shell .notif-body { overflow-wrap: anywhere; }
+.shell .quicklinks a { min-width: 0; }
+.shell .account-card, .shell .act-card, .shell .curcard { min-width: 0; }
+.shell .curcard-bal, .shell .account-bal, .shell .acc-total, .shell .txn-amount {
+  overflow-wrap: anywhere; font-variant-numeric: tabular-nums;
+}
+.shell .pager { padding-top: 4px; }
+.shell .panel + .panel { margin-top: 0; }
+
+@media (max-width: 900px) {
+  .shell .content { padding: 20px 20px 56px; }
+  .shell .topbar { height: 60px; }
+  .shell .filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .shell .profile-grid, .shell .support-grid, .shell .sec-grid,
+  .shell .settings-grid { grid-template-columns: minmax(0, 1fr); }
+  .shell .ov-grid, .shell .ov-grid2, .shell .skel-cols { grid-template-columns: minmax(0, 1fr); }
+  .shell .account-hero { grid-template-columns: minmax(0, 1fr); }
+  .shell .account-hero-side { align-items: flex-start; }
+}
+
+@media (max-width: 640px) {
+  .shell .content { padding: 16px 14px 44px; }
+  .shell .topbar { padding: 0 12px; gap: 9px; }
+  .shell .topbar-title { font-size: 15px; }
+  .shell .topbar-actions { gap: 6px; }
+  .shell .view-stack { gap: 14px; }
+  .shell .panel { --panel-pad: 14px; border-radius: 14px; }
+  .shell .panel-head { gap: 8px; }
+  .shell .panel-head h2 { font-size: 15px; }
+  .shell .filter-grid, .shell .method-grid, .shell .quicklinks {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .shell .filter-grid > * { grid-column: auto; }
+  .shell .filter-bar { align-items: stretch; flex-direction: column; }
+  .shell .filter-actions { justify-content: stretch; }
+  .shell .filter-actions .btn, .shell .stmt-actions .btn { flex: 1 1 auto; }
+  .shell .stat-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .shell .stat-card { padding: 13px; }
+  .shell .stat-val { font-size: 19px; }
+  .shell .curcards, .shell .grid-cards, .shell .act-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px;
+  }
+  .shell .curcard { padding: 11px; }
+  .shell .curcard-bal { font-size: 15px; }
+  .shell .account-card { padding: 15px; }
+  .shell .account-bal { font-size: 21px; }
+  .shell .account-hero, .shell .ov-hero { padding: 20px 17px; }
+  .shell .account-hero-side, .shell .ov-hero-side { align-items: flex-start; }
+  .shell .ov-chips { justify-content: flex-start; }
+  .shell .takeover-banner { padding: 9px 12px; }
+  .shell .takeover-inner { min-width: 0; }
+  .shell .takeover-inner p { white-space: normal; }
+  .shell .session-card { align-items: flex-start; flex-wrap: wrap; }
+  .shell .notif-list li { padding: 12px 10px; }
+  .shell .detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .shell .verify-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .shell .table-wrap { border-radius: 10px; }
+  .shell .table-wrap table { min-width: 620px; }
+  .shell .pager { gap: 6px; }
+  .shell .pager-btn { min-width: 34px; height: 34px; }
+}
+
+@media (max-width: 380px) {
+  .shell .stat-row, .shell .curcards, .shell .grid-cards, .shell .act-grid,
+  .shell .detail-grid, .shell .verify-facts { grid-template-columns: minmax(0, 1fr); }
+  .shell .content { padding-inline: 11px; }
+  .shell .topbar-chip { max-width: 112px; }
+}
+
