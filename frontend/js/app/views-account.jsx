@@ -57,7 +57,7 @@
       h(MG.ui.Card, { title: 'Account record' },
         h('dl', { className: 'detail-list' },
           h('dt', null, 'Email'), h('dd', null, p.email || props.user.email || '—'),
-          h('dt', null, 'Country'), h('dd', null, p.country_code || '—'),
+          h('dt', null, 'Country'), h('dd', null, p.country_name || p.country_code || '—'),
           h('dt', null, 'Default currency'), h('dd', null, p.default_currency || MG.config.DEFAULT_CURRENCY),
           h('dt', null, 'Status'), h('dd', null, h(MG.ui.Badge, { status: p.status || 'active' })),
           h('dt', null, 'Member since'), h('dd', null, MG.util.date(p.created_at)))));
