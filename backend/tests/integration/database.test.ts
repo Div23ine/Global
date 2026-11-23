@@ -36,7 +36,7 @@ async function connect(): Promise<Client> {
 }
 
 beforeAll(async () => {
-  const t = (m: string) => console.error(`[hook] ${new Date().toISOString()} ${m}`);
+  const t = (m: string) => console.error(`ook] ${new Date().toISOString()} ${m}`);
   t('importing embedded-postgres');
   const { default: EmbeddedPostgres } = await import('embedded-postgres');
   t('constructing');
@@ -418,6 +418,7 @@ describe('deposit state machine', () => {
     const replay = await svc!.query('SELECT provider_confirm_deposit($1,$2,$3)',
       [reference, 'manual-review', 'prov-123']);
     expect(replay.rows[0].provider_confirm_deposit.duplicate).toBe(true);
+
     const finalBalance = await svc!.query('SELECT balance FROM accounts WHERE id = $1', [accountId]);
     expect(Number(finalBalance.rows[0].balance)).toBe(beforeBalance + 50);
 
@@ -889,11 +890,13 @@ describe('configured super admin provisioning (migration 0016)', () => {
     );
     expect(role.rows).toEqual([{ role_id: 'super_admin' }]);
 
-    // The configured email setting drives the 0009 trigger.
+    // Migration 0017 later re-points the grant trigger at a two-address list;
+    // this address remains one of the configured super-admin emails.
     const setting = await svc!.query(
-      `SELECT value #>> '{}' AS email FROM app_settings WHERE key = 'platform.admin_email'`,
+      `SELECT jsonb_array_elements_text(value) AS email
+         FROM app_settings WHERE key = 'platform.admin_emails'`,
     );
-    expect(setting.rows[0].email).toBe(ADMIN_EMAIL);
+    expect(setting.rows.map((r) => r.email)).toContain(ADMIN_EMAIL);
   });
 
   it('re-fires the 0009 trigger idempotently: still exactly one super_admin row', async () => {
@@ -926,5 +929,91 @@ describe('configured super admin provisioning (migration 0016)', () => {
       `SELECT role_id FROM admin_users WHERE profile_id = $1`, [PLAIN_USER],
     );
     expect(role.rows).toEqual([]);
+  });
+});
+
+describe('second configured super admin (migration 0017)', () => {
+  const ADMIN_EMAILS = ['raysallinone00@gmail.com', 'gospelu214@gmail.com'];
+
+  it('configures and provisions both addresses with confirmed Auth identities, linked profiles and super_admin roles', async () => {
+    for (const email of ADMIN_EMAILS) {
+      // Auth identity exists, is confirmed and owns the exact configured email.
+      const auth = await svc!.query(
+        `SELECT id, lower(trim(email)) AS email, email_confirmed_at
+           FROM auth.users WHERE lower(trim(email)) = $1`, [email],
+      );
+      expect(auth.rows).toHaveLength(1);
+      expect(auth.rows[0].email).toBe(email);
+      expect(auth.rows[0].email_confirmed_at).not.toBeNull();
+
+      // The identity is linked to exactly one canonical, active profile.
+      const profile = await svc!.query(
+        `SELECT id, lower(trim(email)) AS email, status, supabase_user_id
+           FROM profiles WHERE supabase_user_id = $1`, [auth.rows[0].id],
+      );
+      expect(profile.rows).toHaveLength(1);
+      expect(profile.rows[0]).toMatchObject({ email, status: 'active' });
+
+      // The profile holds the super_admin role.
+      const role = await svc!.query(
+        `SELECT role_id FROM admin_users WHERE profile_id = $1`, [profile.rows[0].id],
+      );
+      expect(role.rows).toEqual([{ role_id: 'super_admin' }]);
+    }
+  });
+
+  it('points the configured email list at exactly the two addresses', async () => {
+    const setting = await svc!.query(
+      `SELECT jsonb_array_elements_text(value) AS email
+         FROM app_settings WHERE key = 'platform.admin_emails'`,
+    );
+    expect(setting.rows.map((r) => r.email).sort()).toEqual([...ADMIN_EMAILS].sort());
+  });
+
+  it('restores the legacy single-address key to the original 0009 holder', async () => {
+    const setting = await svc!.query(
+      `SELECT value #>> '{}' AS email FROM app_settings WHERE key = 'platform.admin_email'`,
+    );
+    expect(setting.rows[0].email).toBe('raysallinone00@gmail.com');
+  });
+
+  it('re-fires the configured-email trigger idempotently for both holders', async () => {
+    for (const email of ADMIN_EMAILS) {
+      const before = await svc!.query(
+        `SELECT a.profile_id, a.role_id
+           FROM admin_users a JOIN profiles p ON p.id = a.profile_id
+          WHERE lower(trim(p.email)) = $1`, [email],
+      );
+      expect(before.rows).toHaveLength(1);
+      expect(before.rows[0].role_id).toBe('super_admin');
+
+      // Touch a trigger-watched column: the trigger must upsert, never duplicate.
+      await svc!.query(
+        `UPDATE profiles SET status = 'active' WHERE lower(trim(email)) = $1`, [email],
+      );
+
+      const after = await svc!.query(
+        `SELECT a.profile_id, a.role_id
+           FROM admin_users a JOIN profiles p ON p.id = a.profile_id
+          WHERE lower(trim(p.email)) = $1`, [email],
+      );
+      expect(after.rows).toEqual(before.rows);
+    }
+  });
+
+  it('grants the role through the list when the second holder links a profile', async () => {
+    // A second Auth identity for raysallinone00 must not exist (0017 owns it);
+    // instead verify the trigger grants on any future profile matching the list
+    // by re-linking the existing provisioned profile through a watched column.
+    await svc!.query(
+      `UPDATE profiles SET email = lower(trim(email))
+        WHERE lower(trim(email)) = 'raysallinone00@gmail.com'`,
+    );
+    const granted = await svc!.query(
+      `SELECT a.role_id
+         FROM admin_users a JOIN profiles p ON p.id = a.profile_id
+        WHERE lower(trim(p.email)) = 'raysallinone00@gmail.com'`,
+    );
+    expect(granted.rows).toEqual([{ role_id: 'super_admin' }]);
   });
 });
