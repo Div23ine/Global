@@ -19,10 +19,12 @@ export interface AuthCookies {
   csrfToken: string | null;
 }
 
-const PREFIX = env.isProduction ? '__Host-mg-' : 'mg-';
-const ACCESS = PREFIX + 'access';
-const REFRESH = PREFIX + 'refresh';
-const CSRF = PREFIX + 'csrf';
+function cookieNames() {
+  // Resolve at request time: Cloudflare Worker bindings are applied after
+  // module evaluation, so production mode is not reliable at import time.
+  const prefix = env.isProduction ? '__Host-mg-' : 'mg-';
+  return { access: prefix + 'access', refresh: prefix + 'refresh', csrf: prefix + 'csrf' };
+}
 const REFRESH_COOKIE_TTL = 12 * 60 * 60;
 
 function readCookies(req: Request): Record<string, string> {
@@ -40,10 +42,11 @@ function readCookies(req: Request): Record<string, string> {
 
 export function readAuthCookies(req: Request): AuthCookies {
   const cookies = readCookies(req);
+  const names = cookieNames();
   return {
-    accessToken: cookies[ACCESS] || null,
-    refreshToken: cookies[REFRESH] || null,
-    csrfToken: cookies[CSRF] || null,
+    accessToken: cookies[names.access] || null,
+    refreshToken: cookies[names.refresh] || null,
+    csrfToken: cookies[names.csrf] || null,
   };
 }
 
@@ -73,19 +76,21 @@ export function setSessionCookies(
   const csrfToken = existingCsrf || randomBytes(32).toString('hex');
   res.setHeader('Cache-Control', 'no-store, private');
   res.setHeader('Pragma', 'no-cache');
-  appendCookie(res, cookie(ACCESS, session.access_token, accessAge));
-  appendCookie(res, cookie(REFRESH, session.refresh_token, REFRESH_COOKIE_TTL));
-  appendCookie(res, cookie(CSRF, csrfToken, REFRESH_COOKIE_TTL));
+  const names = cookieNames();
+  appendCookie(res, cookie(names.access, session.access_token, accessAge));
+  appendCookie(res, cookie(names.refresh, session.refresh_token, REFRESH_COOKIE_TTL));
+  appendCookie(res, cookie(names.csrf, csrfToken, REFRESH_COOKIE_TTL));
   return csrfToken;
 }
 
 export function clearSessionCookies(res: Response): void {
   res.setHeader('Cache-Control', 'no-store, private');
+  const names = cookieNames();
   const expiry = 'Path=/; SameSite=Lax; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT';
   const secure = env.isProduction ? '; Secure' : '';
-  appendCookie(res, ACCESS + '=; ' + expiry + secure + '; HttpOnly');
-  appendCookie(res, REFRESH + '=; ' + expiry + secure + '; HttpOnly');
-  appendCookie(res, CSRF + '=; ' + expiry + secure + '; HttpOnly');
+  appendCookie(res, names.access + '=; ' + expiry + secure + '; HttpOnly');
+  appendCookie(res, names.refresh + '=; ' + expiry + secure + '; HttpOnly');
+  appendCookie(res, names.csrf + '=; ' + expiry + secure + '; HttpOnly');
 }
 
 export function assertTrustedOrigin(req: Request): void {
@@ -110,6 +115,6 @@ export function assertCsrf(req: Request): void {
 export function ensureCsrfCookie(res: Response, existingToken?: string | null): string {
   const token = existingToken || randomBytes(32).toString('hex');
   res.setHeader('Cache-Control', 'no-store, private');
-  appendCookie(res, cookie(CSRF, token, REFRESH_COOKIE_TTL));
+  appendCookie(res, cookie(cookieNames().csrf, token, REFRESH_COOKIE_TTL));
   return token;
 }
