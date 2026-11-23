@@ -84,6 +84,7 @@
     var _r = React.useState(0); var reload = _r[1];
     var _sel = React.useState(null); var selected = _sel[0]; var setSelected = _sel[1];
     var _bankName = React.useState(''); var bankName = _bankName[0]; var setBankName = _bankName[1];
+    var _accountName = React.useState(''); var accountName = _accountName[0]; var setAccountName = _accountName[1];
     var _accountNumber = React.useState(''); var accountNumber = _accountNumber[0]; var setAccountNumber = _accountNumber[1];
     var _narration = React.useState(''); var narration = _narration[0]; var setNarration = _narration[1];
     var _amt = React.useState(''); var amountReceived = _amt[0]; var setAmountReceived = _amt[1];
@@ -95,15 +96,15 @@
     var state = MG.ui.useAsync(function () { return MGA.api.depositQueue(1, status); }, [status, _r[0]]);
 
     function doSendBankDetails() {
-      if (!selected || !bankName.trim() || !accountNumber.trim()) return;
+      if (!selected || !bankName.trim() || !accountName.trim() || !accountNumber.trim()) return;
       setBusy(true);
       MGA.api.sendDepositBankDetails(selected.id, {
-        bankName: bankName.trim(), accountNumber: accountNumber.trim(),
+        bankName: bankName.trim(), accountName: accountName.trim(), accountNumber: accountNumber.trim(),
         narration: narration.trim() || selected.reference,
       }).then(function () {
         MG.ui.toast('Bank details emailed and added to customer notifications.', 'ok');
         setSelected(Object.assign({}, selected, { status: 'awaiting_payment' }));
-        setBankName(''); setAccountNumber(''); setNarration('');
+        setBankName(''); setAccountName(''); setAccountNumber(''); setNarration('');
         reload(function (x) { return x + 1; });
       }).catch(function (e) { MG.ui.toast(MG.util.errMessage(e), 'err'); })
         .finally(function () { setBusy(false); });
@@ -185,11 +186,13 @@
               h('p', { className: 'muted' }, 'These details are sent only to this customer by email and in-app notification. They are not saved as a reusable bank account.'),
               h('label', null, 'Bank name'),
               h('input', { value: bankName, onChange: function (e) { setBankName(e.target.value); }, placeholder: 'Enter the bank name' }),
+              h('label', null, 'Account name'),
+              h('input', { value: accountName, onChange: function (e) { setAccountName(e.target.value); }, placeholder: 'Enter the account holder name' }),
               h('label', null, 'Account number'),
               h('input', { value: accountNumber, onChange: function (e) { setAccountNumber(e.target.value); }, placeholder: 'Enter the account number' }),
               h('label', null, 'Transfer narration (optional)'),
               h('input', { value: narration, onChange: function (e) { setNarration(e.target.value); }, placeholder: selected.reference }),
-              h('button', { className: 'btn btn-primary btn-sm', style: { marginTop: 8 }, disabled: busy || !bankName.trim() || !accountNumber.trim(), onClick: doSendBankDetails },
+              h('button', { className: 'btn btn-primary btn-sm', style: { marginTop: 8 }, disabled: busy || !bankName.trim() || !accountName.trim() || !accountNumber.trim(), onClick: doSendBankDetails },
                 'Email bank details')) : null),
           h('div', null,
             (['awaiting_payment','payment_reported','under_verification','partially_fulfilled'].indexOf(selected.status) >= 0) ? h(React.Fragment, null,
