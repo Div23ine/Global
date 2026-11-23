@@ -10,6 +10,8 @@
 (function () {
   var React = window.React;
   var h = React.createElement;
+  function adminList(p) { return (window.MGA && MGA.adminList) ? MGA.adminList(p) : (Array.isArray(p) ? p : (p && Array.isArray(p.data) ? p.data : [])); }
+  function adminMeta(p) { return (window.MGA && MGA.adminMeta) ? MGA.adminMeta(p) : ((p && p.meta) || {}); }
   MGA.views = MGA.views || {};
 
   /* -------------------------------------------------------------- dashboard */
@@ -65,7 +67,7 @@
     var state = MG.ui.useAsync(function () {
       return MGA.api.users({ q: filters.q, status: filters.status, country: filters.country, page: filters.page });
     }, [filters.q, filters.status, filters.country, filters.page]);
-    var meta = state.data ? state.data.meta || {} : {};
+    var meta = adminMeta(state.data);
     function set(k, v) {
       var next = Object.assign({}, filters); next[k] = v;
       if (k !== 'page') next.page = 1;
@@ -99,7 +101,7 @@
       state.loading ? h(MG.ui.PageSkeleton, { variant: 'list' })
         : state.error ? h(MG.ui.ErrorPanel, { error: state.error, onRetry: function () { location.reload(); } })
         : h(MG.ui.DataTable, {
-            rows: state.data || [],
+            rows: adminList(state.data),
             rowKey: function (u) { return u.id; },
             onRowClick: function (u) { location.hash = '#/users/' + u.id; },
             empty: h(MG.ui.Empty, { icon: 'users', title: 'No customers found',

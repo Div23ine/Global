@@ -21,12 +21,18 @@
     if (Array.isArray(payload.data)) return payload.data;
     if (payload.data && Array.isArray(payload.data.items)) return payload.data.items;
     if (payload.data && Array.isArray(payload.data.rows)) return payload.data.rows;
+    if (payload.data && Array.isArray(payload.data.deposits)) return payload.data.deposits;
+    if (payload.data && Array.isArray(payload.data.events)) return payload.data.events;
+    if (payload.data && Array.isArray(payload.data.tickets)) return payload.data.tickets;
+    if (payload.data && Array.isArray(payload.data.payments)) return payload.data.payments;
     return [];
   }
   function adminMeta(payload) {
     if (!payload || typeof payload !== 'object') return {};
     return payload.meta || (payload.data && payload.data.meta) || {};
   }
+  MGA.adminList = adminList;
+  MGA.adminMeta = adminMeta;
 
 
   /* ------------------------------------------------------------- currencies */
@@ -43,7 +49,7 @@
         h('p', null, 'Availability is a ', h('b', null, 'live platform setting'),
           ' \u2014 the customer Activate page re-reads it on every visit.')),
       h(MG.ui.DataTable, {
-        rows: state.data || [],
+        rows: adminList(state.data),
         rowKey: function (c) { return c.code; },
         empty: h(MG.ui.Empty, { icon: 'coins', title: 'No currencies', note: 'The supported currency list is empty.' }),
         columns: [
@@ -124,7 +130,7 @@
         icon: 'wallet', title: 'Deposit management',
         sub: 'Monitor every deposit attempt \u2014 confirmation stays with the payment provider.',
         actions: h('span', { className: 'panel-chip' },
-          state.loading ? 'Loading\u2026' : ((state.data || []).length + ' deposits')) }),
+          state.loading ? 'Loading\u2026' : (adminList(state.data).length + ' deposits')) }),
 
       h(MG.ui.Notice, { tone: 'warn', icon: 'lock' },
         h('p', null, h('b', null, 'Administrators cannot confirm or alter deposits.'),
@@ -151,7 +157,7 @@
       state.loading ? h(MG.ui.PageSkeleton, { variant: 'list' })
         : state.error ? h(MG.ui.ErrorPanel, { error: state.error, onRetry: function () { location.reload(); } })
         : h(MG.ui.DataTable, {
-            rows: state.data || [],
+            rows: adminList(state.data),
             rowKey: function (d) { return d.id; },
             empty: h(MG.ui.Empty, { icon: 'wallet', title: 'No deposits in queue', note: 'No deposit attempts match the current filter.' }),
             columns: [
@@ -222,7 +228,7 @@
         icon: 'receipt', title: 'Transactions',
         sub: 'The complete customer ledger \u2014 read-only for administrators.',
         actions: h('span', { className: 'panel-chip' },
-          state.loading ? 'Loading\u2026' : ((state.data || []).length + ' entries')) }),
+          state.loading ? 'Loading\u2026' : (adminList(state.data).length + ' entries')) }),
 
       h('div', { className: 'filter-bar' },
         h('div', { className: 'field field-search' },
@@ -248,7 +254,7 @@
       state.loading ? h(MG.ui.PageSkeleton, { variant: 'list' })
         : state.error ? h(MG.ui.ErrorPanel, { error: state.error, onRetry: function () { location.reload(); } })
         : h(MG.ui.DataTable, {
-            rows: state.data || [],
+            rows: adminList(state.data),
             rowKey: function (t) { return t.id; },
             empty: h(MG.ui.Empty, { icon: 'receipt', title: 'No transactions match', note: 'No ledger entries match the current filters.' }),
             columns: [
@@ -280,7 +286,7 @@
     var state = MG.ui.useAsync(function () { return MGA.api.payments(1); }, []);
     if (state.loading) return h(MG.ui.PageSkeleton, { variant: 'page' });
     if (state.error) return h(MG.ui.ErrorPanel, { error: state.error, onRetry: function () { location.reload(); } });
-    var list = state.data || [];
+    var list = adminList(state.data);
     var stats = {};
     list.forEach(function (a) { stats[a.outcome] = (stats[a.outcome] || 0) + 1; });
     return h(React.Fragment, null,
@@ -313,7 +319,7 @@
     var _rs = React.useState(''); var freezeReason = _rs[0]; var setFreezeReason = _rs[1];
     var _b = React.useState(false); var busy = _b[0]; var setBusy = _b[1];
     var state = MG.ui.useAsync(function () { return MGA.api.securityEvents(1); }, []);
-    var events = state.data || [];
+    var events = adminList(state.data);
     var suspiciousCount = events.filter(function (e) { return e.severity === 'critical'; }).length;
 
     return h(React.Fragment, null,
@@ -437,7 +443,7 @@
     var _m = React.useState({}); var replies = _m[0]; var setReplies = _m[1];
     if (state.loading) return h(MG.ui.PageSkeleton, { variant: 'list' });
     if (state.error) return h(MG.ui.ErrorPanel, { error: state.error, onRetry: function () { location.reload(); } });
-    var list = state.data || [];
+    var list = adminList(state.data);
     var openCount = list.filter(function (t) { return t.status !== 'resolved'; }).length;
     return h(React.Fragment, null,
       h(MG.ui.PageHead, {
@@ -559,13 +565,13 @@
     var state = MG.ui.useAsync(function () {
       return MGA.api.audit({ q: filters.q, result: filters.result, page: filters.page });
     }, [filters.q, filters.result, filters.page]);
-    var meta = state.data ? state.data.meta || {} : {};
+    var meta = adminMeta(state.data);
     function set(k, v) {
       var next = Object.assign({}, filters); next[k] = v;
       if (k !== 'page') next.page = 1;
       setFilters(next);
     }
-    var rows = (state.data && Array.isArray(state.data)) ? state.data : ((state.data && state.data.data) || []);
+    var rows = adminList(state.data);
     var denied = rows.filter(function (a) { return a.result === 'denied'; }).length;
     return h(React.Fragment, null,
       h(MG.ui.PageHead, {

@@ -11,6 +11,7 @@
 (function () {
   var React = window.React;
   var h = React.createElement;
+  function adminList(p) { return (window.MGA && MGA.adminList) ? MGA.adminList(p) : (Array.isArray(p) ? p : (p && Array.isArray(p.data) ? p.data : [])); }
   MGA.views = MGA.views || {};
 
   var UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -142,7 +143,7 @@
       state.loading ? h(MG.ui.PageSkeleton, { variant: 'list' })
         : state.error ? h(MG.ui.ErrorPanel, { error: state.error, onRetry: function () { location.reload(); } })
         : h(MG.ui.DataTable, {
-            rows: state.data || [],
+            rows: adminList(state.data),
             rowKey: function (r) { return r.id; },
             empty: h(MG.ui.Empty, { icon: 'receipt', title: 'No refunds', note: 'No refund requests match the current filter.' }),
             columns: [

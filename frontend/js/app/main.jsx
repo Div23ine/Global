@@ -473,6 +473,7 @@
     if (window.__meridianBootError) window.__meridianBootError(new Error('Missing #gl-app mount node.'));
   } else {
     try {
+      window.__meridianBooted = true;
       ReactDOM.createRoot(mount).render(h(App));
     } catch (err) {
       if (window.__meridianBootError) window.__meridianBootError(err);
