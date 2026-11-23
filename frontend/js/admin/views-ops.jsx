@@ -89,6 +89,9 @@
     var _txn = React.useState(''); var bankTxnId = _txn[0]; var setBankTxnId = _txn[1];
     var _notes = React.useState(''); var notes = _notes[0]; var setNotes = _notes[1];
     var _busy = React.useState(false); var busy = _busy[0]; var setBusy = _busy[1];
+    var _bankForm = React.useState({ label: '', bankName: '', beneficiaryName: '', accountNumber: '', iban: '', swiftBic: '', countryCode: 'DE', currencyCode: 'EUR', transferInstructions: '' });
+    var bankForm = _bankForm[0]; var setBankForm = _bankForm[1];
+    var _txnRef = React.useState(''); var bankTxnRef = _txnRef[0]; var setBankTxnRef = _txnRef[1];
 
     var state = MG.ui.useAsync(function () { return MGA.api.depositQueue(1, status); }, [status, _r[0]]);
 
@@ -116,10 +119,11 @@
         amountReceived: amountReceived,
         currencyCode: selected.currency_code,
         bankTransactionId: bankTxnId || undefined,
+        bankTransactionRef: bankTxnRef || undefined,
         notes: notes || undefined,
       }).then(function () {
         MG.ui.toast('Payment verified and balance credited.', 'ok');
-        setSelected(null); setAmountReceived(''); setBankTxnId(''); setNotes('');
+        setSelected(null); setAmountReceived(''); setBankTxnId(''); setBankTxnRef(''); setNotes('');
         reload(function (x) { return x + 1; });
       }).catch(function (e) { MG.ui.toast(MG.util.errMessage(e), 'err'); })
         .finally(function () { setBusy(false); });
@@ -128,17 +132,51 @@
     return h(React.Fragment, null,
       h(MG.ui.PageHead, {
         icon: 'wallet', title: 'Deposit management',
-        sub: 'Monitor every deposit attempt \u2014 confirmation stays with the payment provider.',
+        sub: 'Manage approved receiving accounts and verify customer bank transfers before crediting balances.',
         actions: h('span', { className: 'panel-chip' },
           state.loading ? 'Loading\u2026' : (adminList(state.data).length + ' deposits')) }),
 
-      h(MG.ui.Notice, { tone: 'warn', icon: 'lock' },
-        h('p', null, h('b', null, 'Administrators cannot confirm or alter deposits.'),
-          ' Deposit outcomes come from the payment provider; not even a Super Administrator can flip a pending deposit to successful.')),
-
-      h(MG.ui.RestrictedPanel, {
-        intro: 'Demonstration \u2014 attempt to alter a deposit confirmation:',
-        ops: [{ op: 'alter_deposit', label: 'Alter deposit confirmation' }] }),
+      h(MG.ui.Card, { title: 'Receiving bank accounts — approval required' },
+        h('p', { className: 'muted' }, 'Add verified receiving details for any supported currency. New accounts stay hidden from customers until an administrator approves them.'),
+        h('div', { className: 'grid-two' },
+          h('div', { className: 'field' }, h('label', null, 'Account label'), h('input', { value: bankForm.label, onChange: function (e) { setBankForm(Object.assign({}, bankForm, { label: e.target.value })); }, placeholder: 'e.g. EUR primary account' })),
+          h('div', { className: 'field' }, h('label', null, 'Bank name'), h('input', { value: bankForm.bankName, onChange: function (e) { setBankForm(Object.assign({}, bankForm, { bankName: e.target.value })); } })),
+          h('div', { className: 'field' }, h('label', null, 'Beneficiary name'), h('input', { value: bankForm.beneficiaryName, onChange: function (e) { setBankForm(Object.assign({}, bankForm, { beneficiaryName: e.target.value })); } })),
+          h('div', { className: 'field' }, h('label', null, 'Currency'), h('select', { value: bankForm.currencyCode, onChange: function (e) { setBankForm(Object.assign({}, bankForm, { currencyCode: e.target.value })); } }, ['EUR','GBP','USD','CHF','PLN'].map(function (c) { return h('option', { key: c, value: c }, c); }))),
+          h('div', { className: 'field' }, h('label', null, 'Country code'), h('input', { value: bankForm.countryCode, maxLength: 2, onChange: function (e) { setBankForm(Object.assign({}, bankForm, { countryCode: e.target.value.toUpperCase() })); } })),
+          h('div', { className: 'field' }, h('label', null, 'Account number'), h('input', { value: bankForm.accountNumber, onChange: function (e) { setBankForm(Object.assign({}, bankForm, { accountNumber: e.target.value })); } })),
+          h('div', { className: 'field' }, h('label', null, 'IBAN'), h('input', { value: bankForm.iban, onChange: function (e) { setBankForm(Object.assign({}, bankForm, { iban: e.target.value.toUpperCase() })); } })),
+          h('div', { className: 'field' }, h('label', null, 'SWIFT/BIC'), h('input', { value: bankForm.swiftBic, onChange: function (e) { setBankForm(Object.assign({}, bankForm, { swiftBic: e.target.value.toUpperCase() })); } })),
+          h('div', { className: 'field' }, h('label', null, 'Transfer instructions'), h('input', { value: bankForm.transferInstructions, onChange: function (e) { setBankForm(Object.assign({}, bankForm, { transferInstructions: e.target.value })); }, placeholder: 'Optional routing instructions' }))),
+        h('button', { className: 'btn btn-primary btn-sm', disabled: busy || !bankForm.label.trim() || !bankForm.bankName.trim() || !bankForm.beneficiaryName.trim() || !/^[A-Z]{2}$/.test(bankForm.countryCode) || (!bankForm.accountNumber.trim() && !bankForm.iban.trim()), onClick: function () {
+          setBusy(true);
+          MGA.api.saveReceivingBank(bankForm).then(function () {
+            MG.ui.toast('Receiving account submitted for approval. It is not yet available to customers.', 'ok');
+            setBankForm({ label: '', bankName: '', beneficiaryName: '', accountNumber: '', iban: '', swiftBic: '', countryCode: 'DE', currencyCode: 'EUR', transferInstructions: '' });
+            return MGA.api.receivingBanks();
+          }).then(function (res) { setBanks((res && res.data) || res || []); })
+            .catch(function (e) { MG.ui.toast(MG.util.errMessage(e), 'err'); })
+            .finally(function () { setBusy(false); });
+        } }, 'Submit bank account for approval'),
+        h('div', { className: 'stack-sm', style: { marginTop: 16 } },
+          (banks || []).length ? banks.map(function (b) {
+            return h('div', { key: b.id, className: 'list-row' },
+              h('div', null, h('b', null, b.label), h('p', { className: 'muted' }, b.bank_name + ' · ' + b.currency_code + ' · ' + (b.account_number || b.iban || 'No account identifier')),
+                b.rejection_reason ? h('p', { className: 'form-error' }, b.rejection_reason) : null),
+              h('div', { className: 'btn-row' }, h(MG.ui.Badge, { status: b.status || (b.is_active ? 'approved' : 'pending') }),
+                b.status === 'pending' ? h('button', { className: 'btn btn-primary btn-sm', disabled: busy, onClick: function () {
+                  setBusy(true); MGA.api.approveReceivingBank(b.id).then(function () { MG.ui.toast('Receiving account approved.', 'ok'); return MGA.api.receivingBanks(); })
+                    .then(function (res) { setBanks((res && res.data) || res || []); })
+                    .catch(function (e) { MG.ui.toast(MG.util.errMessage(e), 'err'); }).finally(function () { setBusy(false); });
+                } }, 'Approve') : null,
+                b.status === 'pending' ? h('button', { className: 'btn btn-ghost btn-sm', disabled: busy, onClick: function () {
+                  var reason = window.prompt('Reason for rejecting this receiving account:');
+                  if (!reason || reason.trim().length < 3) return;
+                  setBusy(true); MGA.api.rejectReceivingBank(b.id, reason.trim()).then(function () { MG.ui.toast('Receiving account rejected.', 'ok'); return MGA.api.receivingBanks(); })
+                    .then(function (res) { setBanks((res && res.data) || res || []); })
+                    .catch(function (e) { MG.ui.toast(MG.util.errMessage(e), 'err'); }).finally(function () { setBusy(false); });
+                } }, 'Reject') : null));
+          }) : h(MG.ui.Empty, { title: 'No receiving accounts', note: 'Add a receiving account above and submit it for approval.' }))),
 
       h('div', { className: 'filter-bar' },
         h('div', { className: 'field' },
@@ -183,6 +221,9 @@
             h('p', null, h('b', null, 'Customer: '), selected.profiles ? (selected.profiles.full_name || selected.profiles.email) : selected.profile_id),
             h('p', null, h('b', null, 'Requested: '), MG.util.money(selected.requested_amount || selected.amount, selected.currency_code),
               ' \u00B7 Status: ', h(MG.ui.Badge, { status: selected.status })),
+            selected.payment_notes ? h('p', null, h('b', null, 'Customer payment notes: '), selected.payment_notes) : null,
+            selected.customer_bank_reference ? h('p', null, h('b', null, 'Customer bank reference: '), selected.customer_bank_reference) : null,
+            selected.receipt_url ? h('p', null, h('a', { href: selected.receipt_url, target: '_blank', rel: 'noopener noreferrer' }, 'Open payment evidence')) : null,
             (selected.status === 'pending_admin_action' || selected.status === 'awaiting_payment') ? h('div', { className: 'field', style: { marginTop: 14 } },
               h('label', null, 'Assign receiving bank'),
               h('select', { value: bankId, onChange: function (e) { setBankId(e.target.value); } },
@@ -197,8 +238,11 @@
                 h('label', null, 'Amount received (will be credited)'),
                 h('input', { value: amountReceived, onChange: function (e) { setAmountReceived(e.target.value); }, placeholder: 'e.g. 1000.00' })),
               h('div', { className: 'field' },
-                h('label', null, 'Bank transaction ID (optional)'),
+                h('label', null, 'Bank transaction ID'),
                 h('input', { value: bankTxnId, onChange: function (e) { setBankTxnId(e.target.value); } })),
+              h('div', { className: 'field' },
+                h('label', null, 'Receiving-bank transaction reference'),
+                h('input', { value: bankTxnRef, onChange: function (e) { setBankTxnRef(e.target.value); } })),
               h('div', { className: 'field' },
                 h('label', null, 'Verification notes'),
                 h('input', { value: notes, onChange: function (e) { setNotes(e.target.value); } })),

@@ -39,9 +39,9 @@
     cancelDeposit: function (reference) {
       return http.post('/deposits/' + encodeURIComponent(reference) + '/cancel');
     },
-    reportPayment: function (reference, notes, receiptUrl) {
+    reportPayment: function (reference, notes, bankTransactionRef, receiptUrl) {
       return http.post('/deposits/' + encodeURIComponent(reference) + '/report-payment', {
-        notes: notes, receiptUrl: receiptUrl
+        notes: notes, bankTransactionRef: bankTransactionRef, receiptUrl: receiptUrl
       });
     },
 
@@ -96,6 +96,8 @@
     },
     receivingBanks: function () { return http.get('/admin/receiving-banks'); },
     saveReceivingBank: function (payload) { return http.post('/admin/receiving-banks', payload); },
+    approveReceivingBank: function (id) { return http.post('/admin/receiving-banks/' + encodeURIComponent(id) + '/approve'); },
+    rejectReceivingBank: function (id, reason) { return http.post('/admin/receiving-banks/' + encodeURIComponent(id) + '/reject', { reason: reason }); },
     refunds: function (page, status) { return http.get('/admin/refunds' + qs({ page: page, status: status })); },
     createRefund: function (payload, idempotencyKey) {
       return http.post('/admin/refunds', payload, { idempotencyKey: idempotencyKey });

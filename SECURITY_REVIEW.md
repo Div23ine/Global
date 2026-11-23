@@ -267,3 +267,20 @@ The Cloudflare Worker deployment succeeded and its TypeScript typecheck/unit-tes
 To avoid breaking the already-live legacy Pages client while this deployment is blocked, the API currently has a temporary compatibility branch that accepts legacy bearer requests only when their Origin exactly matches the Meridian CORS allowlist. The new BFF client does not use that path. **Remove the temporary bearer compatibility branch from `backend/src/middleware/auth.ts` immediately after the new Pages build deploys successfully.** Until then, the live browser is not fully on the HttpOnly transport.
 
 A browser deployment clears local Supabase session storage and users will need to sign in again. Previously issued refresh tokens are not retroactively revoked by changing the transport; this rollout does not claim to revoke every pre-existing session. Test customer login, admin login/authorization, OTP resend/failure, TOTP step-up, refresh, logout, and cookie flags in a browser after Pages is live.
+
+
+## 9. STRIDE — owner-authorized receiving-bank approval and deposit verification (2026-11-23)
+
+Owner: repository/project owner. Code pointers: migration `0018_approved_receiving_bank_workflow.sql`, `backend/src/services/deposits.service.ts`, `backend/src/routes/admin.routes.ts`, and customer/admin deposit views.
+
+| Threat | Decision | Mitigation / owner |
+|---|---|---|
+| Spoofing / elevation — read-only admin approves bank details or credits deposits | Mitigated | Bank submit/approve/reject and deposit credit remain behind `deposits.manage`; route-permission contract tests include both new approval endpoints. Owner: backend. |
+| Tampering — pending or rejected account is used for customer payment instructions | Mitigated | New/changed accounts are inactive and pending; assignment filters for approved + active; database check constraint binds active state to approval state. Owner: database/backend. |
+| Tampering — payment is credited against a different receiving account | Mitigated | Atomic credit RPC locks the deposit, requires the exact assigned bank, and checks that bank is approved/active. Owner: database. |
+| Replay — duplicate bank statement reference credits multiple deposits | Mitigated | Unique partial index and RPC duplicate check scope the statement reference to the receiving account; existing transaction-ID uniqueness remains. Owner: database. |
+| Repudiation — administrator changes bank details or approves/rejects without trace | Mitigated | Submit/resubmit/approve/reject actions are audit-logged; account numbers and IBAN values are omitted from audit payloads. Owner: backend. |
+| Information disclosure — customers see unapproved receiving accounts | Mitigated | Customers only receive bank details attached to their own deposit; assignment is restricted to approved accounts. Owner: backend. |
+| Operational lockout — legacy receiving accounts become unavailable after migration | Accepted with rollout requirement | Migration 0018 marks legacy accounts pending/inactive; operators must review and re-approve each legitimate account before assigning new deposits. Existing deposit rows are not rewritten. Owner: platform operator. |
+
+Residual requirement: an administrator must independently verify the incoming transaction in the receiving bank's trusted statement/portal before invoking credit. A customer-supplied receipt, URL or reference is not proof of settlement. Owner: platform operator.

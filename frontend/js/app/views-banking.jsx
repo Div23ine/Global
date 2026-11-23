@@ -372,6 +372,8 @@
     var _e = React.useState(null); var err = _e[0]; var setErr = _e[1];
     var _sel = React.useState(null); var selected = _sel[0]; var setSelected = _sel[1];
     var _notes = React.useState(''); var reportNotes = _notes[0]; var setReportNotes = _notes[1];
+    var _bankRef = React.useState(''); var reportBankRef = _bankRef[0]; var setReportBankRef = _bankRef[1];
+    var _receipt = React.useState(''); var reportReceiptUrl = _receipt[0]; var setReportReceiptUrl = _receipt[1];
     var accountsState = MG.ui.useAsync(function () { return MG.api.accounts(); }, []);
     var historyState = MG.ui.useAsync(function () { return MG.api.deposits(1); }, [result]);
 
@@ -429,9 +431,10 @@
 
     function reportPayment(d) {
       setBusy(true);
-      MG.api.reportPayment(d.reference, reportNotes || undefined).then(function () {
+      if (!reportBankRef.trim()) { MG.util.toast('Enter your bank transaction reference.', 'err'); setBusy(false); return; }
+      MG.api.reportPayment(d.reference, reportNotes || undefined, reportBankRef.trim(), reportReceiptUrl || undefined).then(function () {
         MG.util.toast('Payment reported — awaiting administrator verification. No balance credited yet.', 'ok');
-        setSelected(null); setReportNotes('');
+        setSelected(null); setReportNotes(''); setReportBankRef(''); setReportReceiptUrl('');
         setResult({ _refresh: Date.now() });
         setBusy(false);
       }).catch(function (error) {
@@ -544,8 +547,12 @@
       selected ? h(MG.ui.Card, { title: 'Report payment — ' + selected.reference },
         h('p', { className: 'muted' },
           'Reporting a payment does not credit your balance. An administrator must verify the funds arrived before any credit is applied.'),
-        h('label', null, 'Optional notes'),
-        h(MG.ui.Input, { value: reportNotes, onChange: function (e) { setReportNotes(e.target.value); }, placeholder: 'e.g. transferred via SEPA on …' }),
+        h('label', null, 'Bank transaction reference (required)'),
+        h(MG.ui.Input, { value: reportBankRef, onChange: function (e) { setReportBankRef(e.target.value); }, placeholder: 'Reference shown by your bank' }),
+        h('label', null, 'Payment evidence URL (optional)'),
+        h(MG.ui.Input, { value: reportReceiptUrl, onChange: function (e) { setReportReceiptUrl(e.target.value); }, placeholder: 'https://…' }),
+        h('label', null, 'Additional notes'),
+        h(MG.ui.Input, { value: reportNotes, onChange: function (e) { setReportNotes(e.target.value); }, placeholder: 'Transfer date, sender name, bank, etc.' }),
         h('div', { className: 'btn-row' },
           h(MG.ui.Button, { variant: 'primary', busy: busy, onClick: function () { reportPayment(selected); } }, 'Confirm I have sent the payment'),
           h(MG.ui.Button, { variant: 'ghost', onClick: function () { setSelected(null); } }, 'Cancel'))

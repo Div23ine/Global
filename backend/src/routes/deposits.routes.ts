@@ -100,6 +100,7 @@ depositsRouter.post('/deposits/:reference/cancel', requireAuth, async (req, res,
 
 const reportSchema = z.object({
   notes: z.string().max(1000).optional(),
+  bankTransactionRef: z.string().trim().min(3).max(120),
   receiptUrl: z.string().url().max(500).optional(),
 }).strict();
 
@@ -109,7 +110,7 @@ depositsRouter.post('/deposits/:reference/report-payment', requireAuth, validate
     const deposit = await reportPayment(
       req.auth!.userId,
       reference,
-      { notes: req.body.notes, receiptUrl: req.body.receiptUrl },
+      { notes: req.body.notes, bankTransactionRef: req.body.bankTransactionRef, receiptUrl: req.body.receiptUrl },
       { ip: req.ip, userAgent: req.get('user-agent') },
     );
     ok(res, deposit, 'Payment reported — awaiting administrator verification. No balance has been credited yet.');

@@ -115,6 +115,8 @@ function mapPgError(message: string): never {
   }
   if (message.includes('DUPLICATE_BANK_TRANSACTION')) throw conflict('This bank transaction ID has already been recorded.');
   if (message.includes('CURRENCY_MISMATCH')) throw badRequest('Currency does not match the deposit request.');
+  if (message.includes('RECEIVING_BANK_NOT_APPROVED') || message.includes('RECEIVING_BANK_MISMATCH')) throw invalidState('The receiving bank account is not approved for this deposit.');
+  if (message.includes('BANK_TRANSACTION_REFERENCE_REQUIRED')) throw badRequest('A bank transaction ID or reference is required.');
   if (message.includes('ALREADY_FULLY_CREDITED')) throw conflict('Deposit is already fully credited.');
   if (message.includes('INVALID_AMOUNT')) throw badRequest('Invalid amount.');
   throw new Error(message);
@@ -257,7 +259,7 @@ export async function cancelDeposit(
 export async function reportPayment(
   userId: string,
   reference: string,
-  payload: { notes?: string; receiptUrl?: string },
+  payload: { notes?: string; receiptUrl?: string; bankTransactionRef?: string },
   ctx?: { ip?: string | null; userAgent?: string | null },
 ): Promise<DepositRecord> {
   const db = getServiceClient();
@@ -272,6 +274,7 @@ export async function reportPayment(
   if (!['awaiting_payment', 'payment_reported', 'partially_fulfilled'].includes(dep.status)) {
     throw invalidState('Payment can only be reported for deposits that are awaiting payment.');
   }
+  if (!payload.bankTransactionRef?.trim()) throw badRequest('Enter the bank transaction reference from your transfer receipt.');
 
   const { data: updated, error: updErr } = await db
     .from('deposits')
@@ -280,6 +283,7 @@ export async function reportPayment(
       payment_reported_at: new Date().toISOString(),
       payment_notes: payload.notes ?? dep.payment_notes,
       receipt_url: payload.receiptUrl ?? dep.receipt_url,
+      customer_bank_reference: payload.bankTransactionRef ?? dep.customer_bank_reference,
     })
     .eq('id', dep.id)
     .select('*')
@@ -287,7 +291,7 @@ export async function reportPayment(
   if (updErr) throw new Error(updErr.message);
 
   await auditAllowed(userId, 'deposit.report_payment', { type: 'deposit', id: reference }, {
-    notes: payload.notes, hasReceipt: Boolean(payload.receiptUrl),
+    notes: payload.notes, bankTransactionRef: payload.bankTransactionRef, hasReceipt: Boolean(payload.receiptUrl),
   }, { ip: ctx?.ip, userAgent: ctx?.userAgent });
 
   return updated as DepositRecord;
@@ -306,6 +310,7 @@ export async function assignReceivingBank(
     .select('*')
     .eq('id', bankAccountId)
     .eq('is_active', true)
+    .eq('status', 'approved')
     .maybeSingle();
   if (bankErr) throw new Error(bankErr.message);
   if (!bank) throw notFound('Receiving bank account not found or inactive.');
@@ -405,6 +410,10 @@ export async function verifyAndCreditPayment(
   if (!CREDITABLE_STATUSES.has(dep.status)) {
     throw invalidState(`Deposit status "${dep.status}" does not allow crediting.`);
   }
+  if (!dep.assigned_bank_id) throw invalidState('No approved receiving bank is assigned to this deposit.');
+  if (!input.bankTransactionId?.trim() && !input.bankTransactionRef?.trim()) {
+    throw badRequest('Enter the receiving-bank transaction ID or reference after verifying the funds in the receiving account.');
+  }
 
   // The credit RPC locks the deposit and performs the status transition in the
   // same transaction as the payment + ledger inserts. Do not pre-update here:
@@ -415,8 +424,8 @@ export async function verifyAndCreditPayment(
     p_amount: amount,
     p_currency: input.currencyCode,
     p_receiving_bank_id: input.receivingBankId ?? dep.assigned_bank_id,
-    p_bank_txn_id: input.bankTransactionId ?? null,
-    p_bank_txn_ref: input.bankTransactionRef ?? null,
+    p_bank_txn_id: input.bankTransactionId?.trim() || null,
+    p_bank_txn_ref: input.bankTransactionRef?.trim() || null,
     p_verified_by: adminId,
     p_notes: input.notes ?? null,
   });
@@ -494,7 +503,7 @@ export async function rejectDeposit(
 export async function listReceivingBanks(activeOnly = true) {
   const db = getServiceClient();
   let q = db.from('receiving_bank_accounts').select('*').order('display_order');
-  if (activeOnly) q = q.eq('is_active', true);
+  if (activeOnly) q = q.eq('is_active', true).eq('status', 'approved');
   const { data, error } = await q;
   if (error) throw new Error(error.message);
   return data ?? [];
@@ -519,39 +528,77 @@ export async function upsertReceivingBank(
 ) {
   const db = getServiceClient();
   const row = {
-    label: payload.label,
-    bank_name: payload.bankName,
+    label: payload.label, bank_name: payload.bankName,
     beneficiary_name: payload.beneficiaryName,
     account_number: payload.accountNumber ?? null,
-    iban: payload.iban ?? null,
-    swift_bic: payload.swiftBic ?? null,
-    country_code: payload.countryCode,
-    currency_code: payload.currencyCode,
+    iban: payload.iban ?? null, swift_bic: payload.swiftBic ?? null,
+    country_code: payload.countryCode, currency_code: payload.currencyCode,
     transfer_instructions: payload.transferInstructions ?? '',
-    is_active: payload.isActive ?? true,
-    display_order: payload.displayOrder ?? 100,
+    status: 'pending', is_active: false, approved_by: null, approved_at: null,
+    rejection_reason: null, display_order: payload.displayOrder ?? 100,
     updated_at: new Date().toISOString(),
   };
-
   if (payload.id) {
-    const { data, error } = await db
-      .from('receiving_bank_accounts')
-      .update(row)
-      .eq('id', payload.id)
-      .select('*')
-      .single();
+    const { data: existing, error: findErr } = await db.from('receiving_bank_accounts')
+      .select('id, status').eq('id', payload.id).maybeSingle();
+    if (findErr) throw new Error(findErr.message);
+    if (!existing) throw notFound('Receiving bank account not found.');
+    if (existing.status === 'approved') throw invalidState('Approved bank accounts cannot be edited. Add a new account and submit it for approval instead.');
+    const { data, error } = await db.from('receiving_bank_accounts')
+      .update(row).eq('id', payload.id).select('*').single();
     if (error) throw new Error(error.message);
-    await auditAllowed(adminId, 'bank_account.update', { type: 'receiving_bank', id: payload.id }, row);
+    await auditAllowed(adminId, 'bank_account.resubmit', { type: 'receiving_bank', id: payload.id }, {
+      currency: row.currency_code, bankName: row.bank_name,
+      accountNumberProvided: Boolean(row.account_number), ibanProvided: Boolean(row.iban),
+    });
     return data;
   }
-
-  const { data, error } = await db
-    .from('receiving_bank_accounts')
-    .insert(row)
-    .select('*')
-    .single();
+  const { data, error } = await db.from('receiving_bank_accounts')
+    .insert({ ...row, created_by: adminId }).select('*').single();
   if (error) throw new Error(error.message);
-  await auditAllowed(adminId, 'bank_account.create', { type: 'receiving_bank', id: data.id }, row);
+  await auditAllowed(adminId, 'bank_account.submit', { type: 'receiving_bank', id: data.id }, {
+    currency: row.currency_code, bankName: row.bank_name,
+    accountNumberProvided: Boolean(row.account_number), ibanProvided: Boolean(row.iban),
+  });
+  return data;
+}
+
+export async function approveReceivingBank(
+  adminId: string, bankId: string, ctx?: { ip?: string | null; userAgent?: string | null },
+) {
+  const db = getServiceClient();
+  const { data: bank, error } = await db.from('receiving_bank_accounts').select('*').eq('id', bankId).maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!bank) throw notFound('Receiving bank account not found.');
+  if (bank.status !== 'pending') throw invalidState('Only pending receiving bank accounts can be approved.');
+  if (!bank.account_number && !bank.iban) throw badRequest('A verified account number or IBAN is required before approval.');
+  if (/placeholder|unassigned/i.test([bank.label, bank.bank_name, bank.beneficiary_name].join(' '))) {
+    throw badRequest('Placeholder receiving details cannot be approved.');
+  }
+  const now = new Date().toISOString();
+  const { data, error: updateErr } = await db.from('receiving_bank_accounts')
+    .update({ status: 'approved', is_active: true, approved_by: adminId, approved_at: now, rejection_reason: null, updated_at: now })
+    .eq('id', bankId).eq('status', 'pending').select('*').maybeSingle();
+  if (updateErr) throw new Error(updateErr.message);
+  if (!data) throw invalidState('This receiving account was changed by another administrator. Refresh and try again.');
+  await auditAllowed(adminId, 'bank_account.approve', { type: 'receiving_bank', id: bankId }, {
+    currency: bank.currency_code, bankName: bank.bank_name,
+  }, { ip: ctx?.ip, userAgent: ctx?.userAgent });
+  return data;
+}
+
+export async function rejectReceivingBank(
+  adminId: string, bankId: string, reason: string, ctx?: { ip?: string | null; userAgent?: string | null },
+) {
+  const db = getServiceClient();
+  const { data, error } = await db.from('receiving_bank_accounts')
+    .update({ status: 'rejected', is_active: false, rejection_reason: reason, approved_by: null, approved_at: null, updated_at: new Date().toISOString() })
+    .eq('id', bankId).eq('status', 'pending').select('*').maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) throw invalidState('Only pending receiving bank accounts can be rejected.');
+  await auditAllowed(adminId, 'bank_account.reject', { type: 'receiving_bank', id: bankId }, { reason }, {
+    ip: ctx?.ip, userAgent: ctx?.userAgent,
+  });
   return data;
 }
 

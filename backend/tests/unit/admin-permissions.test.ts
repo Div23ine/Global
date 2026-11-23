@@ -75,6 +75,8 @@ const MANAGE_GATED: Array<[string, string, string]> = [
   ['POST', '/admin/deposits/:id/verify-credit', 'deposits.manage'],
   ['POST', '/admin/deposits/:id/reject', 'deposits.manage'],
   ['POST', '/admin/receiving-banks', 'deposits.manage'],
+  ['POST', '/admin/receiving-banks/:id/approve', 'deposits.manage'],
+  ['POST', '/admin/receiving-banks/:id/reject', 'deposits.manage'],
   ['POST', '/admin/refunds', 'refunds.manage'],
   ['POST', '/admin/refunds/:id/approve', 'refunds.manage'],
   ['POST', '/admin/refunds/:id/reject', 'refunds.manage'],

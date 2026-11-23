@@ -485,3 +485,20 @@ The Pages workflow was triggered by frontend commits. Its first completed attemp
 3. Confirm customer/admin OTP login, TOTP step-up, account/API reads, POST/PATCH/DELETE CSRF protection, refresh rotation and logout.
 4. Remove the temporary bearer compatibility fallback, redeploy Worker, and verify legacy Authorization requests are rejected.
 5. Previously issued refresh tokens are not automatically revoked by the transport migration; require fresh sign-in after Pages deploy and decide separately if a global session revocation is required.
+
+
+## 15. Owner-authorized deposit and receiving-bank workflow implementation (2026-11-23)
+
+Mode: `extend` — owner explicitly authorized replacing the previous read-only deposit policy with the controlled manual bank-transfer workflow.
+
+Implementation prepared for `development`:
+
+- Receiving-bank accounts now have pending / approved / rejected states. Admin-submitted details default to pending and inactive; customer deposit assignment only accepts approved accounts. Approvals and rejections are server-side, permission-gated and audit-logged.
+- Admins can add receiving accounts for EUR, GBP, USD, CHF and PLN. Approval requires a non-placeholder account number or IBAN. Editing an approved account is blocked; a replacement must be submitted and approved separately.
+- Customer payment reporting requires the sender-bank transaction reference and supports an optional evidence URL. Admin review displays the submitted reference, notes and evidence URL.
+- Balance credit requires an assigned approved receiving account and a receiving-bank transaction ID or statement reference. The database RPC validates the account/deposit match and prevents duplicate statement references per receiving account; ledger and deposit updates remain atomic.
+- Migration 0018 is forward-only. It moves existing receiving accounts to pending/inactive so they must be explicitly re-approved; no account details are seeded or invented. Existing deposit records and ledger entries are not rewritten.
+
+Verification: source changes and route-permission contract were prepared; local typecheck, lint, unit/integration tests, browser flow and migration rehearsal have NOT yet been run in this environment. No production migration or deployment was performed. Next: run CI, inspect failures, rehearse 0018 on an isolated database, then coordinate migration + Worker/Pages deployment.
+
+Decision: receiving-account approval is independent of deposit approval. Approving an account only enables it for future matching-currency requests; it never credits a customer. Customer deposit approval remains a separate operation after checking the actual receiving-bank transaction. Full account numbers are excluded from audit metadata.

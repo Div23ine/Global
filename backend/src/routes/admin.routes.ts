@@ -29,6 +29,8 @@ import {
   rejectDeposit,
   listReceivingBanks,
   upsertReceivingBank,
+  approveReceivingBank,
+  rejectReceivingBank,
 } from '../services/deposits.service';
 import {
   createRefundRequest,
@@ -561,7 +563,6 @@ const bankSchema = z.object({
   countryCode: z.string().regex(/^[A-Z]{2}$/),
   currencyCode: z.string().regex(/^[A-Z]{3}$/),
   transferInstructions: z.string().max(2000).optional(),
-  isActive: z.boolean().optional(),
   displayOrder: z.number().int().optional(),
 }).strict();
 
@@ -570,6 +571,21 @@ adminRouter.post('/admin/receiving-banks', requireAdmin('deposits.manage'), vali
     const bank = await upsertReceivingBank(req.auth!.userId, req.body);
     res.status(201);
     ok(res, bank, 'Receiving bank account saved');
+  } catch (err) { next(err); }
+});
+
+adminRouter.post('/admin/receiving-banks/:id/approve', requireAdmin('deposits.manage'), async (req, res, next) => {
+  try {
+    const bank = await approveReceivingBank(req.auth!.userId, String(req.params.id), ctxOf(req));
+    ok(res, bank, 'Receiving bank account approved');
+  } catch (err) { next(err); }
+});
+
+const rejectBankSchema = z.object({ reason: z.string().min(3).max(1000) }).strict();
+adminRouter.post('/admin/receiving-banks/:id/reject', requireAdmin('deposits.manage'), validate(rejectBankSchema), async (req, res, next) => {
+  try {
+    const bank = await rejectReceivingBank(req.auth!.userId, String(req.params.id), req.body.reason, ctxOf(req));
+    ok(res, bank, 'Receiving bank account rejected');
   } catch (err) { next(err); }
 });
 
