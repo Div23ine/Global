@@ -224,8 +224,8 @@ export async function createDeposit(
   }, { ip: ctx?.ip, userAgent: ctx?.userAgent });
   await notifyAdminsByEmail({
     eventType: 'deposit.created', subject: 'New deposit request — ' + finalRef,
-    body: 'A customer submitted a deposit request requiring administrator attention.\\n\\nReference: ' + finalRef +
-      '\\nAmount: ' + amount + ' ' + input.currencyCode + '\\nStatus: Pending admin action\\n\\nSign in to Meridian and open Deposit Management to review it.',
+    body: 'A customer submitted a deposit request requiring administrator attention.\n\nReference: ' + finalRef +
+      '\nAmount: ' + amount + ' ' + input.currencyCode + '\nStatus: Pending admin action\n\nSign in to Meridian and open Deposit Management to review it.',
   });
 
   return deposit as DepositRecord;
@@ -301,11 +301,11 @@ export async function reportPayment(
   }, { ip: ctx?.ip, userAgent: ctx?.userAgent });
   await notifyAdminsByEmail({
     eventType: 'deposit.payment_reported', subject: 'Payment reported — ' + reference,
-    body: 'A customer reported a bank transfer. Administrator verification is required before any balance is credited.\\n\\nReference: ' + reference +
-      '\\nAmount: ' + String(updated.requested_amount ?? updated.amount) + ' ' + updated.currency_code +
-      '\\nBank transaction reference: ' + String(payload.bankTransactionRef ?? '') +
-      '\\nReceipt attached: ' + (payload.receiptUrl ? 'Yes' : 'No') +
-      '\\n\\nSign in to Meridian and open Deposit Management to verify the payment.',
+    body: 'A customer reported a bank transfer. Administrator verification is required before any balance is credited.\n\nReference: ' + reference +
+      '\nAmount: ' + String(updated.requested_amount ?? updated.amount) + ' ' + updated.currency_code +
+      '\nBank transaction reference: ' + String(payload.bankTransactionRef ?? '') +
+      '\nReceipt attached: ' + (payload.receiptUrl ? 'Yes' : 'No') +
+      '\n\nSign in to Meridian and open Deposit Management to verify the payment.',
   });
 
   return updated as DepositRecord;
