@@ -245,20 +245,44 @@
 
   function SignInInline() {
     var _e = React.useState(''); var email = _e[0]; var setEmail = _e[1];
-    var _s = React.useState(false); var sent = _s[0]; var setSent = _s[1];
+    var _o = React.useState(''); var otp = _o[0]; var setOtp = _o[1];
+    var _step = React.useState('email'); var step = _step[0]; var setStep = _step[1];
     var _b = React.useState(false); var busy = _b[0]; var setBusy = _b[1];
     var _x = React.useState(''); var error = _x[0]; var setError = _x[1];
     var _m = React.useState(''); var message = _m[0]; var setMessage = _m[1];
 
-    function sendLink(event) {
+    function sendOtp(event) {
       if (event) event.preventDefault();
       setBusy(true); setError(''); setMessage('');
       MG.auth.signInAdmin(email).then(function (result) {
         if (result.error) throw result.error;
-        setSent(true);
-        setMessage('A secure administrator sign-in link has been sent. Open it to enter the admin console.');
-      }).catch(function (err) { setError(err.message || 'Could not send the administrator sign-in link.'); })
-        .finally(function () { setBusy(false); });
+        setStep('otp');
+        setMessage('A six-digit sign-in code has been sent to ' + email.trim() + '.');
+      }).catch(function (err) {
+        setError(err.message || 'Could not send the administrator sign-in code.');
+      }).finally(function () { setBusy(false); });
+    }
+
+    function verifyOtp(event) {
+      if (event) event.preventDefault();
+      setBusy(true); setError(''); setMessage('');
+      MG.auth.verifyAdminOtp(email, otp).then(function (result) {
+        if (result.error) throw result.error;
+        // Supabase publishes the authenticated session. AdminApp then checks
+        // the server-side profile and role before rendering the console.
+      }).catch(function (err) {
+        setError(err.message || 'The code is invalid or expired.');
+      }).finally(function () { setBusy(false); });
+    }
+
+    function resendOtp() {
+      setBusy(true); setError(''); setMessage('');
+      MG.auth.signInAdmin(email).then(function (result) {
+        if (result.error) throw result.error;
+        setMessage('A new six-digit code has been sent to ' + email.trim() + '.');
+      }).catch(function (err) {
+        setError(err.message || 'Could not resend the administrator sign-in code.');
+      }).finally(function () { setBusy(false); });
     }
 
     return h('div', { className: 'auth-viewport' },
@@ -274,17 +298,35 @@
               h('span', { className: 'auth-ic', 'aria-hidden': 'true',
                 dangerouslySetInnerHTML: { __html: MG.ui.icon('shield-check', 26) } }),
               h('h2', null, 'Administrator sign in'),
-              h('p', null, 'Enter your authorized administrator email to receive a secure magic link.')),
-            h('form', { onSubmit: sendLink },
+              h('p', null, step === 'email'
+                ? 'Enter your authorized administrator email to receive a six-digit verification code.'
+                : 'Enter the six-digit code sent to ' + email.trim() + '.')),
+            step === 'email' ? h('form', { onSubmit: sendOtp },
               h('div', { className: 'field' },
                 h('label', { htmlFor: 'admin-email' }, 'Administrator email address'),
                 h('input', { id: 'admin-email', className: 'input', type: 'email', required: true,
-                  autoComplete: 'email', value: email, onChange: function (event) { setEmail(event.target.value.trim()); }, autoCapitalize: 'none' })),
+                  autoComplete: 'email', value: email,
+                  onChange: function (event) { setEmail(event.target.value.trim()); }, autoCapitalize: 'none' })),
               error ? h('p', { className: 'form-error', role: 'alert' }, error) : null,
-              message ? h('p', { className: 'form-success', role: 'status' }, message) : null,
               h('button', { className: 'btn btn-primary btn-block', type: 'submit', disabled: busy },
-                busy ? 'Please wait…' : (sent ? 'Resend magic link' : 'Email magic link')))))));
+                busy ? 'Sending…' : 'Send verification code')) : null,
+            step === 'otp' ? h(React.Fragment, null,
+              h('form', { onSubmit: verifyOtp },
+                h('div', { className: 'field' },
+                  h('label', { htmlFor: 'admin-otp' }, 'Six-digit email code'),
+                  h('input', { id: 'admin-otp', className: 'input', type: 'text', required: true,
+                    inputMode: 'numeric', autoComplete: 'one-time-code', pattern: '[0-9]{6}',
+                    maxLength: 6, value: otp,
+                    onChange: function (event) { setOtp(event.target.value.replace(/\D/g, '').slice(0, 6)); } })),
+                error ? h('p', { className: 'form-error', role: 'alert' }, error) : null,
+                message ? h('p', { className: 'form-success', role: 'status' }, message) : null,
+                h('button', { className: 'btn btn-primary btn-block', type: 'submit', disabled: busy || otp.length !== 6 },
+                  busy ? 'Verifying…' : 'Verify code and sign in')),
+              h('button', { type: 'button', className: 'btn btn-ghost btn-block', disabled: busy, onClick: resendOtp },
+                'Resend code'),
+              h('button', { type: 'button', className: 'btn btn-ghost btn-block', disabled: busy,
+                onClick: function () { setStep('email'); setOtp(''); setError(''); setMessage(''); } },
+                'Use a different email')) : null)));
   }
-
   ReactDOM.createRoot(document.getElementById('gl-app')).render(h(AdminApp));
 })();
