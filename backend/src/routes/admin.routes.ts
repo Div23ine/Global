@@ -24,7 +24,7 @@ import { parsePagination, pageMeta } from '../utils/pagination';
 import { badRequest, invalidState, notFound, ok } from '../utils/httpError';
 import { computeFullName } from '../utils/name';
 import {
-  assignReceivingBank,
+  sendManualDepositBankDetails,
   verifyAndCreditPayment,
   rejectDeposit,
   listReceivingBanks,
@@ -620,6 +620,19 @@ adminRouter.post('/admin/deposits/:id/assign-bank', requireAdmin('deposits.manag
       req.auth!.userId, String(req.params.id), req.body.bankAccountId, ctxOf(req),
     );
     ok(res, deposit, 'Receiving bank assigned — customer notified');
+  } catch (err) { next(err); }
+});
+
+const manualBankDetailsSchema = z.object({
+  bankName: z.string().trim().min(1).max(120),
+  accountNumber: z.string().trim().min(1).max(120),
+  narration: z.string().trim().max(500).optional(),
+}).strict();
+
+adminRouter.post('/admin/deposits/:id/send-bank-details', requireAdmin('deposits.manage'), validate(manualBankDetailsSchema), async (req, res, next) => {
+  try {
+    const result = await sendManualDepositBankDetails(req.auth!.userId, String(req.params.id), req.body, ctxOf(req));
+    ok(res, result, 'Bank details emailed to customer and added to notifications');
   } catch (err) { next(err); }
 });
 

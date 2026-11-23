@@ -85,8 +85,8 @@
     },
     deposits: function (page, status) { return http.get('/admin/deposits' + qs({ page: page, status: status })); },
     depositQueue: function (page, status) { return http.get('/admin/deposits/queue' + qs({ page: page, status: status })); },
-    assignBank: function (depositId, bankAccountId) {
-      return http.post('/admin/deposits/' + encodeURIComponent(depositId) + '/assign-bank', { bankAccountId: bankAccountId });
+    sendDepositBankDetails: function (depositId, payload) {
+      return http.post('/admin/deposits/' + encodeURIComponent(depositId) + '/send-bank-details', payload);
     },
     verifyCredit: function (depositId, payload) {
       return http.post('/admin/deposits/' + encodeURIComponent(depositId) + '/verify-credit', payload);
@@ -94,10 +94,6 @@
     rejectDeposit: function (depositId, reason) {
       return http.post('/admin/deposits/' + encodeURIComponent(depositId) + '/reject', { reason: reason });
     },
-    receivingBanks: function () { return http.get('/admin/receiving-banks'); },
-    saveReceivingBank: function (payload) { return http.post('/admin/receiving-banks', payload); },
-    approveReceivingBank: function (id) { return http.post('/admin/receiving-banks/' + encodeURIComponent(id) + '/approve'); },
-    rejectReceivingBank: function (id, reason) { return http.post('/admin/receiving-banks/' + encodeURIComponent(id) + '/reject', { reason: reason }); },
     refunds: function (page, status) { return http.get('/admin/refunds' + qs({ page: page, status: status })); },
     createRefund: function (payload, idempotencyKey) {
       return http.post('/admin/refunds', payload, { idempotencyKey: idempotencyKey });

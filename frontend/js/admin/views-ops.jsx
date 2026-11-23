@@ -83,30 +83,27 @@
     var _s = React.useState(''); var status = _s[0]; var setStatus = _s[1];
     var _r = React.useState(0); var reload = _r[1];
     var _sel = React.useState(null); var selected = _sel[0]; var setSelected = _sel[1];
-    var _banks = React.useState([]); var banks = _banks[0]; var setBanks = _banks[1];
-    var _bankId = React.useState(''); var bankId = _bankId[0]; var setBankId = _bankId[1];
+    var _bankName = React.useState(''); var bankName = _bankName[0]; var setBankName = _bankName[1];
+    var _accountNumber = React.useState(''); var accountNumber = _accountNumber[0]; var setAccountNumber = _accountNumber[1];
+    var _narration = React.useState(''); var narration = _narration[0]; var setNarration = _narration[1];
     var _amt = React.useState(''); var amountReceived = _amt[0]; var setAmountReceived = _amt[1];
     var _txn = React.useState(''); var bankTxnId = _txn[0]; var setBankTxnId = _txn[1];
     var _notes = React.useState(''); var notes = _notes[0]; var setNotes = _notes[1];
     var _busy = React.useState(false); var busy = _busy[0]; var setBusy = _busy[1];
-    var _bankForm = React.useState({ label: '', bankName: '', beneficiaryName: '', accountNumber: '', iban: '', swiftBic: '', countryCode: 'DE', currencyCode: 'EUR', transferInstructions: '' });
-    var bankForm = _bankForm[0]; var setBankForm = _bankForm[1];
     var _txnRef = React.useState(''); var bankTxnRef = _txnRef[0]; var setBankTxnRef = _txnRef[1];
 
     var state = MG.ui.useAsync(function () { return MGA.api.depositQueue(1, status); }, [status, _r[0]]);
 
-    React.useEffect(function () {
-      MGA.api.receivingBanks().then(function (res) {
-        setBanks((res && res.data) || res || []);
-      }).catch(function () {});
-    }, []);
-
-    function doAssign() {
-      if (!selected || !bankId) return;
+    function doSendBankDetails() {
+      if (!selected || !bankName.trim() || !accountNumber.trim()) return;
       setBusy(true);
-      MGA.api.assignBank(selected.id, bankId).then(function () {
-        MG.ui.toast('Bank details assigned \u2014 customer notified.', 'ok');
-        setSelected(null); setBankId('');
+      MGA.api.sendDepositBankDetails(selected.id, {
+        bankName: bankName.trim(), accountNumber: accountNumber.trim(),
+        narration: narration.trim() || selected.reference,
+      }).then(function () {
+        MG.ui.toast('Bank details emailed and added to customer notifications.', 'ok');
+        setSelected(Object.assign({}, selected, { status: 'awaiting_payment' }));
+        setBankName(''); setAccountNumber(''); setNarration('');
         reload(function (x) { return x + 1; });
       }).catch(function (e) { MG.ui.toast(MG.util.errMessage(e), 'err'); })
         .finally(function () { setBusy(false); });
@@ -132,51 +129,9 @@
     return h(React.Fragment, null,
       h(MG.ui.PageHead, {
         icon: 'wallet', title: 'Deposit management',
-        sub: 'Manage approved receiving accounts and verify customer bank transfers before crediting balances.',
+        sub: 'Send one-time bank instructions to each customer, then verify incoming transfers before crediting balances.',
         actions: h('span', { className: 'panel-chip' },
           state.loading ? 'Loading\u2026' : (adminList(state.data).length + ' deposits')) }),
-
-      h(MG.ui.Card, { title: 'Receiving bank accounts — approval required' },
-        h('p', { className: 'muted' }, 'Add verified receiving details for any supported currency. New accounts stay hidden from customers until an administrator approves them.'),
-        h('div', { className: 'grid-two' },
-          h('div', { className: 'field' }, h('label', null, 'Account label'), h('input', { value: bankForm.label, onChange: function (e) { setBankForm(Object.assign({}, bankForm, { label: e.target.value })); }, placeholder: 'e.g. EUR primary account' })),
-          h('div', { className: 'field' }, h('label', null, 'Bank name'), h('input', { value: bankForm.bankName, onChange: function (e) { setBankForm(Object.assign({}, bankForm, { bankName: e.target.value })); } })),
-          h('div', { className: 'field' }, h('label', null, 'Beneficiary name'), h('input', { value: bankForm.beneficiaryName, onChange: function (e) { setBankForm(Object.assign({}, bankForm, { beneficiaryName: e.target.value })); } })),
-          h('div', { className: 'field' }, h('label', null, 'Currency'), h('select', { value: bankForm.currencyCode, onChange: function (e) { setBankForm(Object.assign({}, bankForm, { currencyCode: e.target.value })); } }, ['EUR','GBP','USD','CHF','PLN'].map(function (c) { return h('option', { key: c, value: c }, c); }))),
-          h('div', { className: 'field' }, h('label', null, 'Country code'), h('input', { value: bankForm.countryCode, maxLength: 2, onChange: function (e) { setBankForm(Object.assign({}, bankForm, { countryCode: e.target.value.toUpperCase() })); } })),
-          h('div', { className: 'field' }, h('label', null, 'Account number'), h('input', { value: bankForm.accountNumber, onChange: function (e) { setBankForm(Object.assign({}, bankForm, { accountNumber: e.target.value })); } })),
-          h('div', { className: 'field' }, h('label', null, 'IBAN'), h('input', { value: bankForm.iban, onChange: function (e) { setBankForm(Object.assign({}, bankForm, { iban: e.target.value.toUpperCase() })); } })),
-          h('div', { className: 'field' }, h('label', null, 'SWIFT/BIC'), h('input', { value: bankForm.swiftBic, onChange: function (e) { setBankForm(Object.assign({}, bankForm, { swiftBic: e.target.value.toUpperCase() })); } })),
-          h('div', { className: 'field' }, h('label', null, 'Transfer instructions'), h('input', { value: bankForm.transferInstructions, onChange: function (e) { setBankForm(Object.assign({}, bankForm, { transferInstructions: e.target.value })); }, placeholder: 'Optional routing instructions' }))),
-        h('button', { className: 'btn btn-primary btn-sm', disabled: busy || !bankForm.label.trim() || !bankForm.bankName.trim() || !bankForm.beneficiaryName.trim() || !/^[A-Z]{2}$/.test(bankForm.countryCode) || (!bankForm.accountNumber.trim() && !bankForm.iban.trim()), onClick: function () {
-          setBusy(true);
-          MGA.api.saveReceivingBank(bankForm).then(function () {
-            MG.ui.toast('Receiving account submitted for approval. It is not yet available to customers.', 'ok');
-            setBankForm({ label: '', bankName: '', beneficiaryName: '', accountNumber: '', iban: '', swiftBic: '', countryCode: 'DE', currencyCode: 'EUR', transferInstructions: '' });
-            return MGA.api.receivingBanks();
-          }).then(function (res) { setBanks((res && res.data) || res || []); })
-            .catch(function (e) { MG.ui.toast(MG.util.errMessage(e), 'err'); })
-            .finally(function () { setBusy(false); });
-        } }, 'Submit bank account for approval'),
-        h('div', { className: 'stack-sm', style: { marginTop: 16 } },
-          (banks || []).length ? banks.map(function (b) {
-            return h('div', { key: b.id, className: 'list-row' },
-              h('div', null, h('b', null, b.label), h('p', { className: 'muted' }, b.bank_name + ' · ' + b.currency_code + ' · ' + (b.account_number || b.iban || 'No account identifier')),
-                b.rejection_reason ? h('p', { className: 'form-error' }, b.rejection_reason) : null),
-              h('div', { className: 'btn-row' }, h(MG.ui.Badge, { status: b.status || (b.is_active ? 'approved' : 'pending') }),
-                b.status === 'pending' ? h('button', { className: 'btn btn-primary btn-sm', disabled: busy, onClick: function () {
-                  setBusy(true); MGA.api.approveReceivingBank(b.id).then(function () { MG.ui.toast('Receiving account approved.', 'ok'); return MGA.api.receivingBanks(); })
-                    .then(function (res) { setBanks((res && res.data) || res || []); })
-                    .catch(function (e) { MG.ui.toast(MG.util.errMessage(e), 'err'); }).finally(function () { setBusy(false); });
-                } }, 'Approve') : null,
-                b.status === 'pending' ? h('button', { className: 'btn btn-ghost btn-sm', disabled: busy, onClick: function () {
-                  var reason = window.prompt('Reason for rejecting this receiving account:');
-                  if (!reason || reason.trim().length < 3) return;
-                  setBusy(true); MGA.api.rejectReceivingBank(b.id, reason.trim()).then(function () { MG.ui.toast('Receiving account rejected.', 'ok'); return MGA.api.receivingBanks(); })
-                    .then(function (res) { setBanks((res && res.data) || res || []); })
-                    .catch(function (e) { MG.ui.toast(MG.util.errMessage(e), 'err'); }).finally(function () { setBusy(false); });
-                } }, 'Reject') : null));
-          }) : h(MG.ui.Empty, { title: 'No receiving accounts', note: 'Add a receiving account above and submit it for approval.' }))),
 
       h('div', { className: 'filter-bar' },
         h('div', { className: 'field' },
@@ -224,14 +179,18 @@
             selected.payment_notes ? h('p', null, h('b', null, 'Customer payment notes: '), selected.payment_notes) : null,
             selected.customer_bank_reference ? h('p', null, h('b', null, 'Customer bank reference: '), selected.customer_bank_reference) : null,
             selected.receipt_url ? h('p', null, h('a', { href: selected.receipt_url, target: '_blank', rel: 'noopener noreferrer' }, 'Open payment evidence')) : null,
+            h('p', null, h('b', null, 'Customer email: '), selected.profiles && selected.profiles.email ? selected.profiles.email : 'Email unavailable'),
             (selected.status === 'pending_admin_action' || selected.status === 'awaiting_payment') ? h('div', { className: 'field', style: { marginTop: 14 } },
-              h('label', null, 'Assign receiving bank'),
-              h('select', { value: bankId, onChange: function (e) { setBankId(e.target.value); } },
-                h('option', { value: '' }, 'Select bank account\u2026'),
-                (banks || []).filter(function (b) { return b.currency_code === selected.currency_code && b.is_active !== false; })
-                  .map(function (b) { return h('option', { key: b.id, value: b.id }, b.label + ' \u2014 ' + b.bank_name); })),
-              h('button', { className: 'btn btn-primary btn-sm', style: { marginTop: 8 }, disabled: busy || !bankId, onClick: doAssign },
-                'Assign bank details')) : null),
+              h('h4', null, 'Send one-time bank details'),
+              h('p', { className: 'muted' }, 'These details are sent only to this customer by email and in-app notification. They are not saved as a reusable bank account.'),
+              h('label', null, 'Bank name'),
+              h('input', { value: bankName, onChange: function (e) { setBankName(e.target.value); }, placeholder: 'Enter the bank name' }),
+              h('label', null, 'Account number'),
+              h('input', { value: accountNumber, onChange: function (e) { setAccountNumber(e.target.value); }, placeholder: 'Enter the account number' }),
+              h('label', null, 'Transfer narration (optional)'),
+              h('input', { value: narration, onChange: function (e) { setNarration(e.target.value); }, placeholder: selected.reference }),
+              h('button', { className: 'btn btn-primary btn-sm', style: { marginTop: 8 }, disabled: busy || !bankName.trim() || !accountNumber.trim(), onClick: doSendBankDetails },
+                'Email bank details')) : null),
           h('div', null,
             (['awaiting_payment','payment_reported','under_verification','partially_fulfilled'].indexOf(selected.status) >= 0) ? h(React.Fragment, null,
               h('div', { className: 'field' },

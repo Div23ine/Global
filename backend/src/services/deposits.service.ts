@@ -17,7 +17,7 @@ import { badRequest, conflict, invalidState, notFound } from '../utils/httpError
 import { parseAmount, type Money } from '../utils/money';
 import { env } from '../config/env';
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { emailBankDetailsAssigned, emailDepositCredited } from './resend.service';
+import { emailManualDepositBankDetails, emailDepositCredited } from './resend.service';
 
 export type DepositMethod = 'bank_transfer';
 
@@ -297,89 +297,50 @@ export async function reportPayment(
   return updated as DepositRecord;
 }
 
-export async function assignReceivingBank(
-  adminId: string,
-  depositId: string,
-  bankAccountId: string,
+export async function sendManualDepositBankDetails(
+  adminId: string, depositId: string,
+  input: { bankName: string; accountNumber: string; narration?: string },
   ctx?: { ip?: string | null; userAgent?: string | null },
-): Promise<DepositRecord> {
+): Promise<{ reference: string; email: string; status: string }> {
   const db = getServiceClient();
-
-  const { data: bank, error: bankErr } = await db
-    .from('receiving_bank_accounts')
-    .select('*')
-    .eq('id', bankAccountId)
-    .eq('is_active', true)
-    .eq('status', 'approved')
-    .maybeSingle();
-  if (bankErr) throw new Error(bankErr.message);
-  if (!bank) throw notFound('Receiving bank account not found or inactive.');
-
-  const { data: dep, error } = await db
-    .from('deposits')
-    .select('*')
-    .eq('id', depositId)
-    .maybeSingle();
+  const { data: dep, error } = await db.from('deposits').select('*').eq('id', depositId).maybeSingle();
   if (error) throw new Error(error.message);
   if (!dep) throw notFound('Deposit not found.');
   if (!['pending_admin_action', 'awaiting_payment'].includes(dep.status)) {
-    throw invalidState('Bank details can only be assigned while the deposit is pending admin action or awaiting payment.');
+    throw invalidState('Bank details can only be sent for a deposit awaiting bank instructions.');
   }
-  if (dep.currency_code !== bank.currency_code) {
-    throw badRequest(`Bank account currency (${bank.currency_code}) does not match deposit currency (${dep.currency_code}).`);
-  }
+  const { data: profile, error: profileError } = await db.from('profiles')
+    .select('email, full_name, first_name').eq('id', dep.profile_id).maybeSingle();
+  if (profileError) throw new Error(profileError.message);
+  if (!profile?.email) throw badRequest('This customer does not have an email address on their account.');
 
-  const { data: updated, error: updErr } = await db
-    .from('deposits')
-    .update({
-      assigned_bank_id: bankAccountId,
-      assigned_at: new Date().toISOString(),
-      assigned_by: adminId,
-      status: 'awaiting_payment',
-    })
-    .eq('id', depositId)
-    .select('*')
-    .single();
-  if (updErr) throw new Error(updErr.message);
-
-  await db.from('notifications').insert({
-    profile_id: dep.profile_id,
-    type: 'success',
-    title: 'Bank details ready for your deposit',
-    body: `Please transfer ${dep.requested_amount ?? dep.amount} ${dep.currency_code} using the details shown in your Deposit section. Include reference ${dep.reference} in the transfer narration.`,
+  const narration = input.narration?.trim() || dep.reference;
+  const sent = await emailManualDepositBankDetails({
+    to: profile.email, customerName: profile.full_name || profile.first_name || '',
+    reference: dep.reference, amount: String(dep.requested_amount ?? dep.amount),
+    currency: dep.currency_code, bankName: input.bankName.trim(),
+    accountNumber: input.accountNumber.trim(), narration,
   });
+  if (!sent) throw invalidState('The bank-details email could not be sent. Check email delivery configuration and try again.');
 
-  // Email bank details via Resend (non-blocking on failure)
-  try {
-    const { data: profile } = await db
-      .from('profiles')
-      .select('email, full_name, first_name')
-      .eq('id', dep.profile_id)
-      .maybeSingle();
-    if (profile?.email) {
-      await emailBankDetailsAssigned({
-        to: profile.email,
-        customerName: profile.full_name || profile.first_name || '',
-        reference: dep.reference,
-        amount: String(dep.requested_amount ?? dep.amount),
-        currency: dep.currency_code,
-        bankName: bank.bank_name,
-        beneficiaryName: bank.beneficiary_name,
-        iban: bank.iban,
-        accountNumber: bank.account_number,
-        swiftBic: bank.swift_bic,
-        transferInstructions: bank.transfer_instructions,
-      });
-    }
-  } catch {
-    /* email failure must not roll back assignment */
-  }
+  const { error: updateError } = await db.from('deposits').update({
+    status: 'awaiting_payment', assigned_bank_id: null, assigned_at: null, assigned_by: null,
+  }).eq('id', depositId);
+  if (updateError) throw new Error(updateError.message);
 
-  await auditAllowed(adminId, 'deposit.assign_bank', { type: 'deposit', id: dep.reference }, {
-    bankId: bankAccountId, bankLabel: bank.label,
+  const { error: notificationError } = await db.from('notifications').insert({
+    profile_id: dep.profile_id, type: 'success', title: 'Bank details for your deposit',
+    body: 'Bank: ' + input.bankName.trim() + '. Account number: ' + input.accountNumber.trim() +
+      '. Amount: ' + String(dep.requested_amount ?? dep.amount) + ' ' + dep.currency_code +
+      '. Transfer narration: ' + narration +
+      '. Your balance will be credited after the payment is verified.',
+  });
+  if (notificationError) throw new Error(notificationError.message);
+
+  await auditAllowed(adminId, 'deposit.send_bank_details', { type: 'deposit', id: dep.reference }, {
+    bankName: input.bankName.trim(), email: profile.email,
   }, { ip: ctx?.ip, userAgent: ctx?.userAgent });
-
-  return updated as DepositRecord;
+  return { reference: dep.reference, email: profile.email, status: 'awaiting_payment' };
 }
 
 export async function verifyAndCreditPayment(
@@ -410,7 +371,6 @@ export async function verifyAndCreditPayment(
   if (!CREDITABLE_STATUSES.has(dep.status)) {
     throw invalidState(`Deposit status "${dep.status}" does not allow crediting.`);
   }
-  if (!dep.assigned_bank_id) throw invalidState('No approved receiving bank is assigned to this deposit.');
   if (!input.bankTransactionId?.trim() && !input.bankTransactionRef?.trim()) {
     throw badRequest('Enter the receiving-bank transaction ID or reference after verifying the funds in the receiving account.');
   }
@@ -423,7 +383,7 @@ export async function verifyAndCreditPayment(
     p_deposit_id: depositId,
     p_amount: amount,
     p_currency: input.currencyCode,
-    p_receiving_bank_id: input.receivingBankId ?? dep.assigned_bank_id,
+    p_receiving_bank_id: input.receivingBankId ?? dep.assigned_bank_id ?? null,
     p_bank_txn_id: input.bankTransactionId?.trim() || null,
     p_bank_txn_ref: input.bankTransactionRef?.trim() || null,
     p_verified_by: adminId,
