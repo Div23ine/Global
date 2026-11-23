@@ -56,7 +56,7 @@
             '<a class="btn btn-ghost btn-block" href="app.html">Sign in</a>' +
             '<a class="btn btn-primary btn-block" href="app.html#/register">Create Account</a>' +
           '</div>' +
-          '<p class="drawer-note">Meridian Global Accounts — international multi-currency accounts.</p>' +
+          '<p class="drawer-note">Meridian provides platform accounts — not bank accounts.</p>' +
         '</div>' +
         '<div class="drawer-scrim" data-drawer-scrim hidden></div>';
 
@@ -91,7 +91,7 @@
               '<div class="footer-brand">' +
                 brand('brand brand-light', true) +
                 '<p>One account. Five currencies. Global access. Meridian Global Accounts provides international multi-currency platform accounts for customers in Europe.</p>' +
-                '<p class="footer-demo">Meridian Global Accounts is an international multi-currency account platform. Deposits and payments are processed through licensed partners.</p>' +
+                '<p class="footer-demo">Meridian provides platform accounts — not bank accounts. Deposits and payments are processed exclusively through licensed partners.</p>' +
               '</div>' +
               '<nav class="footer-col" aria-label="Product">' +
                 '<h3>Product</h3>' +
