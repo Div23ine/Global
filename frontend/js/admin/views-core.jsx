@@ -132,7 +132,7 @@
     var state = MG.ui.useAsync(function () { return MGA.api.user(id); }, [id, _r[0]]);
     var _e = React.useState({ first: '', last: '', phone: '' }); var edit = _e[0]; var setEdit = _e[1];
     var _b = React.useState(false); var busy = _b[0]; var setBusy = _b[1];
-    var _n = React.useState({ title: '', body: '', alsoSms: false }); var note = _n[0]; var setNote = _n[1];
+    var _n = React.useState({ title: '', body: '' }); var note = _n[0]; var setNote = _n[1];
     var confirm = MG.ui.useConfirm();
 
     React.useEffect(function () {
@@ -343,9 +343,9 @@
               e.preventDefault();
               if (!note.body) { MG.ui.toast('Write a message before sending.', 'err'); return; }
               setBusy(true);
-              MGA.api.notifyUser(id, note.title, note.body, note.alsoSms).then(function () {
+              MGA.api.notifyUser(id, note.title, note.body).then(function () {
                 setBusy(false);
-                setNote({ title: '', body: '', alsoSms: false });
+                setNote({ title: '', body: '' });
                 MG.ui.toast('Notification sent.', 'ok');
               }).catch(function (err) { setBusy(false); MG.ui.toast(MG.util.errMessage(err), 'err'); });
             } },
@@ -357,11 +357,6 @@
                 h('label', { htmlFor: 'nt-body' }, 'Message'),
                 h('textarea', { id: 'nt-body', rows: 3, value: note.body,
                   onChange: function (e) { setNote(Object.assign({}, note, { body: e.target.value })); } })),
-              h('label', { className: 'switch' },
-                h('input', { type: 'checkbox', checked: note.alsoSms,
-                  onChange: function (e) { setNote(Object.assign({}, note, { alsoSms: e.target.checked })); } }),
-                h('span', { className: 'switch-track', 'aria-hidden': 'true' }),
-                h('span', { className: 'switch-label' }, 'Also send by SMS')),
               h('button', { type: 'submit', className: 'btn btn-ghost btn-block' + (busy ? ' is-busy' : ''), disabled: busy, style: { marginTop: 12 } },
                 h(MG.ui.Icon, { name: 'send', size: 14 }), ' Send notification')),
             h('p', { className: 'panel-note' }, h('b', null, 'Manual'), ' \u2014 the customer is not notified automatically. Manual sends are recorded in the audit log.')),
