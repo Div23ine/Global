@@ -202,17 +202,8 @@
       });
     },
 
-    beginPhoneVerification: function (phone) {
-      return requireClient().auth.updateUser({ phone: phone });
-    },
-
-    verifyPhoneOtp: function (phone, token) {
-      return requireClient().auth.verifyOtp({
-        phone: phone,
-        token: String(token).replace(/\s+/g, ''),
-        type: 'phone_change',
-      });
-    },
+    /* SMS/phone verification removed with the Twilio integration: customers
+       verify their email address only, with the email OTP above. */
 
     getMfaAssurance: function () {
       return requireClient().auth.mfa.getAuthenticatorAssuranceLevel();

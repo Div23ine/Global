@@ -168,8 +168,6 @@
     var form = _f[0]; var setForm = _f[1];
     var _step = useState('details'); var step = _step[0]; var setStep = _step[1];
     var _emailOtp = useState(''); var emailOtp = _emailOtp[0]; var setEmailOtp = _emailOtp[1];
-    var _phoneOtp = useState(''); var phoneOtp = _phoneOtp[0]; var setPhoneOtp = _phoneOtp[1];
-    var _phone = useState(''); var fullPhone = _phone[0]; var setFullPhone = _phone[1];
     var _b = useState(false); var busy = _b[0]; var setBusy = _b[1];
     var _e = useState(''); var error = _e[0]; var setError = _e[1];
     var _m = useState(''); var message = _m[0]; var setMessage = _m[1];
@@ -192,7 +190,7 @@
       if (form.password !== form.confirmPassword) { setError('Your passwords do not match.'); return; }
       var phone;
       try { phone = normalizePhone(); } catch (err) { setError(err.message); return; }
-      setFullPhone(phone); setBusy(true);
+      setBusy(true);
       MG.auth.signUp({
         fullName: form.fullName, email: form.email, country: form.country,
         countryCode: form.countryCode, callingCode: form.callingCode,
@@ -209,21 +207,9 @@
       event.preventDefault(); setBusy(true); setError(''); setMessage('');
       MG.auth.verifyEmailOtp(form.email, emailOtp).then(function (result) {
         if (result.error) throw result.error;
-        return MG.auth.beginPhoneVerification(fullPhone).then(function (phoneResult) {
-          if (phoneResult.error) throw phoneResult.error;
-          setStep('phone');
-          setMessage('Email verified. A separate SMS code has been sent to ' + fullPhone + '.');
-        });
-      }).catch(function (err) { setError(err.message || 'Email verification failed.'); })
-        .finally(function () { setBusy(false); });
-    }
-
-    function verifyPhone(event) {
-      event.preventDefault(); setBusy(true); setError(''); setMessage('');
-      MG.auth.verifyPhoneOtp(fullPhone, phoneOtp).then(function (result) {
-        if (result.error) throw result.error;
+        setMessage('Email verified. Your account is ready.');
         location.hash = '#/overview';
-      }).catch(function (err) { setError(err.message || 'Phone verification failed.'); })
+      }).catch(function (err) { setError(err.message || 'Email verification failed.'); })
         .finally(function () { setBusy(false); });
     }
 
@@ -251,28 +237,20 @@
         error ? h('p', { className: 'form-error', role: 'alert' }, error) : null,
         h('button', { className: 'btn btn-primary btn-block', type: 'submit', disabled: busy },
           busy ? 'Creating account…' : 'Sign Up'));
-    } else if (step === 'email') {
+    } else {
       content = h('form', { onSubmit: verifyEmail },
         h(AuthInput, { label: 'Email verification code', value: emailOtp, required: true, maxLength: 6, autoComplete: 'one-time-code',
           onChange: function (event) { setEmailOtp(event.target.value.replace(/\D/g, '').slice(0, 6)); } }),
-        h('p', { className: 'muted' }, 'Check your inbox and enter the six-digit code. Phone verification follows after email confirmation.'),
+        h('p', { className: 'muted' }, 'Check your inbox and enter the six-digit one-time code.'),
         error ? h('p', { className: 'form-error', role: 'alert' }, error) : null,
         h('button', { className: 'btn btn-primary btn-block', type: 'submit', disabled: busy },
-          busy ? 'Verifying email…' : 'Verify email'));
-    } else {
-      content = h('form', { onSubmit: verifyPhone },
-        h(AuthInput, { label: 'SMS verification code', value: phoneOtp, required: true, maxLength: 6, autoComplete: 'one-time-code',
-          onChange: function (event) { setPhoneOtp(event.target.value.replace(/\D/g, '').slice(0, 6)); } }),
-        h('p', { className: 'muted' }, 'Enter the code sent to ' + fullPhone + '. Your account becomes available after both email and phone are verified.'),
-        error ? h('p', { className: 'form-error', role: 'alert' }, error) : null,
-        h('button', { className: 'btn btn-primary btn-block', type: 'submit', disabled: busy },
-          busy ? 'Verifying phone…' : 'Verify phone and activate account'));
+          busy ? 'Verifying email…' : 'Verify email and activate account'));
     }
 
     return h('div', { className: 'auth-wrap' },
       h('div', { className: 'auth-card' },
         h('p', { className: 'auth-brand' }, 'Meridian Global Accounts'),
-        h('h1', null, step === 'details' ? 'Create your account' : step === 'email' ? 'Verify your email' : 'Verify your phone'),
+        h('h1', null, step === 'details' ? 'Create your account' : 'Verify your email'),
         h('p', { className: 'muted' }, step === 'details' ? 'Create your Meridian account with your contact details and a password.' : message),
         content,
         step !== 'details' && message ? h('p', { className: 'form-success', role: 'status' }, message) : null,

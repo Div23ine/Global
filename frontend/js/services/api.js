@@ -76,8 +76,8 @@
     banUser: function (id, reason) { return http.post('/admin/users/' + encodeURIComponent(id) + '/ban', { reason: reason }); },
     unbanUser: function (id) { return http.post('/admin/users/' + encodeURIComponent(id) + '/unban'); },
     deleteUser: function (id) { return http.del('/admin/users/' + encodeURIComponent(id)); },
-    notifyUser: function (id, title, body, alsoSms) {
-      return http.post('/admin/users/' + encodeURIComponent(id) + '/notify', { title: title, body: body, alsoSms: alsoSms });
+    notifyUser: function (id, title, body) {
+      return http.post('/admin/users/' + encodeURIComponent(id) + '/notify', { title: title, body: body });
     },
     currencies: function () { return http.get('/admin/currencies'); },
     setCurrencyStatus: function (code, status) {
