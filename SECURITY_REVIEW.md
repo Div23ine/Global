@@ -240,3 +240,30 @@ Owner-approved change: both customer and administrator sign-in now use a six-dig
 | Elevation of privilege — receiving an OTP could be mistaken for administrator authorization | Mitigated | OTP verification authenticates an identity only. AdminApp still calls the protected API, and backend profile/status/role/permission checks remain authoritative. `shouldCreateUser: false` prevents admin login from creating arbitrary identities. Owner: backend. `frontend/js/admin/main.jsx`, backend admin middleware. |
 
 Verification not yet completed against live email delivery: the connected Supabase tool does not expose the project's Auth email-template configuration, and no live OTP inbox journey has been executed. The operator must save the Magic Link / OTP template with `{{ .Token }}`; code changes alone cannot change Supabase's outgoing email template.
+
+
+## 16. HttpOnly session-cookie BFF migration (2026-11-23)
+
+The browser auth transport has been migrated on `development` to an API Backend-for-Frontend. The browser auth facade no longer creates a Supabase JS client, reads access tokens, stores refresh tokens, or sends `Authorization: Bearer`. OTP verification, password updates, refresh, logout and TOTP operations are performed by the API.
+
+Production cookie design:
+- `__Host-mg-access` and `__Host-mg-refresh`: `Secure; HttpOnly; SameSite=Lax; Path=/`, no `Domain` attribute. Host-only scope binds them to the API host. Access-cookie lifetime follows the Supabase access-token expiry; refresh cookie uses a 12-hour sliding lifetime.
+- `__Host-mg-csrf`: also `Secure; HttpOnly; SameSite=Lax; Path=/`. The API returns the CSRF nonce in a no-store JSON response; browser JS keeps only this nonce and echoes it in `X-Meridian-CSRF`.
+- Cookie-authenticated mutations require an allowlisted `Origin` and constant-time double-submit CSRF validation. CORS enables credentials only for configured Meridian origins.
+- Protected API requests validate the cookie-held Supabase JWT with Supabase Auth, recheck that the profile remains active, and retain backend role/permission plus AAL2 enforcement for normal customer routes. AAL1 is allowed only on the session/MFA routes to complete a pending TOTP step-up.
+- The new client deletes old browser Supabase session keys when it starts. Users must authenticate again after the new Pages build is published.
+
+| Threat | Decision | Mitigation, owner and code pointer |
+|---|---|---|
+| Information disclosure — XSS reads an access/refresh token | Mitigated by the new client when deployed | Tokens are no longer returned to JS or included in browser storage/API headers; production cookie flags are HttpOnly and Secure. HttpOnly prevents cookie-value reads; it does not stop an XSS payload from issuing authenticated requests. Owner: frontend/backend. `backend/src/services/session-cookie.service.ts`, `backend/src/routes/auth.routes.ts`, `frontend/js/services/supabase-auth.js`. |
+| Spoofing/session theft over an untrusted network | Mitigated in the new transport | Secure cookies require HTTPS; the API issues host-only `__Host-` cookies and verifies the Supabase JWT server-side. Owner: platform/backend. `backend/src/services/session-cookie.service.ts`, `backend/src/middleware/auth.ts`. |
+| CSRF — cross-site request uses ambient cookies | Mitigated | SameSite=Lax, exact Origin allowlist, and double-submit CSRF token are checked for cookie-authenticated state changes. Owner: backend. `backend/src/services/session-cookie.service.ts`, `backend/src/app.ts`. |
+| Session authorization after ban/suspension | Mitigated | Profile status is checked on each protected API request; normal customer routes retain AAL2 enforcement where a verified TOTP factor exists. Owner: backend. `backend/src/middleware/auth.ts`, `backend/src/services/supabase-auth.service.ts`. |
+
+### Rollout caveat — not yet fully enforced in the live browser
+
+The Cloudflare Worker deployment succeeded and its TypeScript typecheck/unit-test steps passed. The Cloudflare Pages deployment failed with Wrangler authentication error `10000` when requesting the Pages project. The configured GitHub Actions `CLOUDFLARE_API_TOKEN` therefore needs the `Account / Cloudflare Pages / Edit` permission for the same Cloudflare account.
+
+To avoid breaking the already-live legacy Pages client while this deployment is blocked, the API currently has a temporary compatibility branch that accepts legacy bearer requests only when their Origin exactly matches the Meridian CORS allowlist. The new BFF client does not use that path. **Remove the temporary bearer compatibility branch from `backend/src/middleware/auth.ts` immediately after the new Pages build deploys successfully.** Until then, the live browser is not fully on the HttpOnly transport.
+
+A browser deployment clears local Supabase session storage and users will need to sign in again. Previously issued refresh tokens are not retroactively revoked by changing the transport; this rollout does not claim to revoke every pre-existing session. Test customer login, admin login/authorization, OTP resend/failure, TOTP step-up, refresh, logout, and cookie flags in a browser after Pages is live.
