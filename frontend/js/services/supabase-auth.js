@@ -70,12 +70,27 @@
         return Promise.reject(new Error('The Supabase browser SDK could not be loaded.'));
       }
 
+      // Session is tab-scoped: sessionStorage only (not localStorage).
+      // Closing the tab ends the session; other tabs do not share it.
+      try {
+        var keysToRemove = [];
+        for (var i = 0; i < window.localStorage.length; i++) {
+          var k = window.localStorage.key(i);
+          if (k && (k.indexOf('sb-') === 0 || k.indexOf('supabase.auth') === 0 || k === 'mg-auth')) {
+            keysToRemove.push(k);
+          }
+        }
+        keysToRemove.forEach(function (key) { window.localStorage.removeItem(key); });
+      } catch (e) { /* private mode */ }
+
       client = window.supabase.createClient(
         MG.config.SUPABASE_URL,
         MG.config.SUPABASE_ANON_KEY,
         {
           auth: {
             persistSession: true,
+            storage: window.sessionStorage,
+            storageKey: 'mg-auth-tab',
             autoRefreshToken: true,
             detectSessionInUrl: true,
             flowType: 'pkce',
