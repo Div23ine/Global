@@ -351,7 +351,9 @@ export async function verifyAndCreditPayment(
     throw invalidState(`Deposit status "${dep.status}" does not allow crediting.`);
   }
 
-  await db.from('deposits').update({ status: 'under_verification' }).eq('id', depositId);
+  // The credit RPC locks the deposit and performs the status transition in the
+  // same transaction as the payment + ledger inserts. Do not pre-update here:
+  // a failed RPC must not strand the deposit in under_verification.
 
   const { data, error: rpcErr } = await db.rpc('admin_credit_deposit_payment', {
     p_deposit_id: depositId,
