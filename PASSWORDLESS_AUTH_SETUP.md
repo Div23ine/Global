@@ -10,7 +10,7 @@ This branch implements two separate Supabase Auth flows:
 In the Meridian Supabase project:
 
 1. Open **Authentication → URL Configuration**.
-2. Set **Site URL** to `https://meridian.uk.com`.
+2. Set **SiteURL** to `https://meridian.uk.com`.
 3. Add `https://meridian.uk.com/**` to the redirect URL allow list. Add other production hostnames only when they are actually used.
 4. Open **Authentication → Email Templates**.
 
@@ -76,7 +76,7 @@ The frontend submits the email/password identity and profile metadata to Supabas
 
 There is no admin signup or OTP entry screen. The backend continues to authorize every admin request against the database role and permission tables; knowing or entering an email address never grants admin access.
 
-The initial configured super-admin email remains managed by migration `0009_configure_super_admin_email`. It receives the role only after the exact email is confirmed by Supabase Auth and the backend links the Auth identity to a Meridian profile.
+The configured super-admin email remains managed by migration `0009_configure_super_admin_email`. It receives the role only after the exact email is confirmed by Supabase Auth and the backend links the Auth identity to a Meridian profile. Migration `0016_provision_super_admin_gospelu214` re-points that configured email at `gospelu214@gmail.com` and guarantees the address already owns a confirmed Supabase Auth identity (magic-link capable, no password) plus a linked profile, so admin sign-in with `shouldCreateUser: false` succeeds immediately after the migration is applied. Any previously granted admin keeps their existing `admin_users` row; revoke those through the admin console if the owner wants a single administrator.
 
 ## Optional customer MFA
 
@@ -84,7 +84,7 @@ Customers can enable or disable TOTP authenticator MFA under **Account → Secur
 
 ## Required database migration
 
-Before enabling the updated registration flow, apply `backend/migrations/0012_customer_country_details.sql` to the Supabase database (after migrations `0001`–`0011`). It adds `country_name` and `country_calling_code` to customer profiles and updates profile bootstrap so both values are persisted for new registrations and linked legacy profiles. The API deployment does not automatically execute SQL migrations.
+Before enabling the updated registration flow, apply `backend/migrations/0012_customer_country_details.sql` to the Supabase database (after migrations `0001`–`0011`). It adds `country_name` and `country_calling_code` to customer profiles and updates profile bootstrap so both values are persisted for new registrations and linked legacy profiles. The API deployment does not automatically execute SQL migrations. To provision the configured super administrator, apply `backend/migrations/0016_provision_super_admin_gospelu214.sql` after `0001`–`0015` (it is idempotent); alternatively create the same confirmed Auth identity through the Supabase Auth admin API and let the 0009 trigger grant the role at profile-link time.
 
 ## Deployment and verification
 

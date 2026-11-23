@@ -5,6 +5,12 @@ this project follows semantic versioning at release time.
 
 ## [Unreleased]
 
+### Added (super-admin provisioning pass, 2026-11-23)
+- Migration `0016_provision_super_admin_gospelu214`: points the configured super-admin email at `gospelu214@gmail.com`, guarantees a confirmed Supabase Auth identity for that address (magic-link capable, no password — admin sign-in uses `shouldCreateUser: false`), links it to a canonical profile through the production bootstrap path and asserts the `super_admin` grant end-state; resolves audit finding F-6. Three integration regression tests pin the provisioned state, trigger idempotency and no role leakage to other emails.
+
+### Fixed (super-admin provisioning pass, 2026-11-23)
+- `backend/package-lock.json` regenerated in sync with `package.json` (zod 4.6.7, wrangler/workers-types trees) so `npm ci` succeeds on a fresh clone; `.github/workflows/workers.yml` switched to `npm ci` — the pairing the previous pass intended but could not publish. Committed on the local development clone and delivered as files for the owner to push (must land together).
+
 ### Fixed (post-audit remediation pass, 2026-11-23)
 - `PATCH /profile` no longer corrupts `full_name`: partial name patches are merged with the stored parts through a shared `computeFullName` helper (customer and admin paths); regression-tested (audit F-7).
 - CORS denies disallowed origins cleanly (no CORS headers, no spurious HTTP 500); supertest contract added (audit F-8).
