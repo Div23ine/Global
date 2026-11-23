@@ -36,7 +36,6 @@ healthRouter.get('/health', (_req, res) => {
     checks: {
       database: supabaseConfigured() ? 'configured' : 'not_configured',
       auth: supabaseConfigured() ? 'configured' : 'not_configured',
-      twilio: env.twilio.accountSid ? 'configured' : 'not_configured',
     },
   }, 'Service healthy');
 });

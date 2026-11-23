@@ -47,17 +47,6 @@ function buildEnv() {
       serviceRoleKey: str(get('SUPABASE_SERVICE_ROLE_KEY')),
     },
 
-    twilio: {
-      accountSid: str(get('TWILIO_ACCOUNT_SID')),
-      authToken: str(get('TWILIO_AUTH_TOKEN')),
-      fromNumber: str(get('TWILIO_FROM_NUMBER')),
-      allowedRecipients: str(get('TWILIO_ALLOWED_RECIPIENTS'))
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean),
-      smsPerHour: num(get('RATE_LIMIT_SMS_PER_HOUR'), 20),
-    },
-
     resend: {
       apiKey: str(get('RESEND_API_KEY')),
       fromEmail: str(get('RESEND_FROM_EMAIL')),

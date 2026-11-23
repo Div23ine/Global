@@ -38,12 +38,12 @@ export async function verifySupabaseAccessToken(headerValue: string): Promise<Su
     throw new Error('Invalid token or unverified email');
   }
   // Resolve the canonical profile and admin role before applying customer-only
-  // phone/MFA requirements. Admin authentication intentionally remains
+  // MFA requirements. Admin authentication intentionally remains
   // email-magic-link-only.
   const db = getServiceClient();
   const { data: profile, error: profileError } = await db
     .from('profiles')
-    .select('id, phone')
+    .select('id')
     .eq('supabase_user_id', data.user.id)
     .maybeSingle();
   if (profileError) throw new Error(profileError.message);
@@ -59,15 +59,8 @@ export async function verifySupabaseAccessToken(headerValue: string): Promise<Su
     isAdmin = Boolean(admin);
   }
 
-  // A new customer profile is not bootstrapped until Supabase confirms the
-  // phone. Existing legacy profiles with an already stored phone remain
-  // compatible; any in-progress phone change must be completed first.
-  if (!isAdmin && (
-    data.user.new_phone ||
-    ((!profile || !profile.phone) && (!data.user.phone || !data.user.phone_confirmed_at))
-  )) {
-    throw new Error('Phone number has not been verified');
-  }
+  // SMS/phone verification was removed together with the Twilio integration;
+  // customers verify their email address only.
 
   // If a customer enrolled a verified TOTP factor, every protected API
   // request must carry an AAL2 token. The browser UI is not the security
