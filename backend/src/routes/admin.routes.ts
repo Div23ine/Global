@@ -51,20 +51,20 @@ const ctxOf = (req: { admin?: { roleId: string }; ip?: string; get(h: string): s
 /* ------------------------------------------------------- admin Gmail alerts */
 // Each admin connects their own mailbox. OAuth state is single-use and bound
 // to the authenticated administrator; refresh tokens never reach the browser.
-adminRouter.get('/admin/email/gmail/status', async (req, res, next) => {
+adminRouter.get('/admin/email/gmail/status', requireAdmin(), async (req, res, next) => {
   try {
     ok(res, await gmailConnectionStatus(req.auth!.userId), 'Gmail connection status');
   } catch (err) { next(err); }
 });
 
-adminRouter.post('/admin/email/gmail/connect', async (req, res, next) => {
+adminRouter.post('/admin/email/gmail/connect', requireAdmin(), async (req, res, next) => {
   try {
     const authorizationUrl = await beginGmailConnection(req.auth!.userId);
     ok(res, { authorizationUrl }, 'Continue to Google to connect your Gmail account');
   } catch (err) { next(err); }
 });
 
-adminRouter.get('/admin/email/gmail/callback', async (req, res, next) => {
+adminRouter.get('/admin/email/gmail/callback', requireAdmin(), async (req, res, next) => {
   try {
     if (req.query.error) throw invalidState('Google Gmail connection was cancelled.');
     const code = String(req.query.code ?? '');
@@ -77,7 +77,7 @@ adminRouter.get('/admin/email/gmail/callback', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-adminRouter.delete('/admin/email/gmail', async (req, res, next) => {
+adminRouter.delete('/admin/email/gmail', requireAdmin(), async (req, res, next) => {
   try {
     await disconnectGmail(req.auth!.userId);
     await auditAllowed(req.auth!.userId, 'admin.gmail_disconnect', { type: 'admin_email', id: req.auth!.userId },
