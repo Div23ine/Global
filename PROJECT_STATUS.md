@@ -420,3 +420,33 @@ returned HTTP 422 "Signups not allowed for otp") and the audit's open question
    `.github/workflows/workers.yml` `npm ci` + lockfile-sync job) — the API
    token cannot write workflow files.
 4. Still open owner decisions: F-10 (unmatched_payments), F-14 (www-522).
+
+## Email OTP-only customer + administrator sign-in pass (2026-11-23)
+
+Owner-approved requirement: both customer and administrator sign-in must use a numeric email OTP, not a magic link.
+
+### Code changes on `development`
+
+- `frontend/js/services/supabase-auth.js`: customer and administrator sign-in requests use `signInWithOtp({ shouldCreateUser: false })` without `emailRedirectTo`; added a dedicated six-digit admin OTP verifier; customer email OTP verification no longer falls back to `magiclink` token verification.
+- `frontend/js/admin/main.jsx`: replaced the administrator magic-link-only form with email → six-digit OTP → verify/resend flow. The admin console remains gated by backend profile and permission checks.
+- `frontend/js/app/main.jsx`: removed the obsolete customer post-magic-link OTP screen; customer login is now one email OTP step, followed by optional TOTP MFA when enrolled.
+- `PASSWORDLESS_AUTH_SETUP.md` and `SUPABASE_EMAIL_OTP.md`: documented the shared Magic Link / OTP template requirement and both customer/admin code journeys.
+- `SECURITY_REVIEW.md`: added STRIDE assessment for OTP delivery, replay, rate limits and privilege separation.
+
+### Important external configuration
+
+Supabase sends a magic link by default from `signInWithOtp()` when the **Magic Link / OTP** email template uses `{{ .ConfirmationURL }}`. The Supabase Dashboard template must be changed to display `{{ .Token }}` and remove the link before inboxes will receive numeric codes. The connected Supabase management tools do not expose Auth email-template editing, so that project-level setting has not been changed here. Do not claim live OTP delivery until the template is saved and both live sign-in journeys are tested.
+
+### Verification status
+
+- GitHub commits applied to `development`; code changes are committed, not deployed.
+- Live Supabase email delivery and template configuration: **NOT VERIFIED / external configuration outstanding**.
+- Browser E2E and frontend syntax gates: pending CI result; not claimed complete in this pass.
+- Database schema/migrations: no changes required for this authentication-flow change.
+
+### Next actions
+
+1. Change Supabase Authentication → Email Templates → Magic Link / OTP to an OTP-only template containing `{{ .Token }}`.
+2. Confirm the Confirm sign up template also contains `{{ .Token }}` where used.
+3. Run frontend syntax checks and live customer/admin OTP journeys, including wrong/expired code rejection, resend rate limits, customer TOTP and non-admin denial.
+4. Deploy Pages only after the checks pass.
