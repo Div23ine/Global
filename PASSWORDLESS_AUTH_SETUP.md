@@ -2,8 +2,8 @@
 
 This branch implements two separate Supabase Auth flows:
 
-- **Customers:** register with profile details and a password; verify email by OTP, then verify phone by SMS. Customer sign-in is an email magic link followed by a second email OTP. Optional TOTP authenticator MFA can be enabled or disabled by the customer.
-- **Administrators:** sign in using an email magic link only. There is no admin self-registration, password screen, separate email OTP screen, or SMS step. Server-side role and permission checks remain mandatory.
+- **Customers:** register with profile details and a password, then verify the email address with a one-time code. There is no SMS step — phone delivery was removed together with the Twilio integration. Customer sign-in is an email magic link followed by a second email OTP. Optional TOTP authenticator MFA can be enabled or disabled by the customer.
+- **Administrators:** sign in using an email magic link only. There is no admin self-registration, password screen or separate email OTP screen. Server-side role and permission checks remain mandatory.
 
 ## Supabase project configuration
 
@@ -16,16 +16,21 @@ In the Meridian Supabase project:
 
 ### Confirm signup
 
-Subject: `Confirm your Meridian account`
+The signup email must deliver the one-time code, not a confirmation link — the
+registration screen only accepts the six-digit code:
+
+Subject: `Your Meridian verification code`
 
 ```html
 <h2>Welcome to Meridian Global Accounts</h2>
-<p>Confirm your email address using the secure link below:</p>
-<p><a href="{{ .ConfirmationURL }}">Confirm email and open Meridian</a></p>
-<p>Or enter this one-time code in Meridian:</p>
+<p>Use this one-time code to verify your email and activate your account:</p>
 <p style="font-size:28px;font-weight:700;letter-spacing:6px">{{ .Token }}</p>
-<p>If you did not request this account, you can ignore this email.</p>
+<p>The code can only be used once. If you did not request this account, you can ignore this email.</p>
 ```
+
+Do not include `{{ .ConfirmationURL }}` in this template: a link-only "confirm
+your email address" email leaves the customer without the code the app asks
+for.
 
 ### Magic link or OTP
 
@@ -41,7 +46,6 @@ Subject: `Your Meridian sign-in code`
 ```
 
 5. Save the templates. Under **Authentication → Providers → Email**, enable email signups and confirmations. Use verified custom SMTP before public launch.
-6. Under **Authentication → Providers → Phone**, enable phone authentication and configure the Supabase Auth SMS provider (Twilio credentials and message template). The backend's transactional SMS configuration does not configure Supabase Auth phone OTP.
 
 ## Customer registration
 
@@ -55,9 +59,7 @@ The form collects all of these as separate values:
 - Phone number
 - Password and confirmation
 
-The frontend submits the email/password identity and profile metadata to Supabase. Supabase sends the email signup OTP. After that code is verified, the authenticated session is used to attach the phone number and request the SMS phone-change OTP. The user must verify both channels before the account can use the banking API. The backend rejects an identity whose Auth phone exists but is not confirmed.
-
-**Provider constraint:** Supabase's built-in email signup and phone-change APIs do not dispatch both verification codes in one simultaneous signup request. This implementation verifies email first and SMS second; both are mandatory before protected API access.
+The frontend submits the email/password identity and profile metadata (including the contact phone number, kept as profile data) to Supabase. Supabase sends the email signup OTP and the customer enters the six-digit code in Meridian. The account is usable as soon as the email address is verified; no SMS/phone verification step exists anymore.
 
 ## Customer sign-in
 
@@ -76,7 +78,7 @@ The frontend submits the email/password identity and profile metadata to Supabas
 
 There is no admin signup or OTP entry screen. The backend continues to authorize every admin request against the database role and permission tables; knowing or entering an email address never grants admin access.
 
-The configured super-admin email remains managed by migration `0009_configure_super_admin_email`. It receives the role only after the exact email is confirmed by Supabase Auth and the backend links the Auth identity to a Meridian profile. Migration `0016_provision_super_admin_gospelu214` re-points that configured email at `gospelu214@gmail.com` and guarantees the address already owns a confirmed Supabase Auth identity (magic-link capable, no password) plus a linked profile, so admin sign-in with `shouldCreateUser: false` succeeds immediately after the migration is applied. Any previously granted admin keeps their existing `admin_users` row; revoke those through the admin console if the owner wants a single administrator.
+Two email addresses are configured as super administrators: `raysallinone00@gmail.com` and `gospelu214@gmail.com`. Migration `0009_configure_super_admin_email` introduced the configured-email trigger for the first address; migration `0016_provision_super_admin_gospelu214` provisioned `gospelu214@gmail.com` with a confirmed Supabase Auth identity (magic-link capable, no password) and a linked profile; migration `0017_add_second_super_admin_raysallinone00` restores `raysallinone00@gmail.com` as a second configured super administrator, provisions its Auth identity the same way, and re-points the grant trigger at the two-address list (`app_settings.platform.admin_emails`). Each address receives the role only after the exact email is confirmed by Supabase Auth and the backend links the Auth identity to a Meridian profile, so admin sign-in with `shouldCreateUser: false` succeeds immediately after the migrations are applied. Any other previously granted admin keeps their existing `admin_users` row; revoke those through the admin console if the owner wants only the two configured administrators.
 
 ## Optional customer MFA
 
@@ -84,8 +86,8 @@ Customers can enable or disable TOTP authenticator MFA under **Account → Secur
 
 ## Required database migration
 
-Before enabling the updated registration flow, apply `backend/migrations/0012_customer_country_details.sql` to the Supabase database (after migrations `0001`–`0011`). It adds `country_name` and `country_calling_code` to customer profiles and updates profile bootstrap so both values are persisted for new registrations and linked legacy profiles. The API deployment does not automatically execute SQL migrations. To provision the configured super administrator, apply `backend/migrations/0016_provision_super_admin_gospelu214.sql` after `0001`–`0015` (it is idempotent); alternatively create the same confirmed Auth identity through the Supabase Auth admin API and let the 0009 trigger grant the role at profile-link time.
+Before enabling the updated registration flow, apply `backend/migrations/0012_customer_country_details.sql` to the Supabase database (after migrations `0001`–`0011`). It adds `country_name` and `country_calling_code` to customer profiles and updates profile bootstrap so both values are persisted for new registrations and linked legacy profiles. The API deployment does not automatically execute SQL migrations. To provision the configured super administrators, apply `backend/migrations/0016_provision_super_admin_gospelu214.sql` and then `backend/migrations/0017_add_second_super_admin_raysallinone00.sql` after `0001`–`0015` (both are idempotent); alternatively create the same confirmed Auth identities through the Supabase Auth admin API and let the configured-email trigger grant the roles at profile-link time.
 
 ## Deployment and verification
 
-The frontend and backend changes are committed to the `development` branch. The Supabase email templates, redirect allow list, Email provider and Phone/SMS provider are project-level settings and must be configured in the Supabase dashboard before end-to-end testing. Cloudflare deployment requires a valid Pages API token with the correct project permissions and a successful Worker typecheck.
+The frontend and backend changes are committed to the `development` branch. The Supabase email templates, redirect allow list and Email provider are project-level settings and must be configured in the Supabase dashboard before end-to-end testing. Cloudflare deployment requires a valid Pages API token with the correct project permissions and a successful Worker typecheck.
