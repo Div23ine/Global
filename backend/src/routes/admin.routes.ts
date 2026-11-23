@@ -27,10 +27,6 @@ import {
   sendManualDepositBankDetails,
   verifyAndCreditPayment,
   rejectDeposit,
-  listReceivingBanks,
-  upsertReceivingBank,
-  approveReceivingBank,
-  rejectReceivingBank,
 } from '../services/deposits.service';
 import {
   createRefundRequest,
@@ -545,50 +541,6 @@ adminRouter.patch('/admin/settings', requireAdmin('settings.manage'), validate(s
 /* Manual bank-transfer deposit management + internal refunds                 */
 /* -------------------------------------------------------------------------- */
 
-adminRouter.get('/admin/receiving-banks', requireAdmin('deposits.manage'), async (_req, res, next) => {
-  try {
-    const banks = await listReceivingBanks(false);
-    ok(res, banks, 'Receiving bank accounts');
-  } catch (err) { next(err); }
-});
-
-const bankSchema = z.object({
-  id: z.string().uuid().optional(),
-  label: z.string().min(1).max(120),
-  bankName: z.string().min(1).max(120),
-  beneficiaryName: z.string().min(1).max(120),
-  accountNumber: z.string().max(64).optional(),
-  iban: z.string().max(34).optional(),
-  swiftBic: z.string().max(11).optional(),
-  countryCode: z.string().regex(/^[A-Z]{2}$/),
-  currencyCode: z.string().regex(/^[A-Z]{3}$/),
-  transferInstructions: z.string().max(2000).optional(),
-  displayOrder: z.number().int().optional(),
-}).strict();
-
-adminRouter.post('/admin/receiving-banks', requireAdmin('deposits.manage'), validate(bankSchema), async (req, res, next) => {
-  try {
-    const bank = await upsertReceivingBank(req.auth!.userId, req.body);
-    res.status(201);
-    ok(res, bank, 'Receiving bank account saved');
-  } catch (err) { next(err); }
-});
-
-adminRouter.post('/admin/receiving-banks/:id/approve', requireAdmin('deposits.manage'), async (req, res, next) => {
-  try {
-    const bank = await approveReceivingBank(req.auth!.userId, String(req.params.id), ctxOf(req));
-    ok(res, bank, 'Receiving bank account approved');
-  } catch (err) { next(err); }
-});
-
-const rejectBankSchema = z.object({ reason: z.string().min(3).max(1000) }).strict();
-adminRouter.post('/admin/receiving-banks/:id/reject', requireAdmin('deposits.manage'), validate(rejectBankSchema), async (req, res, next) => {
-  try {
-    const bank = await rejectReceivingBank(req.auth!.userId, String(req.params.id), req.body.reason, ctxOf(req));
-    ok(res, bank, 'Receiving bank account rejected');
-  } catch (err) { next(err); }
-});
-
 adminRouter.get('/admin/deposits/queue', requireAdmin('deposits.read'), async (req, res, next) => {
   try {
     const p = parsePagination(req.query as Record<string, unknown>);
@@ -609,30 +561,6 @@ adminRouter.get('/admin/deposits/queue', requireAdmin('deposits.read'), async (r
       .range(p.offset, p.offset + p.pageSize - 1);
     if (error) throw new Error(error.message);
     ok(res, data ?? [], 'Deposit management queue', pageMeta(p, count ?? 0));
-  } catch (err) { next(err); }
-});
-
-const assignBankSchema = z.object({ bankAccountId: z.string().uuid() }).strict();
-
-adminRouter.post('/admin/deposits/:id/assign-bank', requireAdmin('deposits.manage'), validate(assignBankSchema), async (req, res, next) => {
-  try {
-    const deposit = await assignReceivingBank(
-      req.auth!.userId, String(req.params.id), req.body.bankAccountId, ctxOf(req),
-    );
-    ok(res, deposit, 'Receiving bank assigned — customer notified');
-  } catch (err) { next(err); }
-});
-
-const manualBankDetailsSchema = z.object({
-  bankName: z.string().trim().min(1).max(120),
-  accountNumber: z.string().trim().min(1).max(120),
-  narration: z.string().trim().max(500).optional(),
-}).strict();
-
-adminRouter.post('/admin/deposits/:id/send-bank-details', requireAdmin('deposits.manage'), validate(manualBankDetailsSchema), async (req, res, next) => {
-  try {
-    const result = await sendManualDepositBankDetails(req.auth!.userId, String(req.params.id), req.body, ctxOf(req));
-    ok(res, result, 'Bank details emailed to customer and added to notifications');
   } catch (err) { next(err); }
 });
 
