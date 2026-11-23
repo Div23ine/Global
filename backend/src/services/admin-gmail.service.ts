@@ -209,6 +209,7 @@ async function sendViaConnection(connection: {
 export async function notifyAdminsByEmail(input: {
   subject: string; body: string; eventType: string;
 }): Promise<void> {
+  if (!configured()) return;
   try {
     const db = getServiceClient();
     const [{ data: admins, error: adminError }, { data: connections, error: connectionError }] = await Promise.all([
