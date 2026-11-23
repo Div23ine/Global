@@ -547,7 +547,7 @@ adminRouter.get('/admin/deposits/queue', requireAdmin('deposits.read'), async (r
     const db = getServiceClient();
     let query = db
       .from('deposits')
-      .select('*, profiles(email, full_name), receiving_bank_accounts(label, bank_name, currency_code)', { count: 'exact' });
+      .select('*, profiles(email, full_name)', { count: 'exact' });
     const status = String(req.query.status ?? '');
     if (status) query = query.eq('status', status);
     else {
@@ -564,10 +564,22 @@ adminRouter.get('/admin/deposits/queue', requireAdmin('deposits.read'), async (r
   } catch (err) { next(err); }
 });
 
+const manualBankDetailsSchema = z.object({
+  bankName: z.string().trim().min(1).max(120),
+  accountNumber: z.string().trim().min(1).max(120),
+  narration: z.string().trim().max(500).optional(),
+}).strict();
+
+adminRouter.post('/admin/deposits/:id/send-bank-details', requireAdmin('deposits.manage'), validate(manualBankDetailsSchema), async (req, res, next) => {
+  try {
+    const result = await sendManualDepositBankDetails(req.auth!.userId, String(req.params.id), req.body, ctxOf(req));
+    ok(res, result, 'Bank details emailed to customer and added to notifications');
+  } catch (err) { next(err); }
+});
+
 const verifyCreditSchema = z.object({
   amountReceived: z.union([z.string(), z.number()]),
   currencyCode: z.string().regex(/^[A-Z]{3}$/),
-  receivingBankId: z.string().uuid().optional(),
   bankTransactionId: z.string().max(120).optional(),
   bankTransactionRef: z.string().max(120).optional(),
   notes: z.string().max(2000).optional(),
