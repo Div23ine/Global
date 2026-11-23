@@ -545,7 +545,7 @@ adminRouter.patch('/admin/settings', requireAdmin('settings.manage'), validate(s
 /* Manual bank-transfer deposit management + internal refunds                 */
 /* -------------------------------------------------------------------------- */
 
-adminRouter.get('/admin/receiving-banks', requireAdmin('deposits.read'), async (_req, res, next) => {
+adminRouter.get('/admin/receiving-banks', requireAdmin('deposits.manage'), async (_req, res, next) => {
   try {
     const banks = await listReceivingBanks(false);
     ok(res, banks, 'Receiving bank accounts');

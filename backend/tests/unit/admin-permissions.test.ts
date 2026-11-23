@@ -74,6 +74,7 @@ const MANAGE_GATED: Array<[string, string, string]> = [
   ['POST', '/admin/deposits/:id/assign-bank', 'deposits.manage'],
   ['POST', '/admin/deposits/:id/verify-credit', 'deposits.manage'],
   ['POST', '/admin/deposits/:id/reject', 'deposits.manage'],
+  ['GET', '/admin/receiving-banks', 'deposits.manage'],
   ['POST', '/admin/receiving-banks', 'deposits.manage'],
   ['POST', '/admin/receiving-banks/:id/approve', 'deposits.manage'],
   ['POST', '/admin/receiving-banks/:id/reject', 'deposits.manage'],
@@ -86,7 +87,6 @@ const READ_ONLY_KEEPERS: Array<[string, string]> = [
   ['GET', '/admin/deposits'],
   ['GET', '/admin/deposits/queue'],
   ['GET', '/admin/refunds'],
-  ['GET', '/admin/receiving-banks'],
   ['GET', '/admin/currencies'],
 ];
 

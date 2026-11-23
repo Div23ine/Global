@@ -458,7 +458,7 @@ export async function verifyAndCreditPayment(
   } catch { /* non-blocking */ }
 
   await auditAllowed(adminId, 'deposit.verify_credit', { type: 'deposit', id: dep.reference }, {
-    amount, currency: input.currencyCode, bankTxnId: input.bankTransactionId, result,
+    amount, currency: input.currencyCode, bankTxnId: input.bankTransactionId, bankTxnRef: input.bankTransactionRef, result,
   }, { ip: ctx?.ip, userAgent: ctx?.userAgent });
 
   return result;
@@ -522,7 +522,6 @@ export async function upsertReceivingBank(
     countryCode: string;
     currencyCode: string;
     transferInstructions?: string;
-    isActive?: boolean;
     displayOrder?: number;
   },
 ) {
@@ -571,7 +570,7 @@ export async function approveReceivingBank(
   if (error) throw new Error(error.message);
   if (!bank) throw notFound('Receiving bank account not found.');
   if (bank.status !== 'pending') throw invalidState('Only pending receiving bank accounts can be approved.');
-  if (!bank.account_number && !bank.iban) throw badRequest('A verified account number or IBAN is required before approval.');
+  if (!bank.account_number?.trim() && !bank.iban?.trim()) throw badRequest('A verified account number or IBAN is required before approval.');
   if (/placeholder|unassigned/i.test([bank.label, bank.bank_name, bank.beneficiary_name].join(' '))) {
     throw badRequest('Placeholder receiving details cannot be approved.');
   }
