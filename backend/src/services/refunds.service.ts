@@ -126,9 +126,9 @@ export async function createRefundRequest(
   if (!isAdmin) {
     await notifyAdminsByEmail({
       eventType: 'refund.requested', subject: 'New refund request — ' + reference,
-      body: 'A customer submitted a refund request requiring administrator review.\\n\\nReference: ' + reference +
-        '\\nOriginal transaction: ' + orig.reference + '\\nRequested amount: ' + amount + ' ' + orig.currency_code +
-        '\\nReason: ' + input.reason.trim() + '\\n\\nSign in to Meridian and open Refund Management to review it.',
+      body: 'A customer submitted a refund request requiring administrator review.\n\nReference: ' + reference +
+        '\nOriginal transaction: ' + orig.reference + '\nRequested amount: ' + amount + ' ' + orig.currency_code +
+        '\nReason: ' + input.reason.trim() + '\n\nSign in to Meridian and open Refund Management to review it.',
     });
   }
 
