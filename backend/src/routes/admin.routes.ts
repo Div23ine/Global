@@ -9,6 +9,7 @@
  * Every administrative action is audit-logged.
  */
 import { Router } from 'express';
+import { env } from '../config/env';
 import { z } from 'zod';
 import { requireAdmin, requireAuth } from '../middleware/auth';
 import { validate } from '../middleware/validate';
@@ -19,6 +20,9 @@ import {
   setSupabaseUserBan,
 } from '../services/supabase-auth.service';
 import { auditAllowed } from '../services/audit.service';
+import {
+  beginGmailConnection, completeGmailConnection, disconnectGmail, gmailConnectionStatus,
+} from '../services/admin-gmail.service';
 import { notify } from '../services/notifications.service';
 import { parsePagination, pageMeta } from '../utils/pagination';
 import { badRequest, invalidState, notFound, ok } from '../utils/httpError';
@@ -42,6 +46,44 @@ const ctxOf = (req: { admin?: { roleId: string }; ip?: string; get(h: string): s
   role: req.admin?.roleId ?? null,
   ip: req.ip,
   userAgent: req.get('user-agent'),
+});
+
+/* ------------------------------------------------------- admin Gmail alerts */
+// Each admin connects their own mailbox. OAuth state is single-use and bound
+// to the authenticated administrator; refresh tokens never reach the browser.
+adminRouter.get('/admin/email/gmail/status', async (req, res, next) => {
+  try {
+    ok(res, await gmailConnectionStatus(req.auth!.userId), 'Gmail connection status');
+  } catch (err) { next(err); }
+});
+
+adminRouter.post('/admin/email/gmail/connect', async (req, res, next) => {
+  try {
+    const authorizationUrl = await beginGmailConnection(req.auth!.userId);
+    ok(res, { authorizationUrl }, 'Continue to Google to connect your Gmail account');
+  } catch (err) { next(err); }
+});
+
+adminRouter.get('/admin/email/gmail/callback', async (req, res, next) => {
+  try {
+    if (req.query.error) throw invalidState('Google Gmail connection was cancelled.');
+    const code = String(req.query.code ?? '');
+    const state = String(req.query.state ?? '');
+    const result = await completeGmailConnection(req.auth!.userId, code, state);
+    await auditAllowed(req.auth!.userId, 'admin.gmail_connect', { type: 'admin_email', id: result.email },
+      { provider: 'google' }, ctxOf(req));
+    const frontendOrigin = env.corsOrigin[0] || 'https://meridian.uk.com';
+    res.redirect(302, frontendOrigin + '/admin.html#/settings');
+  } catch (err) { next(err); }
+});
+
+adminRouter.delete('/admin/email/gmail', async (req, res, next) => {
+  try {
+    await disconnectGmail(req.auth!.userId);
+    await auditAllowed(req.auth!.userId, 'admin.gmail_disconnect', { type: 'admin_email', id: req.auth!.userId },
+      { provider: 'google' }, ctxOf(req));
+    ok(res, { disconnected: true }, 'Gmail disconnected');
+  } catch (err) { next(err); }
 });
 
 /* ------------------------------------------------------------------ overview */
