@@ -127,9 +127,7 @@
     },
 
     signIn: function (email) {
-      // Pure email OTP — do not set emailRedirectTo (that produces magic-link emails).
       var normalizedEmail = email.trim().toLowerCase();
-      try { window.localStorage.setItem('mg_customer_login_email', normalizedEmail); } catch (e) {}
       return requireClient().auth.signInWithOtp({
         email: normalizedEmail,
         options: { shouldCreateUser: false },
@@ -137,40 +135,22 @@
     },
 
     signInAdmin: function (email) {
+      var normalizedEmail = email.trim().toLowerCase();
       return requireClient().auth.signInWithOtp({
-        email: email.trim().toLowerCase(),
+        email: normalizedEmail,
         options: { shouldCreateUser: false },
       });
     },
 
-    hasPendingSecondFactor: function () {
-      try {
-        var pending = window.localStorage.getItem('mg_customer_login_email');
-        var current = state.user && state.user.email;
-        var callbackFlow = new URLSearchParams(window.location.search).get('customer_login') === '1';
-        return Boolean(current && ((pending && pending === current.trim().toLowerCase()) || callbackFlow));
-      } catch (e) { return false; }
-    },
-
-    sendPostLinkEmailOtp: function () {
-      var email = state.user && state.user.email;
-      if (!email || !MG.auth.hasPendingSecondFactor()) {
-        return Promise.reject(new Error('Open your sign-in link before requesting the email code.'));
-      }
-      return requireClient().auth.signInWithOtp({
-        email: email.trim().toLowerCase(),
-        options: { shouldCreateUser: false },
-      });
-    },
-
-    verifyPostLinkEmailOtp: function (token) {
-      var email = state.user && state.user.email;
-      if (!email || !MG.auth.hasPendingSecondFactor()) {
-        return Promise.reject(new Error('There is no pending email verification.'));
+    verifyAdminOtp: function (email, token) {
+      var normalizedEmail = email.trim().toLowerCase();
+      var code = String(token).replace(/\s+/g, '');
+      if (!/^\d{6}$/.test(code)) {
+        return Promise.resolve({ data: null, error: new Error('Enter the six-digit email code.') });
       }
       return requireClient().auth.verifyOtp({
-        email: email.trim().toLowerCase(),
-        token: String(token).replace(/\s+/g, ''),
+        email: normalizedEmail,
+        token: code,
         type: 'email',
       });
     },
@@ -178,16 +158,13 @@
     verifyEmailOtp: function (email, token) {
       var normalized = email.trim().toLowerCase();
       var code = String(token).replace(/\s+/g, '');
-      // signInWithOtp issues type "email"; confirm-signup path uses "signup".
-      function attempt(type) {
-        return requireClient().auth.verifyOtp({ email: normalized, token: code, type: type });
+      if (!/^\d{6}$/.test(code)) {
+        return Promise.resolve({ data: null, error: new Error('Enter the six-digit email code.') });
       }
-      return attempt('email').then(function (result) {
-        if (!result.error) return result;
-        return attempt('signup').then(function (r2) {
-          if (!r2.error) return r2;
-          return attempt('magiclink');
-        });
+      return requireClient().auth.verifyOtp({
+        email: normalized,
+        token: code,
+        type: 'email',
       }).then(function (result) {
         if (result.error) return result;
         // After OTP succeeds on registration, set the password chosen on the form.
@@ -203,7 +180,7 @@
      * 1) beginSignUp → signInWithOtp(shouldCreateUser: true) + stash password locally
      * 2) verifyEmailOtp → verifyOtp type email
      * 3) completeSignUpPassword → updateUser({ password })
-     * Supabase email templates for Magic Link AND Confirm sign up must show {{ .Token }}.
+     * Supabase "Magic Link or OTP" and "Confirm sign up" templates must show {{ .Token }}.
      */
     beginSignUp: function (payload) {
       var email = payload.email.trim().toLowerCase();
