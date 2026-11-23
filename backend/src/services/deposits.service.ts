@@ -55,7 +55,32 @@ export interface DepositRecord {
 const MIN_AMOUNT: Record<string, Money> = {
   EUR: '1.0000', GBP: '1.0000', USD: '1.0000', CHF: '1.0000', PLN: '5.0000',
 };
+
+/**
+ * Opening / first deposit floor — cross-border fee structure requires a
+ * substantial initial funding before subsequent smaller top-ups are allowed.
+ * Applies until the customer has at least one completed (credited) deposit.
+ */
+const FIRST_DEPOSIT_MIN: Record<string, Money> = {
+  USD: '20000.0000',
+  EUR: '20000.0000',
+  GBP: '20000.0000',
+  CHF: '20000.0000',
+  PLN: '20000.0000',
+};
 const MAX_AMOUNT: Money = '50000.0000';
+
+/** True when the customer has never had a deposit fully or partially credited. */
+async function isFirstDeposit(userId: string): Promise<boolean> {
+  const db = getServiceClient();
+  const { count, error } = await db
+    .from('deposits')
+    .select('id', { count: 'exact', head: true })
+    .eq('profile_id', userId)
+    .in('status', ['completed', 'partially_fulfilled']);
+  if (error) throw new Error(error.message);
+  return (count ?? 0) === 0;
+}
 
 const CREDITABLE_STATUSES = new Set([
   'awaiting_payment', 'payment_reported', 'under_verification', 'partially_fulfilled',
@@ -83,8 +108,17 @@ export async function createDeposit(
   ctx?: { ip?: string | null; userAgent?: string | null },
 ): Promise<DepositRecord> {
   const amount = parseAmount(input.amount);
-  const min = MIN_AMOUNT[input.currencyCode] ?? '1.0000';
+  const first = await isFirstDeposit(userId);
+  const firstMin = FIRST_DEPOSIT_MIN[input.currencyCode];
+  const regularMin = MIN_AMOUNT[input.currencyCode] ?? '1.0000';
+  const min = first && firstMin ? firstMin : regularMin;
+
   if (Number(amount) < Number(min)) {
+    if (first && firstMin) {
+      throw badRequest(
+        `Your first deposit must be at least ${Number(firstMin).toLocaleString('en-US', { minimumFractionDigits: 2 })} ${input.currencyCode} to cover cross-border processing fees. Subsequent deposits can be smaller.`,
+      );
+    }
     throw badRequest(`Minimum deposit for ${input.currencyCode} is ${min}.`);
   }
   if (Number(amount) > Number(MAX_AMOUNT)) {

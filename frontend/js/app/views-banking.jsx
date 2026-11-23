@@ -379,6 +379,12 @@
     if (accountsState.error) return h(MG.ui.ErrorPanel, { error: accountsState.error, onRetry: function () { location.reload(); } });
 
     var accounts = (accountsState.data || []).filter(function (a) { return a.status === 'active'; });
+    var history = historyState.data || [];
+    var hasCreditedDeposit = history.some(function (d) {
+      return d.status === 'completed' || d.status === 'partially_fulfilled';
+    });
+    var isFirstDeposit = !hasCreditedDeposit;
+    var FIRST_DEPOSIT_MIN = 20000;
 
     function submit(e) {
       e.preventDefault();
@@ -390,6 +396,11 @@
       var amt = String(form.amount).replace(',', '.');
       if (!/^\d+(\.\d{1,4})?$/.test(amt) || Number(amt) <= 0) {
         setErr('Enter a valid positive amount.');
+        return;
+      }
+      if (isFirstDeposit && Number(amt) < FIRST_DEPOSIT_MIN) {
+        setErr('Your first deposit must be at least 20,000.00 ' + form.currency +
+          ' to cover cross-border processing fees. Subsequent deposits can be smaller.');
         return;
       }
       setBusy(true);
@@ -460,6 +471,12 @@
     } else {
       wizard = h(MG.ui.Card, { title: 'Request a deposit' },
         h('form', { className: 'deposit-form', onSubmit: submit },
+          isFirstDeposit ? h('div', { className: 'notice notice-warn', role: 'status' },
+            h('b', null, 'Opening deposit required'),
+            h('p', null,
+              'Your first deposit must be at least ',
+              h('strong', null, '20,000.00'),
+              ' in the selected currency. This covers cross-border processing fees. After this opening deposit is credited, smaller top-ups are allowed.')) : null,
           err ? h('p', { className: 'form-error', role: 'alert' }, err) : null,
           h('div', { className: 'deposit-form-grid' },
             h(MG.ui.Field, { id: 'deposit-currency', label: 'Currency', hint: 'Choose the account you want to fund.' },
@@ -471,9 +488,16 @@
                   accounts.map(function (a) { return { value: a.currency_code, label: a.currency_code + ' — ' + (a.currency_name || '') }; })
                 ),
               })),
-            h(MG.ui.Field, { id: 'deposit-amount', label: 'Amount', hint: 'Enter the amount in the selected currency.' },
+            h(MG.ui.Field, {
+              id: 'deposit-amount',
+              label: 'Amount',
+              hint: isFirstDeposit
+                ? 'Minimum 20,000.00 for your first deposit (cross-border fees).'
+                : 'Enter the amount in the selected currency.',
+            },
               h(MG.ui.Input, {
-                id: 'deposit-amount', type: 'text', inputMode: 'decimal', placeholder: '0.00',
+                id: 'deposit-amount', type: 'text', inputMode: 'decimal',
+                placeholder: isFirstDeposit ? '20000.00' : '0.00',
                 value: form && form.amount || '',
                 onChange: function (e) { setForm(Object.assign({}, form || {}, { amount: e.target.value })); },
               })),
