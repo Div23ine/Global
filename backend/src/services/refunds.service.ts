@@ -8,6 +8,7 @@ import { auditAllowed } from './audit.service';
 import { badRequest, conflict, forbidden, invalidState, notFound } from '../utils/httpError';
 import { parseAmount, type Money } from '../utils/money';
 import { emailRefundCompleted } from './resend.service';
+import { notifyAdminsByEmail } from './admin-gmail.service';
 
 export interface RefundInput {
   originalTransactionId: string;
@@ -122,6 +123,14 @@ export async function createRefundRequest(
   await auditAllowed(actorId, 'refund.create', { type: 'refund', id: reference }, {
     original: orig.reference, amount, reason: input.reason,
   }, { ip: ctx?.ip, userAgent: ctx?.userAgent });
+  if (!isAdmin) {
+    await notifyAdminsByEmail({
+      eventType: 'refund.requested', subject: 'New refund request — ' + reference,
+      body: 'A customer submitted a refund request requiring administrator review.\\n\\nReference: ' + reference +
+        '\\nOriginal transaction: ' + orig.reference + '\\nRequested amount: ' + amount + ' ' + orig.currency_code +
+        '\\nReason: ' + input.reason.trim() + '\\n\\nSign in to Meridian and open Refund Management to review it.',
+    });
+  }
 
   return refund as RefundRecord;
 }
