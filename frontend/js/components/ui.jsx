@@ -44,7 +44,7 @@
     ticket: 'M21 11a2 2 0 0 0 0-4H3a2 2 0 0 0 0 4 2 2 0 0 1 0 4 2 2 0 0 0 0 4h18a2 2 0 0 0 0-4 2 2 0 0 1 0-4zM9 7v10',
     key: 'M21 2l-2 2m-7.5 7.5a5 5 0 1 1-7-7 5 5 0 0 1 7 7zM10 13L21 2M14 6l2 2M17 3l2 2',
     history: 'M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5M12 7v5l3 3',
-    settings: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm9-3a9 9 0 0 1-.2 1.9l2 1.6-2 3.4-2.5-1a9 9 0 0 1-3.3 1.9l-.4 2.7h-4l-.4-2.7a9 9 0 0 1-3.3-1.9l-2.5 1-2-3.4 2-1.6A9 9 0 0 1 3 12a9 9 0 0 1 .2-1.9l-2-1.6 2-3.4 2.5 1a9 9 0 0 1 3.3-1.9l.4-2.7h4l.4 2.7a9 9 0 0 1 3.3 1.9l2.5-1 2 3.4-2 1.6A9 9 0 0 1 21 12z',
+    settings: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm9-3a9 9 0 0 1-.2 1.9l2 1.6-2 3.4-2.5-1a9 9 0 0 1-3.3 1.9l-.4 2.7h-4l-.4 2.7a9 9 0 0 1-3.3-1.9l-2.5 1-2-3.4 2-1.6A9 9 0 0 1 3 12a9 9 0 0 1 .2-1.9l-2-1.6 2-3.4 2.5 1a9 9 0 0 1 3.3-1.9l.4-2.7h4l.4 2.7a9 9 0 0 1 3.3 1.9l2.5-1 2 3.4 2-1.6A9 9 0 0 1 21 12z',
     'trend-up': 'M23 6l-9.5 9.5-5-5L1 18M23 6h-6M23 6v6',
     refresh: 'M23 4v6h-6M1 20v-6h6M3.5 9a9 9 0 0 1 14.8-3.4L23 10M1 14l4.7 4.4A9 9 0 0 0 20.5 15',
     alert: 'M12 9v4m0 4h.01M10.3 3.9l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3l-8-14a2 2 0 0 0-3.4 0z',
@@ -74,6 +74,7 @@
     check: 'M20 6L9 17l-5-5',
     help: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01',
     'key-circle': 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM13 13l4-4M16 8l1 1',
+    copy: 'M9 9h11v11H9zM5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1',
   };
 
   MG.ui.icon = function (name, size) {
@@ -225,16 +226,16 @@
       h('div', { className: 'skel sk-title' }),
       variant === 'charts' ? h(React.Fragment, null,
         h('div', { className: 'skel sk-hero' }),
-        h('div', { className: 'skel-row' },
+        h('div', { className: 'skel sk-row' },
           h('div', { className: 'skel sk-block' }), h('div', { className: 'skel sk-block' }), h('div', { className: 'skel sk-block' })),
-        h('div', { className: 'skel-cols' },
+        h('div', { className: 'skel sk-cols' },
           h('div', { className: 'skel sk-panel' }), h('div', { className: 'skel sk-panel' })))
       : variant === 'list' ? h(React.Fragment, null,
         h('div', { className: 'skel sk-bar' }), h('div', { className: 'skel sk-bar' }),
         h('div', { className: 'skel sk-panel sk-tall' }))
       : h(React.Fragment, null,
         h('div', { className: 'skel sk-bar' }), h('div', { className: 'skel sk-bar' }),
-        h('div', { className: 'skel-row' },
+        h('div', { className: 'skel sk-row' },
           h('div', { className: 'skel sk-block' }), h('div', { className: 'skel sk-block' }),
           h('div', { className: 'skel sk-block' }), h('div', { className: 'skel sk-block' }))));
   };
@@ -305,7 +306,10 @@
   }
   var TOAST_IC = { ok: 'check-circle', err: 'x-circle', info: 'info' };
   MG.ui.ToastHost = function () {
-    var items = useState([])[0]; var setItems = useState([])[1];
+    /* Single useState call — the old `useState(x)[0]; ... useState(x)[1];`
+       pattern made TWO hook calls reading/writing different slots, so
+       toasts never rendered. */
+    var _ti = useState([]); var items = _ti[0]; var setItems = _ti[1];
     useEffect(function () {
       var fn = function (t) {
         setItems(function (x) { return x.slice(-3).concat([t]); });
@@ -350,8 +354,10 @@
   MG.ui.useConfirm = function () { return useContext(ConfirmCtx); };
 
   MG.ui.ConfirmProvider = function (props) {
-    var req = useState(null)[0]; var setReq = useState(null)[1];
-    var reason = useState('')[0]; var setReason = useState('')[1];
+    /* Single-call useState pairs (see ToastHost note): the former twin-call
+       pattern left `req` permanently null, so confirm dialogs never opened. */
+    var _tr = useState(null); var req = _tr[0]; var setReq = _tr[1];
+    var _tn = useState(''); var reason = _tn[0]; var setReason = _tn[1];
 
     var confirm = function (opts) {
       return new Promise(function (resolve) {
@@ -399,8 +405,8 @@
   /* ------------------------------------------------ restricted panel */
   MG.ui.RestrictedPanel = function (props) {
     var ops = props.ops || [];
-    var rej = useState(null)[0]; var setRej = useState(null)[1];
-    var busy = useState('')[0]; var setBusy = useState('')[1];
+    var _tj = useState(null); var rej = _tj[0]; var setRej = _tj[1];
+    var _tb = useState(''); var busy = _tb[0]; var setBusy = _tb[1];
 
     var attempt = function (op) {
       setBusy(op.op);
@@ -454,13 +460,13 @@
 
   MG.ui.useFetch = function (fn, deps) {
     var state = MG.ui.useAsync(fn, deps);
-    var nonce = useState(0)[0]; var setNonce = useState(0)[1];
+    var _tc = useState(0); var nonce = _tc[0]; var setNonce = _tc[1];
     /* re-run by changing deps won't work with useAsync; provide refresh */
     return [state, function () { setNonce(function (n) { return n + 1; }); }];
   };
 
   MG.ui.useDebounced = function (value, ms) {
-    var v = useState(value)[0]; var setV = useState(value)[1];
+    var _tv = useState(value); var v = _tv[0]; var setV = _tv[1];
     useEffect(function () {
       var t = setTimeout(function () { setV(value); }, ms || 300);
       return function () { clearTimeout(t); };

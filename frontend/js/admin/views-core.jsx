@@ -133,6 +133,7 @@
     var _e = React.useState({ first: '', last: '', phone: '' }); var edit = _e[0]; var setEdit = _e[1];
     var _b = React.useState(false); var busy = _b[0]; var setBusy = _b[1];
     var _n = React.useState({ title: '', body: '', alsoSms: false }); var note = _n[0]; var setNote = _n[1];
+    var confirm = MG.ui.useConfirm();
 
     React.useEffect(function () {
       if (state.data && state.data.profile) {
@@ -162,6 +163,92 @@
         MG.ui.toast('Permitted fields updated. The customer is not notified automatically.', 'ok');
         refresh();
       }).catch(function (err) { setBusy(false); MG.ui.toast(MG.util.errMessage(err), 'err'); });
+    }
+
+    /* ---- account status controls (audit F-3: moderation reachable from UI) */
+    var status = p.status || 'active';
+
+    function requireReason(value, what) {
+      var v = String(value || '').trim();
+      if (v.length < 3) { MG.ui.toast(what + ' requires a reason of at least 3 characters.', 'err'); return null; }
+      return v;
+    }
+
+    function doSuspend() {
+      confirm({
+        title: 'Suspend ' + (p.full_name || p.email || 'this customer'),
+        body: 'A suspended customer cannot sign in or transact until reactivated. Existing balances and financial records are preserved.',
+        withReason: 'Reason shown to the customer and recorded in the audit log (3\u2013500 characters).',
+        placeholder: 'e.g. KYC document review pending',
+        confirmLabel: 'Suspend account', tone: 'warn',
+      }).then(function (reason) {
+        if (reason === null || reason === undefined) return;
+        var r = requireReason(reason, 'Suspending');
+        if (!r) return;
+        setBusy(true);
+        MGA.api.suspendUser(id, r).then(function () {
+          MG.ui.toast('Account suspended \u2014 customer notified with the reason.', 'ok');
+          refresh();
+        }).catch(function (err) { MG.ui.toast(MG.util.errMessage(err), 'err'); })
+          .finally(function () { setBusy(false); });
+      });
+    }
+
+    function doBan() {
+      confirm({
+        title: 'Ban ' + (p.full_name || p.email || 'this customer'),
+        body: 'A banned customer is permanently blocked from signing in. Financial records are preserved for audit.',
+        withReason: 'Reason recorded in the security event feed and audit log (3\u2013500 characters).',
+        placeholder: 'e.g. Confirmed fraud pattern on deposit attempts',
+        confirmLabel: 'Ban account', tone: 'danger',
+      }).then(function (reason) {
+        if (reason === null || reason === undefined) return;
+        var r = requireReason(reason, 'Banning');
+        if (!r) return;
+        setBusy(true);
+        MGA.api.banUser(id, r).then(function () {
+          MG.ui.toast('Account banned and security event recorded.', 'ok');
+          refresh();
+        }).catch(function (err) { MG.ui.toast(MG.util.errMessage(err), 'err'); })
+          .finally(function () { setBusy(false); });
+      });
+    }
+
+    function doUnban() {
+      confirm({
+        title: 'Reactivate ' + (p.full_name || p.email || 'this customer'),
+        body: 'The account returns to active status and the customer can sign in again.',
+        confirmLabel: 'Reactivate account', tone: 'primary',
+      }).then(function (okc) {
+        if (!okc) return;
+        setBusy(true);
+        MGA.api.unbanUser(id).then(function () {
+          MG.ui.toast('Account reactivated.', 'ok');
+          refresh();
+        }).catch(function (err) { MG.ui.toast(MG.util.errMessage(err), 'err'); })
+          .finally(function () { setBusy(false); });
+      });
+    }
+
+    function doDelete() {
+      confirm({
+        title: 'Delete ' + (p.full_name || p.email || 'this customer') + '?',
+        body: 'This permanently removes the login identity and anonymises the profile. It cannot be undone.',
+        list: [
+          'The Supabase Auth identity is deleted \u2014 the customer can never sign in again.',
+          'Personal data is anonymised; financial records are retained for audit.',
+          'Any administrator role this profile held is revoked.',
+        ],
+        confirmLabel: 'Delete permanently', tone: 'danger',
+      }).then(function (okc) {
+        if (!okc) return;
+        setBusy(true);
+        MGA.api.deleteUser(id).then(function () {
+          MG.ui.toast('Identity deleted; profile anonymised; financial records retained.', 'ok');
+          location.hash = '#/users';
+        }).catch(function (err) { MG.ui.toast(MG.util.errMessage(err), 'err'); })
+          .finally(function () { setBusy(false); });
+      });
     }
 
     return h(React.Fragment, null,
@@ -278,6 +365,26 @@
               h('button', { type: 'submit', className: 'btn btn-ghost btn-block' + (busy ? ' is-busy' : ''), disabled: busy, style: { marginTop: 12 } },
                 h(MG.ui.Icon, { name: 'send', size: 14 }), ' Send notification')),
             h('p', { className: 'panel-note' }, h('b', null, 'Manual'), ' \u2014 the customer is not notified automatically. Manual sends are recorded in the audit log.')),
+
+          h(MG.ui.Card, { title: h('h3', { className: 'panel-title' }, h(MG.ui.Icon, { name: 'shield', size: 15 }), ' Account status') },
+            h('p', { className: 'panel-note' },
+              'Every change is permission-checked server-side, recorded in the audit log and, where shown, sent to the customer. Financial records are never modified by status changes.'),
+            status === 'deleted'
+              ? h('p', { className: 'panel-note' },
+                  h(MG.ui.Badge, { status: 'cancelled', label: 'deleted' }),
+                  ' This profile is anonymised \u2014 no status controls remain.')
+              : h('div', { className: 'btn-row', style: { flexWrap: 'wrap' } },
+                  status === 'active' ? h('button', { type: 'button', className: 'btn btn-ghost btn-sm', disabled: busy, onClick: doSuspend },
+                    h(MG.ui.Icon, { name: 'pause', size: 14 }), ' Suspend') : null,
+                  status === 'suspended' || status === 'banned'
+                    ? h('button', { type: 'button', className: 'btn btn-primary btn-sm', disabled: busy, onClick: doUnban },
+                        h(MG.ui.Icon, { name: 'check', size: 14 }), ' Reactivate') : null,
+                  status !== 'banned' ? h('button', { type: 'button', className: 'btn btn-ghost btn-sm', disabled: busy, onClick: doBan },
+                    h(MG.ui.Icon, { name: 'ban', size: 14 }), ' Ban') : null,
+                  h('button', { type: 'button', className: 'btn btn-danger btn-sm', disabled: busy, onClick: doDelete },
+                    h(MG.ui.Icon, { name: 'x-circle', size: 14 }), ' Delete')),
+            status !== 'deleted' ? h('p', { className: 'panel-note' },
+              'Suspend and ban ask for a reason (3\u2013500 characters) \u2014 the service layer rejects anything shorter. Delete removes the login identity and anonymises the profile; it cannot be undone.') : null),
 
           h(MG.ui.RestrictedPanel, {
             intro: 'Attempts against this customer\u2019s money are always rejected \u2014 try any of them:',
