@@ -67,9 +67,15 @@ boundary. The service-role key is privileged and must remain server-side.
 - Only a Supabase Auth user whose email is confirmed by Supabase can be linked.
 - The link/bootstrap RPC is executable only by service_role; browser clients
   cannot call it.
-- The RLS identity helper is executable by anon, authenticated and
-  service_role because RLS expressions invoke it; unauthenticated callers
-  resolve to an empty identity and cannot see customer rows.
+- The RLS identity helper is executable by authenticated and service_role.
+  Migration 0015 (owner hardening, 2026-11-23) revoked anon/PUBLIC EXECUTE and
+  altered the nine customer *_select_own policies TO authenticated, so
+  anonymous queries on customer tables default-deny WITHOUT evaluating the
+  helper, and anonymous direct calls are denied. The earlier anon-grant
+  contract (helper executable by anon because RLS expressions invoke it) no
+  longer applies: no policy that calls the helper remains applicable to anon.
+  Locked by the integration regression test (privilege matrix + anon
+  default-deny + direct-call denial + public catalog reads still open).
 - Profile anonymization is SECURITY DEFINER but executable only by
   service_role. Migration 0007 explicitly revokes inherited PUBLIC, anon and
   authenticated grants before granting service_role; this is essential because
@@ -180,3 +186,31 @@ follow-ups: repository/project owner.
 - Still blocked (unchanged): live Supabase/Twilio journeys, production
   migration rehearsal, Cloudflare deployment — all require owner credentials
   and explicit authorization.
+
+## 12. Owner PR #6 hardening verification + regression-test alignment (2026-11-23)
+
+The owner merged PR #6 (`fix/meridian-production-hardening`: deposits.service
+atomicity fix, migration 0015 production security/performance hardening) after
+the remediation push. The re-run verification gates caught one red: the
+integration regression test still asserted the PRE-0015 contract
+(`anon_can_resolve_identity: true`).
+
+Analysis (no RLS change made by the agent — the owner altered the policies):
+- All nine policies that call `app_current_user_id()` are SELECT policies and
+  were all altered `TO authenticated` by 0015. With no anon-applicable policy,
+  anonymous queries on those tables default-deny WITHOUT evaluating the policy
+  expression, so the revoked anon EXECUTE is never exercised.
+- Verified behaviorally on the real migrated database: anon
+  `SELECT * FROM profiles` returns zero rows without error; direct
+  `SELECT app_current_user_id()` as anon is permission-denied; anon public
+  catalog reads (currencies) still work.
+
+| Threat | Decision | Mitigation, owner and code pointer |
+|---|---|---|
+| Tampering — regression suite left red after an owner RLS change hides future regressions | Mitigated | The stale assertion was aligned with the post-0015 contract and STRENGTHENED: the test now locks the tightened privilege matrix, anon default-deny on customer tables (zero rows, no error), direct helper-call denial for anon, and that public catalog reads remain open. Owner: backend. backend/tests/integration/database.test.ts, backend/migrations/0015_production_security_performance_hardening.sql. |
+| DoS/behavior — anon queries erroring instead of cleanly returning empty | Accepted (not reachable) | Would only occur if a policy calling the helper remained applicable to anon; none does after 0015. If a future migration re-introduces an anon-applicable policy using the helper, it must re-grant EXECUTE to anon in the same migration. Owner: database. |
+
+Result: typecheck 0 errors, lint 0 findings, Vitest 53/53 (incl. real-Postgres
+integration), `npm audit` 0 vulnerabilities, frontend check.sh 16/16 — on the
+tree combining the owner's PR #6 with the remediation work and the local
+lockfile/workflow commit.
