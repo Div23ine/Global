@@ -22,6 +22,7 @@ import { auditAllowed } from '../services/audit.service';
 import { notify, notifyWithSms } from '../services/notifications.service';
 import { parsePagination, pageMeta } from '../utils/pagination';
 import { badRequest, invalidState, notFound, ok } from '../utils/httpError';
+import { computeFullName } from '../utils/name';
 import {
   assignReceivingBank,
   verifyAndCreditPayment,
@@ -132,10 +133,13 @@ adminRouter.patch('/admin/users/:id', requireAdmin('users.edit'), validate(userP
     if (req.body.lastName !== undefined) patch.last_name = req.body.lastName;
     if (req.body.phone !== undefined) patch.phone = req.body.phone;
     if (req.body.firstName !== undefined || req.body.lastName !== undefined) {
+      // full_name is recomputed from the STORED parts plus the patched parts
+      // (shared contract with the customer PATCH /profile — see utils/name).
       const { data: cur } = await db_getProfile(String(req.params.id));
-      const full = [req.body.firstName ?? cur?.first_name, req.body.lastName ?? cur?.last_name]
-        .filter(Boolean).join(' ').trim();
-      patch.full_name = full;
+      patch.full_name = computeFullName(cur ?? null, {
+        firstName: req.body.firstName,
+        lastName: req.body.lastName,
+      });
     }
     const db = getServiceClient();
     const { data, error } = await db.from('profiles').update(patch).eq('id', String(req.params.id)).select('*').maybeSingle();
