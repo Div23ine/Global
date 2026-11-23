@@ -36,7 +36,7 @@ async function connect(): Promise<Client> {
 }
 
 beforeAll(async () => {
-  const t = (m: string) => console.error(`[hook] ${new Date().toISOString()} ${m}`);
+  const t = (m: string) => console.error(`ook] ${new Date().toISOString()} ${m}`);
   t('importing embedded-postgres');
   const { default: EmbeddedPostgres } = await import('embedded-postgres');
   t('constructing');
@@ -185,7 +185,13 @@ describe('migrations + seed', () => {
     }
   });
 
-  it('keeps the RLS identity helper public while protecting profile anonymization', async () => {
+  it('locks RLS helper privileges after the 0015 tightening while protecting profile anonymization', async () => {
+    // Migration 0015 (owner hardening): the nine customer *_select_own RLS
+    // policies were altered TO authenticated, so anonymous queries default-deny
+    // WITHOUT evaluating app_current_user_id() and the helper no longer needs
+    // anon EXECUTE. This test locks the tightened matrix and the behavioral
+    // consequence: anon cannot call the helper directly, anon reads on customer
+    // tables return zero rows (no error), and public catalog reads still work.
     const { rows } = await svc!.query(`
       SELECT
         has_function_privilege('anon', 'public.app_current_user_id()', 'EXECUTE') AS anon_can_resolve_identity,
@@ -195,7 +201,7 @@ describe('migrations + seed', () => {
         has_function_privilege('service_role', 'public.anonymize_profile(text)', 'EXECUTE') AS service_can_anonymize
     `);
     expect(rows[0]).toEqual({
-      anon_can_resolve_identity: true,
+      anon_can_resolve_identity: false,
       user_can_resolve_identity: true,
       anon_can_anonymize: false,
       user_can_anonymize: false,
@@ -205,8 +211,16 @@ describe('migrations + seed', () => {
     const anon = await connect();
     try {
       await anon.query('SET ROLE anon');
-      const identity = await anon.query('SELECT public.app_current_user_id() AS id');
-      expect(identity.rows[0].id).toBe('');
+      // Default-deny on a customer table: zero rows, no permission error —
+      // the policy expression (and the helper) is never evaluated for anon.
+      const anonProfiles = await anon.query('SELECT count(*)::int AS n FROM public.profiles');
+      expect(anonProfiles.rows[0].n).toBe(0);
+      // Direct helper call is denied for anon.
+      await expect(anon.query('SELECT public.app_current_user_id() AS id'))
+        .rejects.toThrow(/permission denied/i);
+      // Public catalog tables (no helper in their policies) remain readable.
+      const currencies = await anon.query('SELECT count(*)::int AS n FROM public.currencies');
+      expect(currencies.rows[0].n).toBe(5);
       await expect(anon.query(
         'SELECT public.anonymize_profile($1)',
         ['legacy_admin_profile'],
