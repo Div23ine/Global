@@ -121,7 +121,7 @@ export async function emailBankDetailsAssigned(opts: {
 /** One-off bank instructions for a single deposit; never saved as a reusable bank account. */
 export async function emailManualDepositBankDetails(opts: {
   to: string; customerName: string; reference: string; amount: string; currency: string;
-  bankName: string; accountNumber: string; narration?: string | null;
+  bankName: string; accountName: string; accountNumber: string; narration?: string | null;
 }): Promise<boolean> {
   const narration = opts.narration?.trim() || opts.reference;
   const html = `
@@ -130,6 +130,7 @@ export async function emailManualDepositBankDetails(opts: {
     <table style="border-collapse:collapse;margin:16px 0">
       <tr><td style="padding:4px 12px 4px 0"><strong>Amount</strong></td><td>${escapeHtml(opts.amount)} ${escapeHtml(opts.currency)}</td></tr>
       <tr><td style="padding:4px 12px 4px 0"><strong>Bank</strong></td><td>${escapeHtml(opts.bankName)}</td></tr>
+      <tr><td style="padding:4px 12px 4px 0"><strong>Account name</strong></td><td>${escapeHtml(opts.accountName)}</td></tr>
       <tr><td style="padding:4px 12px 4px 0"><strong>Account number</strong></td><td><code>${escapeHtml(opts.accountNumber)}</code></td></tr>
       <tr><td style="padding:4px 12px 4px 0"><strong>Transfer narration</strong></td><td><code>${escapeHtml(narration)}</code></td></tr>
     </table>
@@ -139,7 +140,7 @@ export async function emailManualDepositBankDetails(opts: {
     to: opts.to, subject: `Bank details for deposit ${opts.reference}`, html,
     text: [`Hello ${opts.customerName || 'Customer'},`, `Deposit: ${opts.reference}`,
       `Amount: ${opts.amount} ${opts.currency}`, `Bank: ${opts.bankName}`,
-      `Account number: ${opts.accountNumber}`, `Transfer narration: ${narration}`,
+      `Account name: ${opts.accountName}`, `Account number: ${opts.accountNumber}`, `Transfer narration: ${narration}`,
       'Your balance is credited only after the payment is verified.',
       '— Meridian Global Accounts'].join('\\n'),
     tags: [{ name: 'category', value: 'deposit_bank_details' }, { name: 'reference', value: opts.reference }],
