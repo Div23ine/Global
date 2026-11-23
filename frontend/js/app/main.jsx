@@ -67,8 +67,8 @@
           var factors = (factorsResult.data && factorsResult.data.totp) || [];
           var verified = factors.filter(function (f) { return f.status === 'verified'; })[0];
           if (!verified) {
-            try { window.localStorage.removeItem('mg_customer_login_email'); } catch (e) {}
             location.hash = '#/overview';
+            MG.auth.completeCustomerLogin();
             return;
           }
           setFactor(verified.id);
@@ -88,8 +88,8 @@
       setBusy(true); setError('');
       MG.auth.verifyTotp(factor, challenge, mfaCode).then(function (result) {
         if (result.error) throw result.error;
-        try { window.localStorage.removeItem('mg_customer_login_email'); } catch (e) {}
         location.hash = '#/overview';
+        MG.auth.completeCustomerLogin();
       }).catch(function (err) { setError(err.message || 'Authenticator code is invalid.'); })
         .finally(function () { setBusy(false); });
     }
