@@ -13,7 +13,7 @@ Cloudflare Pages (static frontend)          Cloudflare Worker (Express API)
               |                              - server-side admin permissions
               | Bearer Supabase Auth JWT     - Supabase service/user-scoped access
               v                              - signed payment-provider webhooks
-       Supabase Auth + PostgreSQL (RLS)       Resend / Twilio
+       Supabase Auth + PostgreSQL (RLS)       Resend email
 ```
 
 | Decision | Choice | Rationale |
@@ -23,7 +23,7 @@ Cloudflare Pages (static frontend)          Cloudflare Worker (Express API)
 | Database | Supabase PostgreSQL | Managed relational database, migrations, RLS and transactional money functions. |
 | Authentication | Supabase Auth | Email/password registration and sign-in, email confirmation, password recovery, password updates and Auth user administration. |
 | Auth-to-data link | Supabase Auth UUID → profiles.supabase_user_id → canonical profiles.id | Preserves existing financial foreign keys while allowing RLS to use auth.uid(). |
-| Notifications | Resend and Twilio | Supabase Auth SMTP handles verification/recovery mail separately from platform notifications. Twilio is transactional only in this design. |
+| Notifications | Resend email | Supabase Auth SMTP handles verification/recovery mail separately from platform notifications. SMS delivery was removed together with the Twilio integration. |
 | Admin | React SPA with API-enforced role checks | UI gating is cosmetic; every privileged endpoint checks the profile role and permissions on the server. |
 
 ## 2. Frontend architecture
@@ -122,7 +122,7 @@ profile ID.
 - Backend: Cloudflare Worker named global, configured from backend/wrangler.toml.
 - Database and identity: Supabase PostgreSQL and Supabase Auth.
 - Worker secrets: SUPABASE_URL, SUPABASE_ANON_KEY and
-  SUPABASE_SERVICE_ROLE_KEY. Optional Resend, Twilio and payment secrets are
+  SUPABASE_SERVICE_ROLE_KEY. Optional Resend and payment secrets are
   configured only when those integrations are enabled.
 - Frontend public config: API_BASE_URL, SUPABASE_URL and SUPABASE_ANON_KEY.
 - Auth email confirmation and password-recovery SMTP are configured in Supabase

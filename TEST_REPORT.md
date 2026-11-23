@@ -70,8 +70,9 @@ environment:
 2. **Live Supabase round-trips via supabase-js** — the SQL layer is verified
    against real PostgreSQL with the identical migrations; the PostgREST
    transport path is not.
-3. **Twilio delivery** — retry/limit/redaction logic implemented; no live SMS
-   sent.
+3. **Twilio delivery** — no longer applicable: the Twilio service was removed
+   with the SMS-OTP pass (service deleted, dependency dropped); no SMS path
+   exists to deliver or test.
 4. **Payment provider webhook end-to-end** — signature logic and idempotent
    state machine verified at unit + database level; the partner contract is
    an external requirement.
