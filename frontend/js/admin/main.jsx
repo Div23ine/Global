@@ -283,7 +283,7 @@
               error ? h('p', { className: 'form-error', role: 'alert' }, error) : null,
               message ? h('p', { className: 'form-success', role: 'status' }, message) : null,
               h('button', { className: 'btn btn-primary btn-block', type: 'submit', disabled: busy },
-                busy ? 'Please wait…' : (sent ? 'Resend magic link' : 'Email magic link'))))));
+                busy ? 'Please wait…' : (sent ? 'Resend magic link' : 'Email magic link')))))));
   }
 
   ReactDOM.createRoot(document.getElementById('gl-app')).render(h(AdminApp));

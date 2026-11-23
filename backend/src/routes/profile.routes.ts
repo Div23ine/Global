@@ -58,3 +58,4 @@ profileRouter.patch('/profile', validate(patchSchema), async (req, res, next) =>
     ok(res, data, 'Profile updated');
   } catch (err) { next(err); }
 });
+
