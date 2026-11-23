@@ -451,8 +451,9 @@
           h(MG.ui.Badge, { status: result.status }), ' ',
           MG.util.money(result.requested_amount || result.amount, result.currency_code)),
         result.status === 'pending_admin_action' ? h('p', { className: 'muted' },
-          'Your request has been received. An administrator will assign receiving bank details shortly. You will be notified when they appear here. Do not transfer funds yet.')
+          'Your request has been received. An administrator will email your one-time bank details and add them to your in-app notifications. Do not transfer funds until you receive those instructions.')
         : null,
+        (result.status === 'awaiting_payment' || result.status === 'payment_reported' || result.status === 'partially_fulfilled') && !bank ? h('p', { className: 'muted' }, 'Your bank instructions were sent to your email and in-app notifications. ', h('a', { href: '#/notifications' }, 'Open notifications'), ' to view the details.') : null,
         (result.status === 'awaiting_payment' || result.status === 'payment_reported' || result.status === 'partially_fulfilled') && bank ? h('div', { className: 'bank-details-panel' },
           h('h4', null, 'Transfer instructions'),
           h('p', null, h('b', null, 'Bank: '), bank.bank_name),
