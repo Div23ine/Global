@@ -6,7 +6,10 @@
   var listeners = [];
   // Keep the customer shell gated between email OTP success and completion of
   // any enrolled TOTP challenge. Admin sign-in uses its own OTP flow.
-  var customerOtpPending = false;
+  var customerOtpPending = (function () {
+    try { return window.sessionStorage.getItem('mg_customer_otp_pending') === '1'; }
+    catch (e) { return false; }
+  })();
   var state = {
     ready: false,
     signedIn: false,
@@ -132,14 +135,19 @@
     signIn: function (email) {
       var normalizedEmail = email.trim().toLowerCase();
       customerOtpPending = true;
+      try { window.sessionStorage.setItem('mg_customer_otp_pending', '1'); } catch (e) {}
       return requireClient().auth.signInWithOtp({
         email: normalizedEmail,
         options: { shouldCreateUser: false },
       }).then(function (result) {
-        if (result.error) customerOtpPending = false;
+        if (result.error) {
+          customerOtpPending = false;
+          try { window.sessionStorage.removeItem('mg_customer_otp_pending'); } catch (e) {}
+        }
         return result;
       }).catch(function (error) {
         customerOtpPending = false;
+        try { window.sessionStorage.removeItem('mg_customer_otp_pending'); } catch (e) {}
         throw error;
       });
     },
@@ -291,6 +299,7 @@
 
     completeCustomerLogin: function () {
       customerOtpPending = false;
+      try { window.sessionStorage.removeItem('mg_customer_otp_pending'); } catch (e) {}
       var session = state.session;
       if (session && session.user) publish(session, session.user);
     },
@@ -304,6 +313,7 @@
       return requireClient().auth.signOut({ scope: scope }).then(function (result) {
         if (!result.error && scope !== 'others') {
           customerOtpPending = false;
+          try { window.sessionStorage.removeItem('mg_customer_otp_pending'); } catch (e) {}
           publish(null, null);
         }
         return result;
