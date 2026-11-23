@@ -19,7 +19,7 @@ import {
   setSupabaseUserBan,
 } from '../services/supabase-auth.service';
 import { auditAllowed } from '../services/audit.service';
-import { notify, notifyWithSms } from '../services/notifications.service';
+import { notify } from '../services/notifications.service';
 import { parsePagination, pageMeta } from '../utils/pagination';
 import { badRequest, invalidState, notFound, ok } from '../utils/httpError';
 import { computeFullName } from '../utils/name';
@@ -235,22 +235,16 @@ adminRouter.delete('/admin/users/:id', requireAdmin('users.delete'), async (req,
 const notifySchema = z.object({
   title: z.string().min(3).max(120),
   body: z.string().min(3).max(2000),
-  alsoSms: z.boolean().optional(),
 }).strict();
 
 adminRouter.post('/admin/users/:id/notify', requireAdmin('users.edit'), validate(notifySchema), async (req, res, next) => {
   try {
     const db = getServiceClient();
-    const { data: profile } = await db.from('profiles').select('phone').eq('id', String(req.params.id)).maybeSingle();
+    const { data: profile } = await db.from('profiles').select('id').eq('id', String(req.params.id)).maybeSingle();
     if (!profile) throw notFound('User not found.');
-    if (req.body.alsoSms) {
-      await notifyWithSms(String(req.params.id), (profile as { phone: string | null }).phone ?? null,
-        'info', req.body.title, req.body.body);
-    } else {
-      await notify(String(req.params.id), 'info', req.body.title, req.body.body);
-    }
+    await notify(String(req.params.id), 'info', req.body.title, req.body.body);
     await auditAllowed(req.auth!.userId, 'admin.manual_notification', { type: 'profile', id: String(req.params.id) },
-      { title: req.body.title, sms: Boolean(req.body.alsoSms) }, ctxOf(req));
+      { title: req.body.title }, ctxOf(req));
     ok(res, { sent: true }, 'Manual notification sent (users are never notified automatically)');
   } catch (err) { next(err); }
 });
