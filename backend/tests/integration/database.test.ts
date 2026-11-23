@@ -36,7 +36,7 @@ async function connect(): Promise<Client> {
 }
 
 beforeAll(async () => {
-  const t = (m: string) => console.error(`ook] ${new Date().toISOString()} ${m}`);
+  const t = (m: string) => console.error(`[hook] ${new Date().toISOString()} ${m}`);
   t('importing embedded-postgres');
   const { default: EmbeddedPostgres } = await import('embedded-postgres');
   t('constructing');
