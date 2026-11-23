@@ -861,3 +861,70 @@ describe('customer isolation on deposits', () => {
     }
   });
 });
+
+describe('configured super admin provisioning (migration 0016)', () => {
+  const ADMIN_EMAIL = 'gospelu214@gmail.com';
+
+  it('provisions the configured email with a confirmed Auth identity, linked profile and super_admin role', async () => {
+    // Auth identity exists, is confirmed and owns the exact configured email.
+    const auth = await svc!.query(
+      `SELECT id, lower(trim(email)) AS email, email_confirmed_at
+         FROM auth.users WHERE lower(trim(email)) = $1`, [ADMIN_EMAIL],
+    );
+    expect(auth.rows).toHaveLength(1);
+    expect(auth.rows[0].email).toBe(ADMIN_EMAIL);
+    expect(auth.rows[0].email_confirmed_at).not.toBeNull();
+
+    // The identity is linked to exactly one canonical, active profile.
+    const profile = await svc!.query(
+      `SELECT id, lower(trim(email)) AS email, status, supabase_user_id
+         FROM profiles WHERE supabase_user_id = $1`, [auth.rows[0].id],
+    );
+    expect(profile.rows).toHaveLength(1);
+    expect(profile.rows[0]).toMatchObject({ email: ADMIN_EMAIL, status: 'active' });
+
+    // The profile holds the super_admin role.
+    const role = await svc!.query(
+      `SELECT role_id FROM admin_users WHERE profile_id = $1`, [profile.rows[0].id],
+    );
+    expect(role.rows).toEqual([{ role_id: 'super_admin' }]);
+
+    // The configured email setting drives the 0009 trigger.
+    const setting = await svc!.query(
+      `SELECT value #>> '{}' AS email FROM app_settings WHERE key = 'platform.admin_email'`,
+    );
+    expect(setting.rows[0].email).toBe(ADMIN_EMAIL);
+  });
+
+  it('re-fires the 0009 trigger idempotently: still exactly one super_admin row', async () => {
+    const before = await svc!.query(
+      `SELECT a.profile_id, a.role_id
+         FROM admin_users a JOIN profiles p ON p.id = a.profile_id
+        WHERE lower(trim(p.email)) = $1`, [ADMIN_EMAIL],
+    );
+    expect(before.rows).toHaveLength(1);
+    expect(before.rows[0].role_id).toBe('super_admin');
+
+    // Touch a trigger-watched column: the trigger must upsert, never duplicate.
+    await svc!.query(
+      `UPDATE profiles SET status = 'active' WHERE lower(trim(email)) = $1`, [ADMIN_EMAIL],
+    );
+
+    const after = await svc!.query(
+      `SELECT a.profile_id, a.role_id
+         FROM admin_users a JOIN profiles p ON p.id = a.profile_id
+        WHERE lower(trim(p.email)) = $1`, [ADMIN_EMAIL],
+    );
+    expect(after.rows).toEqual(before.rows);
+  });
+
+  it('does not grant any admin role to a confirmed identity with a different email', async () => {
+    const PLAIN_USER = '00000000-0000-4000-8000-000000000009';
+    await bootstrapTestUser(PLAIN_USER, 'plain-user@example.com', 'Plain', 'User', 'DE');
+
+    const role = await svc!.query(
+      `SELECT role_id FROM admin_users WHERE profile_id = $1`, [PLAIN_USER],
+    );
+    expect(role.rows).toEqual([]);
+  });
+});
