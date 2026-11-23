@@ -18,6 +18,7 @@ import { parseAmount, type Money } from '../utils/money';
 import { env } from '../config/env';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { emailManualDepositBankDetails, emailDepositCredited } from './resend.service';
+import { notifyAdminsByEmail } from './admin-gmail.service';
 
 export type DepositMethod = 'bank_transfer';
 
@@ -221,6 +222,11 @@ export async function createDeposit(
   await auditAllowed(userId, 'deposit.create', { type: 'deposit', id: finalRef }, {
     currency: input.currencyCode, amount, method: 'bank_transfer',
   }, { ip: ctx?.ip, userAgent: ctx?.userAgent });
+  await notifyAdminsByEmail({
+    eventType: 'deposit.created', subject: 'New deposit request — ' + finalRef,
+    body: 'A customer submitted a deposit request requiring administrator attention.\\n\\nReference: ' + finalRef +
+      '\\nAmount: ' + amount + ' ' + input.currencyCode + '\\nStatus: Pending admin action\\n\\nSign in to Meridian and open Deposit Management to review it.',
+  });
 
   return deposit as DepositRecord;
 }
@@ -293,6 +299,14 @@ export async function reportPayment(
   await auditAllowed(userId, 'deposit.report_payment', { type: 'deposit', id: reference }, {
     notes: payload.notes, bankTransactionRef: payload.bankTransactionRef, hasReceipt: Boolean(payload.receiptUrl),
   }, { ip: ctx?.ip, userAgent: ctx?.userAgent });
+  await notifyAdminsByEmail({
+    eventType: 'deposit.payment_reported', subject: 'Payment reported — ' + reference,
+    body: 'A customer reported a bank transfer. Administrator verification is required before any balance is credited.\\n\\nReference: ' + reference +
+      '\\nAmount: ' + String(updated.requested_amount ?? updated.amount) + ' ' + updated.currency_code +
+      '\\nBank transaction reference: ' + String(payload.bankTransactionRef ?? '') +
+      '\\nReceipt attached: ' + (payload.receiptUrl ? 'Yes' : 'No') +
+      '\\n\\nSign in to Meridian and open Deposit Management to verify the payment.',
+  });
 
   return updated as DepositRecord;
 }
