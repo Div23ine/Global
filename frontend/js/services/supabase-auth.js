@@ -330,4 +330,16 @@
       publish(null, null);
     },
   };
+
+  // Hard aliases — survive partial deploys / cache skew between HTML and JS.
+  if (typeof MG.auth.verifyAdminOtp !== 'function') {
+    MG.auth.verifyAdminOtp = function (email, token) {
+      return MG.auth.verifyEmailOtp(email, token);
+    };
+  }
+  if (typeof MG.auth.signInAdmin !== 'function') {
+    MG.auth.signInAdmin = function (email) {
+      return MG.auth.signIn(email);
+    };
+  }
 })();

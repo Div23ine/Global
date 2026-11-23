@@ -266,7 +266,13 @@
     function verifyOtp(event) {
       if (event) event.preventDefault();
       setBusy(true); setError(''); setMessage('');
-      MG.auth.verifyAdminOtp(email, otp).then(function (result) {
+      var verifyFn = (MG.auth && (MG.auth.verifyAdminOtp || MG.auth.verifyEmailOtp));
+      if (typeof verifyFn !== 'function') {
+        setBusy(false);
+        setError('Authentication module failed to load. Hard-refresh (Ctrl+Shift+R) and try again.');
+        return;
+      }
+      verifyFn.call(MG.auth, email, otp).then(function (result) {
         if (result.error) throw result.error;
         // Supabase publishes the authenticated session. AdminApp then checks
         // the server-side profile and role before rendering the console.

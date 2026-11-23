@@ -37,9 +37,9 @@
       console.error(err);
     };
     window.addEventListener('error', function (e) {
-      if (e && e.message && /Babel|Script error|Unexpected/.test(e.message)) {
-        window.__meridianBootError(e.error || e.message);
-      }
+      var root = document.getElementById('gl-app');
+      var booted = root && root.querySelector && root.querySelector('.shell, .auth-card, .auth-viewport, .auth-wrap');
+      if (!booted && e && e.message) window.__meridianBootError(e.error || e.message);
     });
   </script>
 
