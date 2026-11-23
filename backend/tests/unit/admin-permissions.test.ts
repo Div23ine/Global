@@ -2,7 +2,7 @@
  * Route-permission contract tests.
  *
  * Promise under test: money-moving administrator operations (deposit
- * crediting/rejection, receiving-bank configuration, refund approval) are
+ * crediting/rejection, one-off bank-detail delivery, refund approval) are
  * gated by the MANAGE-level permissions of the seeded role matrix, so a
  * read-only role (compliance, finance_readonly) can never move money.
  *
@@ -71,13 +71,9 @@ function guardFor(method: string, path: string): RouteGuard | undefined {
 }
 
 const MANAGE_GATED: Array<[string, string, string]> = [
-  ['POST', '/admin/deposits/:id/assign-bank', 'deposits.manage'],
+  ['POST', '/admin/deposits/:id/send-bank-details', 'deposits.manage'],
   ['POST', '/admin/deposits/:id/verify-credit', 'deposits.manage'],
   ['POST', '/admin/deposits/:id/reject', 'deposits.manage'],
-  ['GET', '/admin/receiving-banks', 'deposits.manage'],
-  ['POST', '/admin/receiving-banks', 'deposits.manage'],
-  ['POST', '/admin/receiving-banks/:id/approve', 'deposits.manage'],
-  ['POST', '/admin/receiving-banks/:id/reject', 'deposits.manage'],
   ['POST', '/admin/refunds', 'refunds.manage'],
   ['POST', '/admin/refunds/:id/approve', 'refunds.manage'],
   ['POST', '/admin/refunds/:id/reject', 'refunds.manage'],
