@@ -383,8 +383,18 @@
     var hasCreditedDeposit = history.some(function (d) {
       return d.status === 'completed' || d.status === 'partially_fulfilled';
     });
-    var isFirstDeposit = !hasCreditedDeposit;
-    var FIRST_DEPOSIT_MIN = 20000;
+        var isFirstDeposit = !hasCreditedDeposit;
+    // Indicative local units per 1 USD (must match backend policy table).
+    var USD_RATES = { USD: 1, EUR: 0.95, GBP: 0.82, CHF: 0.90, PLN: 4.10 };
+    var FIRST_DEPOSIT_USD = 20000;
+    function firstDepositMin(code) {
+      var rate = USD_RATES[code];
+      if (rate == null) return null;
+      return Math.ceil(FIRST_DEPOSIT_USD * rate * 100) / 100;
+    }
+    function fmtMin(n, code) {
+      return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + code;
+    }
 
     function submit(e) {
       e.preventDefault();
@@ -398,10 +408,13 @@
         setErr('Enter a valid positive amount.');
         return;
       }
-      if (isFirstDeposit && Number(amt) < FIRST_DEPOSIT_MIN) {
-        setErr('Your first deposit must be at least 20,000.00 ' + form.currency +
-          ' to cover cross-border processing fees. Subsequent deposits can be smaller.');
-        return;
+      if (isFirstDeposit) {
+        var minFirst = firstDepositMin(form.currency);
+        if (minFirst != null && Number(amt) < minFirst) {
+          setErr('Your first deposit must be at least ' + fmtMin(minFirst, form.currency) +
+            ' (USD 20,000 equivalent) to cover cross-border processing fees. Subsequent deposits can be smaller.');
+          return;
+        }
       }
       setBusy(true);
       MG.api.createDeposit(form.currency, amt, form.notes || undefined, 'dep-' + Date.now()).then(function (res) {
@@ -474,9 +487,13 @@
           isFirstDeposit ? h('div', { className: 'notice notice-warn', role: 'status' },
             h('b', null, 'Opening deposit required'),
             h('p', null,
-              'Your first deposit must be at least ',
-              h('strong', null, '20,000.00'),
-              ' in the selected currency. This covers cross-border processing fees. After this opening deposit is credited, smaller top-ups are allowed.')) : null,
+              'Your first deposit must be at least the ',
+              h('strong', null, 'USD 20,000 equivalent'),
+              ' in the selected currency (indicative rates). This covers cross-border processing fees. After this opening deposit is credited, smaller top-ups are allowed.'),
+            (form && form.currency && firstDepositMin(form.currency) != null)
+              ? h('p', null, 'Minimum for ', form.currency, ': ',
+                  h('strong', null, fmtMin(firstDepositMin(form.currency), form.currency)))
+              : h('p', { className: 'muted' }, 'Select a currency to see the exact minimum.')) : null,
           err ? h('p', { className: 'form-error', role: 'alert' }, err) : null,
           h('div', { className: 'deposit-form-grid' },
             h(MG.ui.Field, { id: 'deposit-currency', label: 'Currency', hint: 'Choose the account you want to fund.' },
@@ -491,13 +508,17 @@
             h(MG.ui.Field, {
               id: 'deposit-amount',
               label: 'Amount',
-              hint: isFirstDeposit
-                ? 'Minimum 20,000.00 for your first deposit (cross-border fees).'
-                : 'Enter the amount in the selected currency.',
+              hint: isFirstDeposit && form && form.currency && firstDepositMin(form.currency) != null
+                ? ('Minimum ' + fmtMin(firstDepositMin(form.currency), form.currency) + ' (USD 20,000 equivalent).')
+                : isFirstDeposit
+                  ? 'Minimum is the USD 20,000 equivalent in your selected currency.'
+                  : 'Enter the amount in the selected currency.',
             },
               h(MG.ui.Input, {
                 id: 'deposit-amount', type: 'text', inputMode: 'decimal',
-                placeholder: isFirstDeposit ? '20000.00' : '0.00',
+                placeholder: (isFirstDeposit && form && form.currency && firstDepositMin(form.currency) != null)
+                  ? String(firstDepositMin(form.currency).toFixed(2))
+                  : '0.00',
                 value: form && form.amount || '',
                 onChange: function (e) { setForm(Object.assign({}, form || {}, { amount: e.target.value })); },
               })),

@@ -57,18 +57,37 @@ const MIN_AMOUNT: Record<string, Money> = {
 };
 
 /**
- * Opening / first deposit floor — cross-border fee structure requires a
- * substantial initial funding before subsequent smaller top-ups are allowed.
- * Applies until the customer has at least one completed (credited) deposit.
+ * Opening / first deposit floor — cross-border fee structure requires initial
+ * funding of at least USD 20,000 equivalent before smaller top-ups are allowed.
+ *
+ * INDICATIVE_USD rates = units of local currency per 1 USD (ops policy table,
+ * not live market quotes). Minimums are rounded up to 2 decimals so the floor
+ * does not fall under $20,000 at these rates.
  */
-const FIRST_DEPOSIT_MIN: Record<string, Money> = {
-  USD: '20000.0000',
-  EUR: '20000.0000',
-  GBP: '20000.0000',
-  CHF: '20000.0000',
-  PLN: '20000.0000',
+const FIRST_DEPOSIT_MIN_USD = 20_000;
+/** Local currency units per 1 USD (indicative, policy). */
+const INDICATIVE_USD_RATES: Record<string, number> = {
+  USD: 1,
+  EUR: 0.95,   // ≈ $1 → €0.95  → min €19,000
+  GBP: 0.82,   // ≈ $1 → £0.82  → min £16,400
+  CHF: 0.90,   // ≈ $1 → CHF0.90 → min CHF18,000
+  PLN: 4.10,   // ≈ $1 → zł4.10  → min zł82,000
 };
-const MAX_AMOUNT: Money = '50000.0000';
+
+function firstDepositMin(currencyCode: string): Money | null {
+  const rate = INDICATIVE_USD_RATES[currencyCode];
+  if (rate == null || rate <= 0) return null;
+  // Round up to 2 decimal places (cent-safe for display currencies).
+  const raw = FIRST_DEPOSIT_MIN_USD * rate;
+  const cents = Math.ceil(raw * 100) / 100;
+  return cents.toFixed(4) as Money;
+}
+
+function formatMinDisplay(min: Money, currencyCode: string): string {
+  return `${Number(min).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencyCode}`;
+}
+
+const MAX_AMOUNT: Money = '250000.0000'; // raised so USD-equivalent first deposits in weaker units fit
 
 /** True when the customer has never had a deposit fully or partially credited. */
 async function isFirstDeposit(userId: string): Promise<boolean> {
@@ -109,14 +128,16 @@ export async function createDeposit(
 ): Promise<DepositRecord> {
   const amount = parseAmount(input.amount);
   const first = await isFirstDeposit(userId);
-  const firstMin = FIRST_DEPOSIT_MIN[input.currencyCode];
+  const firstMin = first ? firstDepositMin(input.currencyCode) : null;
   const regularMin = MIN_AMOUNT[input.currencyCode] ?? '1.0000';
-  const min = first && firstMin ? firstMin : regularMin;
+  const min = firstMin ?? regularMin;
 
   if (Number(amount) < Number(min)) {
-    if (first && firstMin) {
+    if (firstMin) {
       throw badRequest(
-        `Your first deposit must be at least ${Number(firstMin).toLocaleString('en-US', { minimumFractionDigits: 2 })} ${input.currencyCode} to cover cross-border processing fees. Subsequent deposits can be smaller.`,
+        `Your first deposit must be at least ${formatMinDisplay(firstMin, input.currencyCode)} ` +
+          `(USD 20,000 equivalent at indicative rates) to cover cross-border processing fees. ` +
+          `Subsequent deposits can be smaller.`,
       );
     }
     throw badRequest(`Minimum deposit for ${input.currencyCode} is ${min}.`);
