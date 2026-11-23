@@ -81,10 +81,10 @@ supportRouter.post('/support/tickets', supportLimiter, validate(ticketSchema), a
     if (msgErr) throw new Error(msgErr.message);
     await notifyAdminsByEmail({
       eventType: 'support.ticket_created', subject: 'New customer support request — ' + req.body.subject,
-      body: 'A customer submitted a support request requiring administrator attention.\\n\\nTicket ID: ' + ticket.id +
-        '\\nCategory: ' + req.body.category + '\\nSubject: ' + req.body.subject +
-        '\\n\\nMessage:\\n' + String(req.body.message).slice(0, 1500) +
-        '\\n\\nSign in to Meridian and open Support to respond.',
+      body: 'A customer submitted a support request requiring administrator attention.\n\nTicket ID: ' + ticket.id +
+        '\nCategory: ' + req.body.category + '\nSubject: ' + req.body.subject +
+        '\n\nMessage:\n' + String(req.body.message).slice(0, 1500) +
+        '\n\nSign in to Meridian and open Support to respond.',
     });
     res.status(201);
     res.json({ success: true, message: 'Support ticket created', data: ticket, meta: {} });
