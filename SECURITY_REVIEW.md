@@ -224,3 +224,19 @@ the SMS OTP step. Owner for all follow-ups: repository/project owner.
   files now returns only historical documentation references.
 - Still blocked (unchanged): live Supabase journeys, production migration
   rehearsal, Cloudflare deployment — owner credentials required.
+
+
+## 15. Email OTP-only sign-in pass (2026-11-23)
+
+Owner-approved change: both customer and administrator sign-in now use a six-digit email OTP instead of a magic-link flow. Passwordless requests deliberately omit `emailRedirectTo`; verification uses Supabase `verifyOtp` with `type: 'email'`. The previous customer post-magic-link OTP screen and the administrator magic-link form were removed/replaced. Customer TOTP remains an optional additional factor. Supabase email-template configuration is a separate project-level dependency and must use `{{ .Token }}` rather than `{{ .ConfirmationURL }}` for the Magic Link / OTP template.
+
+| Threat | Decision | Mitigation, owner and code pointer |
+|---|---|---|
+| Spoofing — email OTP is exposed if a mailbox is compromised | Mitigated / residual risk accepted | Supabase issues one-time, expiring email codes; verified email identity remains required. Customer TOTP remains available as an additional factor. Platform operator should protect the mailbox and configure verified SMTP. Owner: platform operator. `frontend/js/services/supabase-auth.js`, Supabase Auth OTP settings. |
+| Tampering — a magic-link token or old callback could be accepted by the app | Mitigated | Login verification accepts the numeric `email` OTP type only; the explicit `magiclink` fallback and post-link customer OTP component are removed. Owner: frontend. `frontend/js/services/supabase-auth.js`, `frontend/js/app/main.jsx`, `frontend/js/admin/main.jsx`. |
+| Repudiation — OTP requests and failed verification | Mitigated by provider controls | Supabase Auth handles token issuance, single-use verification and rate limits. Do not log OTP values or persist them in browser storage. Owner: platform operator/frontend. `frontend/js/services/supabase-auth.js`. |
+| Information disclosure — OTP exposure in URLs or client logs | Mitigated | Sign-in requests do not set `emailRedirectTo`; codes are entered in the app and are not placed in a URL. No code is written to application logs or persistent storage. Owner: frontend. `frontend/js/services/supabase-auth.js`. |
+| DoS — repeated OTP requests | Mitigated | Supabase's email OTP rate limits remain in force; resend is an explicit user action. Review project rate limits if abuse is observed. Owner: platform operator. Supabase Auth rate-limit configuration. |
+| Elevation of privilege — receiving an OTP could be mistaken for administrator authorization | Mitigated | OTP verification authenticates an identity only. AdminApp still calls the protected API, and backend profile/status/role/permission checks remain authoritative. `shouldCreateUser: false` prevents admin login from creating arbitrary identities. Owner: backend. `frontend/js/admin/main.jsx`, backend admin middleware. |
+
+Verification not yet completed against live email delivery: the connected Supabase tool does not expose the project's Auth email-template configuration, and no live OTP inbox journey has been executed. The operator must save the Magic Link / OTP template with `{{ .Token }}`; code changes alone cannot change Supabase's outgoing email template.
