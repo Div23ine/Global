@@ -566,6 +566,7 @@ adminRouter.get('/admin/deposits/queue', requireAdmin('deposits.read'), async (r
 
 const manualBankDetailsSchema = z.object({
   bankName: z.string().trim().min(1).max(120),
+  accountName: z.string().trim().min(1).max(160),
   accountNumber: z.string().trim().min(1).max(120),
   narration: z.string().trim().max(500).optional(),
 }).strict();
