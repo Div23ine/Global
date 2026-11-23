@@ -50,7 +50,7 @@
             h(MG.ui.Field, { id: 'pf-last', label: 'Last name' },
               h(MG.ui.Input, { id: 'pf-last', value: form.lastName || '',
                 onChange: function (e) { setForm(Object.assign({}, form, { lastName: e.target.value })); } }))),
-          h(MG.ui.Field, { id: 'pf-phone', label: 'Phone (E.164)', hint: 'Used for security notifications via SMS.' },
+          h(MG.ui.Field, { id: 'pf-phone', label: 'Phone (E.164)', hint: 'Stored on your profile for account records and support.' },
             h(MG.ui.Input, { id: 'pf-phone', type: 'tel', placeholder: '+49…', value: form.phone || '',
               onChange: function (e) { setForm(Object.assign({}, form, { phone: e.target.value })); } })),
           h(MG.ui.Button, { type: 'submit', variant: 'primary', busy: busy }, 'Save changes'))),
@@ -177,7 +177,7 @@
                 h('form', { onSubmit: verifyMfaEnrollment },
                   h(MG.ui.Field, { id: 'mfa-enrollment-code', label: 'Six-digit authenticator code' },
                     h(MG.ui.Input, { id: 'mfa-enrollment-code', value: code, required: true, maxLength: 8,
-                      autoComplete: 'one-time-code', onChange: function (event) { setCode(event.target.value.replace(/\\D/g, '').slice(0, 8)); } })),
+                      autoComplete: 'one-time-code', onChange: function (event) { setCode(event.target.value.replace(/\D/g, '').slice(0, 8)); } })),
                   h(MG.ui.Button, { type: 'submit', variant: 'primary', busy: busy }, 'Verify and enable MFA')))
             : h(MG.ui.Button, { type: 'button', variant: 'primary', busy: busy, onClick: enableMfa }, 'Enable authenticator MFA')),
       h(MG.ui.Card, { title: 'Security events' },
