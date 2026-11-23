@@ -198,7 +198,7 @@
       }).then(function (result) {
         if (result.error) throw result.error;
         setStep('email');
-        setMessage('Enter the email verification code sent to ' + form.email + '.');
+        setMessage('We sent a one-time code (OTP) to ' + form.email + '. Enter that code below — not a confirmation link.');
       }).catch(function (err) { setError(err.message || 'Could not start registration.'); })
         .finally(function () { setBusy(false); });
     }
@@ -238,20 +238,36 @@
         h('button', { className: 'btn btn-primary btn-block', type: 'submit', disabled: busy },
           busy ? 'Creating account…' : 'Sign Up'));
     } else {
-      content = h('form', { onSubmit: verifyEmail },
-        h(AuthInput, { label: 'Email verification code', value: emailOtp, required: true, maxLength: 6, autoComplete: 'one-time-code',
-          onChange: function (event) { setEmailOtp(event.target.value.replace(/\D/g, '').slice(0, 6)); } }),
-        h('p', { className: 'muted' }, 'Check your inbox and enter the six-digit one-time code.'),
-        error ? h('p', { className: 'form-error', role: 'alert' }, error) : null,
-        h('button', { className: 'btn btn-primary btn-block', type: 'submit', disabled: busy },
-          busy ? 'Verifying email…' : 'Verify email and activate account'));
+      content = h(React.Fragment, null,
+        h('form', { onSubmit: verifyEmail },
+          h(AuthInput, { label: 'One-time code (OTP)', value: emailOtp, required: true, maxLength: 8, autoComplete: 'one-time-code',
+            onChange: function (event) { setEmailOtp(event.target.value.replace(/\D/g, '').slice(0, 8)); } }),
+          h('p', { className: 'muted' },
+            'Enter the numeric one-time code from your email. Do not use a “confirm email address” link — this step requires the OTP only.'),
+          error ? h('p', { className: 'form-error', role: 'alert' }, error) : null,
+          h('button', { className: 'btn btn-primary btn-block', type: 'submit', disabled: busy },
+            busy ? 'Verifying…' : 'Verify OTP and activate account')),
+        h('button', {
+          type: 'button',
+          className: 'btn btn-ghost btn-block',
+          disabled: busy,
+          onClick: function () {
+            setBusy(true); setError(''); setMessage('');
+            MG.auth.resendSignupOtp(form.email).then(function (result) {
+              if (result.error) throw result.error;
+              setMessage('A new one-time code was sent to ' + form.email + '.');
+            }).catch(function (err) {
+              setError(err.message || 'Could not resend the code.');
+            }).finally(function () { setBusy(false); });
+          },
+        }, 'Resend one-time code'));
     }
 
     return h('div', { className: 'auth-wrap' },
       h('div', { className: 'auth-card' },
         h('p', { className: 'auth-brand' }, 'Meridian Global Accounts'),
-        h('h1', null, step === 'details' ? 'Create your account' : 'Verify your email'),
-        h('p', { className: 'muted' }, step === 'details' ? 'Create your Meridian account with your contact details and a password.' : message),
+        h('h1', null, step === 'details' ? 'Create your account' : 'Enter email OTP'),
+        h('p', { className: 'muted' }, step === 'details' ? 'Create your Meridian account with your contact details and a password.' : (message || 'Enter the one-time code from your email.')),
         content,
         step !== 'details' && message ? h('p', { className: 'form-success', role: 'status' }, message) : null,
         h('p', { className: 'muted auth-links' }, 'Already registered? ', h('a', { href: '#/login' }, 'Sign in'))));

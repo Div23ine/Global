@@ -175,16 +175,31 @@
     },
 
     verifyEmailOtp: function (email, token) {
+      var normalized = email.trim().toLowerCase();
+      var code = String(token).replace(/\s+/g, '');
       return requireClient().auth.verifyOtp({
-        email: email.trim().toLowerCase(),
-        token: String(token).replace(/\s+/g, ''),
+        email: normalized,
+        token: code,
         type: 'signup',
+      }).then(function (result) {
+        if (!result.error) return result;
+        // Fallback when the project issues a generic email OTP type.
+        return requireClient().auth.verifyOtp({
+          email: normalized,
+          token: code,
+          type: 'email',
+        });
       });
     },
 
     signUp: function (payload) {
+      // Password registration + email one-time code (OTP). Do not pass
+      // emailRedirectTo — that steers Supabase toward a "Confirm your email"
+      // magic-link message. The Confirm signup template must include
+      // {{ .Token }} so the customer receives a numeric OTP instead.
+      var email = payload.email.trim().toLowerCase();
       return requireClient().auth.signUp({
-        email: payload.email.trim().toLowerCase(),
+        email: email,
         password: payload.password,
         options: {
           data: {
@@ -197,13 +212,30 @@
             country_code: payload.countryCode.trim().toUpperCase(),
             country_calling_code: payload.callingCode.trim(),
           },
-          emailRedirectTo: window.location.origin + window.location.pathname,
         },
+      }).then(function (result) {
+        if (result.error) return result;
+        // If the project still has a stale session path, ensure an OTP is issued.
+        var user = result.data && result.data.user;
+        var session = result.data && result.data.session;
+        if (user && !session) {
+          return requireClient().auth.resend({ type: 'signup', email: email }).then(function (resendResult) {
+            if (resendResult.error) return resendResult;
+            return result;
+          });
+        }
+        return result;
       });
     },
 
-    /* SMS/phone verification removed with the Twilio integration: customers
-       verify their email address only, with the email OTP above. */
+    resendSignupOtp: function (email) {
+      return requireClient().auth.resend({
+        type: 'signup',
+        email: String(email || '').trim().toLowerCase(),
+      });
+    },
+
+    /* SMS/phone verification removed: customers verify by email OTP only. */
 
     getMfaAssurance: function () {
       return requireClient().auth.mfa.getAuthenticatorAssuranceLevel();
