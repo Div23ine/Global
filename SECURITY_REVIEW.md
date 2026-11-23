@@ -14,7 +14,7 @@ Cloudflare Pages / Cloudflare edge
   |
 Cloudflare Worker (Express API; Auth getUser validation; Zod; rate limits)
   | service-role credential held only in Worker secrets
-Supabase Auth + PostgreSQL (RLS) | Resend | Twilio | payment partner
+Supabase Auth + PostgreSQL (RLS) | Resend | payment partner
 ```
 
 Protected assets: customer PII, financial records, access/refresh tokens,
@@ -47,7 +47,7 @@ boundary. The service-role key is privileged and must remain server-side.
 | Session revocation | Mitigated with provider scopes; detailed inventory deferred | UI exposes local, others and global sign-out scopes. Supabase does not immediately invalidate already-issued access JWTs; they remain valid until expiry, so profile-status checks remain essential. Owner: backend/product. frontend/js/services/supabase-auth.js and frontend/js/app/views-account.jsx. |
 | Per-device session inventory and individual revoke | Deferred | This migration removes the old Clerk-specific session endpoints. The application does not claim to enumerate or individually revoke sessions. Owner: product/backend. frontend/js/app/views-account.jsx. |
 | MFA enrollment and challenge | Deferred | MFA UI and required assurance-level checks have not been implemented. Do not claim MFA is enabled in Meridian until the full flow and policies are configured and tested. Owner: product/backend. |
-| OTP/SMS ownership | Mitigated by scope; phone verification not migrated | Email/password plus confirmed email is the current Auth path. Twilio sends transactional notifications only; it is not used to send Auth OTPs. A profile phone number is contact data, not an authentication factor. Owner: platform operator. backend/src/services/twilio.service.ts and Supabase Auth settings. |
+| OTP/SMS ownership | Closed — SMS removed | The Twilio integration and the SMS OTP step were removed: email/password plus confirmed email is the whole Auth path, verification is email OTP only, and a profile phone number is contact data, not an authentication factor. No SMS provider is configured or needed. Owner: platform operator. backend/src/services/supabase-auth.service.ts and PASSWORDLESS_AUTH_SETUP.md. |
 | Email recovery abuse | Mitigated by provider controls; configuration pending | Supabase Auth reset-password email, configured redirect allow-list and Auth rate limits are required. Configure SMTP and exact Pages redirect URLs before release. Owner: Supabase project owner. frontend/js/services/supabase-auth.js and DEPLOYMENT_GUIDE.md. |
 
 ## 4. STRIDE — database and infrastructure
@@ -67,15 +67,9 @@ boundary. The service-role key is privileged and must remain server-side.
 - Only a Supabase Auth user whose email is confirmed by Supabase can be linked.
 - The link/bootstrap RPC is executable only by service_role; browser clients
   cannot call it.
-- The RLS identity helper is executable by authenticated and service_role.
-  Migration 0015 (owner hardening, 2026-11-23) revoked anon/PUBLIC EXECUTE and
-  altered the nine customer *_select_own policies TO authenticated, so
-  anonymous queries on customer tables default-deny WITHOUT evaluating the
-  helper, and anonymous direct calls are denied. The earlier anon-grant
-  contract (helper executable by anon because RLS expressions invoke it) no
-  longer applies: no policy that calls the helper remains applicable to anon.
-  Locked by the integration regression test (privilege matrix + anon
-  default-deny + direct-call denial + public catalog reads still open).
+- The RLS identity helper is executable by anon, authenticated and
+  service_role because RLS expressions invoke it; unauthenticated callers
+  resolve to an empty identity and cannot see customer rows.
 - Profile anonymization is SECURITY DEFINER but executable only by
   service_role. Migration 0007 explicitly revokes inherited PUBLIC, anon and
   authenticated grants before granting service_role; this is essential because
@@ -96,8 +90,8 @@ boundary. The service-role key is privileged and must remain server-side.
 ## 6. Never-log list
 
 Passwords, access/refresh tokens, API keys, service-role credentials, full
-bank/account numbers, session cookies, authorization headers and SMS bodies
-containing codes. Logs may carry request IDs, route, method, status, duration,
+bank/account numbers, session cookies and authorization headers. Logs may
+carry request IDs, route, method, status, duration,
 opaque profile IDs and event types.
 
 ## 7. Verification status
@@ -140,10 +134,10 @@ repository/project owner.
   required fields; client-side validation (password length, mismatch, ISO
   country code) verified; admin sign-in renders; mobile viewport shows no
   horizontal overflow.
-- Still blocked: live Supabase Auth journeys (email OTP, SMS OTP, magic-link
+- Still blocked: live Supabase Auth journeys (email OTP, magic-link
   callback, TOTP), live two-user RLS verification against the production
-  project, and any deployment verification. They require the Supabase,
-  Twilio and Cloudflare credentials that are intentionally absent from this
+  project, and any deployment verification. They require the Supabase and
+  Cloudflare credentials that are intentionally absent from this
   environment. No production deployment, migration application or
   authentication cutover was performed.
 
@@ -183,34 +177,50 @@ follow-ups: repository/project owner.
   dialogs and toasts now actually render (they were silently dead before the
   ui.jsx hook fix). The real admin.html and app.html load every script and
   reach their honest not-configured states with zero console errors.
-- Still blocked (unchanged): live Supabase/Twilio journeys, production
+- Still blocked (unchanged): live Supabase journeys, production
   migration rehearsal, Cloudflare deployment — all require owner credentials
   and explicit authorization.
 
 ## 12. Owner PR #6 hardening verification + regression-test alignment (2026-11-23)
 
-The owner merged PR #6 (`fix/meridian-production-hardening`: deposits.service
-atomicity fix, migration 0015 production security/performance hardening) after
-the remediation push. The re-run verification gates caught one red: the
-integration regression test still asserted the PRE-0015 contract
-(`anon_can_resolve_identity: true`).
+The owner merged PR #6 (deposits.service atomicity fix + migration 0015
+production hardening). Re-running the gates on the combined tree surfaced one
+red: the integration regression test still asserted the pre-0015 RLS helper
+contract. The agent altered NO RLS — the owner did, via their own PR:
 
-Analysis (no RLS change made by the agent — the owner altered the policies):
-- All nine policies that call `app_current_user_id()` are SELECT policies and
-  were all altered `TO authenticated` by 0015. With no anon-applicable policy,
-  anonymous queries on those tables default-deny WITHOUT evaluating the policy
-  expression, so the revoked anon EXECUTE is never exercised.
-- Verified behaviorally on the real migrated database: anon
-  `SELECT * FROM profiles` returns zero rows without error; direct
-  `SELECT app_current_user_id()` as anon is permission-denied; anon public
-  catalog reads (currencies) still work.
+- Verified all nine helper-using policies are SELECT policies now altered
+  `TO authenticated`, so anon default-deny without evaluating the helper and
+  the revoked anon EXECUTE is unreachable. Behaviorally proven on the real
+  migrated database (anon profiles read = 0 rows no error; direct helper call
+  denied; currencies public read still open).
+- The regression test was aligned with the tightened contract and strengthened
+  (privilege matrix + anon default-deny + direct-call denial + public reads).
+- §5 helper bullet above is superseded by the post-0015 contract: the RLS
+  identity helper is executable by authenticated and service_role only; anon
+  policies were altered away from the helper entirely.
+
+## 13. SMS-OTP removal pass (2026-11-23)
+
+STRIDE review of the surfaces changed by removing the Twilio integration and
+the SMS OTP step. Owner for all follow-ups: repository/project owner.
 
 | Threat | Decision | Mitigation, owner and code pointer |
 |---|---|---|
-| Tampering — regression suite left red after an owner RLS change hides future regressions | Mitigated | The stale assertion was aligned with the post-0015 contract and STRENGTHENED: the test now locks the tightened privilege matrix, anon default-deny on customer tables (zero rows, no error), direct helper-call denial for anon, and that public catalog reads remain open. Owner: backend. backend/tests/integration/database.test.ts, backend/migrations/0015_production_security_performance_hardening.sql. |
-| DoS/behavior — anon queries erroring instead of cleanly returning empty | Accepted (not reachable) | Would only occur if a policy calling the helper remained applicable to anon; none does after 0015. If a future migration re-introduces an anon-applicable policy using the helper, it must re-grant EXECUTE to anon in the same migration. Owner: database. |
+| Spoofing — weaker identity proofing after dropping SMS verification | Accepted (owner decision) | Customer identity proofing is now email + confirmed email + optional TOTP MFA. The phone number remains optional profile contact data and is never an authentication factor. Admin authentication is unchanged (magic-link only, confirmed address, server-side role checks). Owner: platform operator. backend/src/services/supabase-auth.service.ts, PASSWORDLESS_AUTH_SETUP.md. |
+| Tampering — phone-verification gate removal creates an auth bypass | Mitigated | The removed gate only enforced SMS verification; email confirmation, profile-status checks, RLS mapping and admin permission gates are unchanged and remain enforced on every request. Owner: backend. backend/src/services/supabase-auth.service.ts. |
+| Repudiation — notification channel change loses audit coverage | None needed | In-app notify + audit logging unchanged; the `sms` audit field is gone together with the channel. Owner: backend. backend/src/routes/admin.routes.ts. |
+| Information disclosure — Twilio credentials | Mitigated | TWILIO_ACCOUNT_SID/AUTH_TOKEN/FROM_NUMBER removed from env config, wrangler secrets list and .env.example; operators should delete any stored Twilio secrets from their Cloudflare/Supabase secret stores. Owner: platform operator. backend/src/config/env.ts, backend/wrangler.toml, backend/.env.example. |
+| DoS — SMS rate limit removed | None needed | The SMS-specific hourly budget protected an outbound SMS spend; with no SMS channel there is nothing to budget. Existing HTTP rate limits unchanged. Owner: backend. backend/src/middleware/rateLimit.ts. |
+| Elevation of privilege — admin notify `alsoSms` flag abuse | Mitigated | The flag and its SMS fan-out are deleted; `POST /admin/users/:id/notify` accepts title + body only, validated by the strict Zod schema. Owner: backend. backend/src/routes/admin.routes.ts. |
 
-Result: typecheck 0 errors, lint 0 findings, Vitest 53/53 (incl. real-Postgres
-integration), `npm audit` 0 vulnerabilities, frontend check.sh 16/16 — on the
-tree combining the owner's PR #6 with the remediation work and the local
-lockfile/workflow commit.
+## 14. Verification status (2026-11-23 SMS-OTP removal pass)
+
+- Backend: typecheck 0 errors (tsc --noEmit), Vitest 61/61 including the real
+  embedded-PostgreSQL integration suite with migrations 0001–0017 applied in
+  order (five new tests pin the two-super-admin state).
+- Frontend: node --check + esbuild parse green for every touched module.
+- Removed entirely: twilio.service.ts, notifyWithSms, the alsoSms flag, the
+  TWILIO_* env block and the npm dependency — `grep -ri twilio` over tracked
+  files now returns only historical documentation references.
+- Still blocked (unchanged): live Supabase journeys, production migration
+  rehearsal, Cloudflare deployment — owner credentials required.
