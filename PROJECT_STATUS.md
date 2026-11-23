@@ -457,3 +457,31 @@ Supabase sends a magic link by default from `signInWithOtp()` when the **Magic L
 The final auth adjustment also keeps the customer session marked unauthenticated in the app state while an OTP-initiated login is awaiting completion. A session-storage marker preserves this gate across a page refresh; it is cleared only after email OTP succeeds and, when enrolled, the TOTP challenge succeeds, or when the sign-in request fails/sign-out completes. The backend AAL2/role checks remain authoritative.
 
 The Pages workflow was triggered by frontend commits. Its first completed attempt (commit `b1077db8`) failed at the Cloudflare Pages API request with authentication error `10000` for the configured `CLOUDFLARE_API_TOKEN`. This is a deployment credential failure, not evidence of a frontend syntax failure; the workflow does not run `frontend/check.sh`. The latest frontend commit's deployment workflow was still queued at the time of this status update. No successful production deployment or live OTP test is claimed.
+
+
+## HttpOnly session-cookie security rollout (2026-11-23)
+
+### Code committed on `development`
+
+- New API auth BFF routes for OTP send/verify, session inspection, refresh, logout, password change and TOTP MFA operations.
+- API sets host-only `__Host-mg-access`, `__Host-mg-refresh` and `__Host-mg-csrf` cookies with `Secure`, `HttpOnly`, `SameSite=Lax`, and `Path=/` in production. No Domain attribute is set.
+- Browser auth facade no longer instantiates Supabase JS, exposes session tokens, stores Supabase sessions, or sends bearer headers. It sends credentialed API requests and only keeps a CSRF nonce in memory.
+- Unsafe cookie-authenticated API requests require an allowlisted Origin and double-submit CSRF header/cookie equality.
+- Existing browser Supabase session keys are cleared by the new client on startup. After successful Pages deployment, users will need to sign in again.
+- Backend TOTP step-up and role/permission checks remain in place. Normal protected customer API routes still require AAL2 where TOTP is enrolled.
+
+### Deployment status
+
+- Cloudflare Worker deploy for commit `b959dab3ac8dfecdd43e99f87e07bfb8795cff82`: **successful**; TypeScript typecheck and unit tests passed.
+- Cloudflare Pages deploy for commit `fe46db6e370dc18362df5e9d1bbccbbbdfb75d40`: **failed**, Wrangler received Cloudflare API Authentication error `10000` at `/accounts/{account}/pages/projects/global`.
+- GitHub Actions repository secret `CLOUDFLARE_API_TOKEN` must be replaced with a token that has `Account / Cloudflare Pages / Edit` permission in the same Cloudflare account. Then rerun the Pages workflow for `development`.
+- Temporary compatibility: until Pages is live, backend accepts old bearer requests only from an exact allowlisted Origin, to avoid breaking the legacy frontend. The new frontend does not use bearer tokens. Remove this fallback immediately after Pages is successfully deployed.
+- Therefore **full HttpOnly enforcement in the live browser is not yet verified or complete**. The new backend cookie path is deployed; the new browser app is still waiting on Pages deployment.
+
+### Required post-deploy verification
+
+1. Confirm the browser receives `Set-Cookie` for `__Host-mg-access`, `__Host-mg-refresh`, and `__Host-mg-csrf`, each with `Secure`, `HttpOnly`, `SameSite=Lax`, `Path=/`, and no `Domain`.
+2. Confirm `document.cookie`, localStorage and sessionStorage do not reveal access/refresh tokens.
+3. Confirm customer/admin OTP login, TOTP step-up, account/API reads, POST/PATCH/DELETE CSRF protection, refresh rotation and logout.
+4. Remove the temporary bearer compatibility fallback, redeploy Worker, and verify legacy Authorization requests are rejected.
+5. Previously issued refresh tokens are not automatically revoked by the transport migration; require fresh sign-in after Pages deploy and decide separately if a global session revocation is required.
