@@ -120,5 +120,8 @@
     audit: function (filters) { return http.get('/admin/audit' + qs(filters)); },
     settings: function () { return http.get('/admin/settings'); },
     updateSettings: function (patch) { return http.patch('/admin/settings', patch); },
+    gmailStatus: function () { return http.get('/admin/email/gmail/status'); },
+    connectGmail: function () { return http.post('/admin/email/gmail/connect'); },
+    disconnectGmail: function () { return http.del('/admin/email/gmail'); },
   };
 })();
