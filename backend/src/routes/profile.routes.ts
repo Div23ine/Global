@@ -6,6 +6,7 @@ import { validate } from '../middleware/validate';
 import { getServiceClient, getUserClient } from '../services/supabase.service';
 import { auditAllowed } from '../services/audit.service';
 import { notFound, ok } from '../utils/httpError';
+import { computeFullName } from '../utils/name';
 
 export const profileRouter = Router();
 
@@ -39,12 +40,17 @@ profileRouter.patch('/profile', validate(patchSchema), async (req, res, next) =>
   try {
     const db = getServiceClient();
     const patch: Record<string, unknown> = {};
-    if (req.body.firstName !== undefined) {
-      patch.first_name = req.body.firstName;
-      patch.full_name = `${req.body.firstName} ${req.body.lastName ?? ''}`.trim();
-    }
-    if (req.body.lastName !== undefined) {
-      patch.last_name = req.body.lastName;
+    // full_name is recomputed from the STORED parts plus the patched parts, so
+    // a partial patch never erases or stales the unpatched half (audit F-7).
+    if (req.body.firstName !== undefined || req.body.lastName !== undefined) {
+      const { data: cur } = await db.from('profiles')
+        .select('first_name, last_name').eq('id', req.auth!.userId).maybeSingle();
+      patch.full_name = computeFullName(cur ?? null, {
+        firstName: req.body.firstName,
+        lastName: req.body.lastName,
+      });
+      if (req.body.firstName !== undefined) patch.first_name = req.body.firstName;
+      if (req.body.lastName !== undefined) patch.last_name = req.body.lastName;
     }
     if (req.body.phone !== undefined) patch.phone = req.body.phone;
     if (req.body.prefs !== undefined) {
@@ -58,4 +64,3 @@ profileRouter.patch('/profile', validate(patchSchema), async (req, res, next) =>
     ok(res, data, 'Profile updated');
   } catch (err) { next(err); }
 });
-

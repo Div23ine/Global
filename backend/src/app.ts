@@ -31,8 +31,11 @@ export function createApp(rateLimitBindings?: RateLimitBindings, cacheKv?: Cache
   app.use(
     cors({
       origin: (origin, cb) => {
+        // Disallowed origins are denied cleanly (callback false → no CORS
+        // headers, no error) instead of raising a 500 through the error
+        // handler. Browser enforcement is unchanged; denial is not an error.
         if (!origin || env.corsOrigin.includes(origin)) cb(null, true);
-        else cb(new Error('Origin not allowed by CORS'));
+        else cb(null, false);
       },
       methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
       allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key', 'x-meridian-signature',
