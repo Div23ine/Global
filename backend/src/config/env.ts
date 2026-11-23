@@ -53,6 +53,13 @@ function buildEnv() {
       fromName: str(get('RESEND_FROM_NAME'), 'Meridian Global Accounts'),
     },
 
+    gmail: {
+      clientId: str(get('GMAIL_CLIENT_ID')),
+      clientSecret: str(get('GMAIL_CLIENT_SECRET')),
+      redirectUri: str(get('GMAIL_REDIRECT_URI')),
+      tokenEncryptionKey: str(get('GMAIL_TOKEN_ENCRYPTION_KEY')),
+    },
+
     payments: {
       provider: str(get('PAYMENT_PROVIDER'), 'manual-bank-transfer'),
       webhookSecret: str(get('PAYMENT_WEBHOOK_SECRET')),
