@@ -450,3 +450,10 @@ Supabase sends a magic link by default from `signInWithOtp()` when the **Magic L
 2. Confirm the Confirm sign up template also contains `{{ .Token }}` where used.
 3. Run frontend syntax checks and live customer/admin OTP journeys, including wrong/expired code rejection, resend rate limits, customer TOTP and non-admin denial.
 4. Deploy Pages only after the checks pass.
+
+
+### Follow-up verification note — TOTP session gate
+
+The final auth adjustment also keeps the customer session marked unauthenticated in the app state while an OTP-initiated login is awaiting completion. A session-storage marker preserves this gate across a page refresh; it is cleared only after email OTP succeeds and, when enrolled, the TOTP challenge succeeds, or when the sign-in request fails/sign-out completes. The backend AAL2/role checks remain authoritative.
+
+The Pages workflow was triggered by frontend commits. Its first completed attempt (commit `b1077db8`) failed at the Cloudflare Pages API request with authentication error `10000` for the configured `CLOUDFLARE_API_TOKEN`. This is a deployment credential failure, not evidence of a frontend syntax failure; the workflow does not run `frontend/check.sh`. The latest frontend commit's deployment workflow was still queued at the time of this status update. No successful production deployment or live OTP test is claimed.
