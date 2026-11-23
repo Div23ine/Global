@@ -324,9 +324,6 @@
     var _u = React.useState(''); var freezeUser = _u[0]; var setFreezeUser = _u[1];
     var _rs = React.useState(''); var freezeReason = _rs[0]; var setFreezeReason = _rs[1];
     var _b = React.useState(false); var busy = _b[0]; var setBusy = _b[1];
-    var gmail = MG.ui.useAsync(function () { return MGA.api.gmailStatus(); }, [_r[0]]);
-    var _gb = React.useState(false); var gmailBusy = _gb[0]; var setGmailBusy = _gb[1];
-    var _gd = React.useState(false); var gmailDisconnectBusy = _gd[0]; var setGmailDisconnectBusy = _gd[1];
     var state = MG.ui.useAsync(function () { return MGA.api.securityEvents(1); }, []);
     var events = adminList(state.data);
     var suspiciousCount = events.filter(function (e) { return e.severity === 'critical'; }).length;
@@ -679,42 +676,56 @@
               h('div', null, h('dt', null, 'Data'), h('dd', null, 'Connected service')),
               h('div', null, h('dt', null, 'Currency availability'), h('dd', null, 'Managed in Currency Management'))),
             h('p', { className: 'panel-note' }, 'All settings changes are audit-logged. Support email and platform name are managed in the database settings table.')),
-          h(MG.ui.Card, { title: h('h3', { className: 'panel-title' }, h(MG.ui.Icon, { name: 'mail', size: 15 }), ' Gmail request alerts') },
-            h('p', { className: 'hint' }, 'Connect your own Gmail account. Meridian will email you whenever a customer submits a request that needs administrator attention. Every connected administrator receives the same alert; any authorized admin can handle it.'),
-            gmail.loading ? h('p', { className: 'muted' }, 'Checking Gmail connection…')
-              : gmail.error ? h('p', { className: 'text-danger' }, MG.util.errMessage(gmail.error))
-              : gmail.data && gmail.data.connected
-                ? h(React.Fragment, null,
-                    h('div', { className: 'status-row' },
-                      h(MG.ui.Badge, { status: 'successful', label: 'Connected' }),
-                      h('strong', null, gmail.data.email || 'Gmail account')),
-                    h('p', { className: 'hint' }, 'This mailbox receives new admin request alerts. Disconnecting stops alerts to this address.'),
-                    h('button', { className: 'btn btn-outline', disabled: gmailDisconnectBusy,
-                      onClick: function () {
-                        setGmailDisconnectBusy(true);
-                        MGA.api.disconnectGmail().then(function () {
-                          MG.ui.toast('Gmail disconnected.', 'ok');
-                          reload(function (x) { return x + 1; });
-                        }).catch(function (e) { MG.ui.toast(MG.util.errMessage(e), 'err'); })
-                          .finally(function () { setGmailDisconnectBusy(false); });
-                      } }, gmailDisconnectBusy ? 'Disconnecting…' : 'Disconnect Gmail'))
-                : h(React.Fragment, null,
-                    h(MG.ui.Badge, { status: 'pending', label: 'Not connected' }),
-                    gmail.data && !gmail.data.configured
-                      ? h('p', { className: 'hint' }, 'Gmail OAuth is not configured on the Meridian API yet. The platform owner must add the Google OAuth credentials and token-encryption key to Cloudflare Worker secrets.')
-                      : h('p', { className: 'hint' }, 'Connect Gmail securely through Google. Meridian never asks for or stores your Gmail password.'),
-                    h('button', { className: 'btn btn-primary' + (gmailBusy ? ' is-busy' : ''), disabled: gmailBusy || (gmail.data && !gmail.data.configured),
-                      onClick: function () {
-                        setGmailBusy(true);
-                        MGA.api.connectGmail().then(function (result) {
-                          if (!result.data || !result.data.authorizationUrl) throw new Error('Google authorization URL was not returned.');
-                          window.location.assign(result.data.authorizationUrl);
-                        }).catch(function (e) {
-                          setGmailBusy(false);
-                          MG.ui.toast(MG.util.errMessage(e), 'err');
-                        });
-                      } }, gmailBusy ? 'Connecting…' : 'Connect Gmail'))),
           h(MG.ui.Notice, { tone: 'warn', icon: 'alert' },
             h('p', null, 'All settings and data are managed through the connected backend service.')))));
+  };
+  /* ---------------------------------------------------------- email alerts */
+  // This is deliberately separate from platform Settings so every admin role
+  // can connect their own mailbox, even when they cannot change global settings.
+  MGA.views.email = function () {
+    var _r = React.useState(0); var reload = _r[1];
+    var gmail = MG.ui.useAsync(function () { return MGA.api.gmailStatus(); }, [_r[0]]);
+    var _gb = React.useState(false); var gmailBusy = _gb[0]; var setGmailBusy = _gb[1];
+    var _gd = React.useState(false); var gmailDisconnectBusy = _gd[0]; var setGmailDisconnectBusy = _gd[1];
+
+    return h(React.Fragment, null,
+      h(MG.ui.PageHead, {
+        icon: 'mail', title: 'Email Alerts',
+        sub: 'Connect your own Gmail account to receive alerts when customers submit requests requiring administrator attention.' }),
+      h(MG.ui.Card, { title: h('h3', { className: 'panel-title' }, h(MG.ui.Icon, { name: 'mail', size: 15 }), ' Your Gmail connection') },
+        h('p', { className: 'hint' }, 'Every connected administrator receives the same request alert. Any available administrator with the right permissions can sign in to Meridian and handle it. Your Gmail account is only used for notifications; it is not tied to the admin who processes the request.'),
+        gmail.loading ? h('p', { className: 'muted' }, 'Checking Gmail connection…')
+          : gmail.error ? h('p', { className: 'text-danger' }, MG.util.errMessage(gmail.error))
+          : gmail.data && gmail.data.connected
+            ? h(React.Fragment, null,
+                h('div', { className: 'status-row' },
+                  h(MG.ui.Badge, { status: 'successful', label: 'Connected' }),
+                  h('strong', null, gmail.data.email || 'Gmail account')),
+                h('p', { className: 'hint' }, 'This mailbox receives new admin request alerts. Disconnecting stops alerts to this address.'),
+                h('button', { className: 'btn btn-outline', disabled: gmailDisconnectBusy,
+                  onClick: function () {
+                    setGmailDisconnectBusy(true);
+                    MGA.api.disconnectGmail().then(function () {
+                      MG.ui.toast('Gmail disconnected.', 'ok');
+                      reload(function (x) { return x + 1; });
+                    }).catch(function (e) { MG.ui.toast(MG.util.errMessage(e), 'err'); })
+                      .finally(function () { setGmailDisconnectBusy(false); });
+                  } }, gmailDisconnectBusy ? 'Disconnecting…' : 'Disconnect Gmail'))
+            : h(React.Fragment, null,
+                h(MG.ui.Badge, { status: 'pending', label: 'Not connected' }),
+                gmail.data && !gmail.data.configured
+                  ? h('p', { className: 'hint' }, 'Gmail OAuth is not configured on the Meridian API yet. The platform owner must add the Google OAuth credentials and token-encryption key to Cloudflare Worker secrets.')
+                  : h('p', { className: 'hint' }, 'Connect Gmail securely through Google. Meridian never asks for or stores your Gmail password.'),
+                h('button', { className: 'btn btn-primary' + (gmailBusy ? ' is-busy' : ''), disabled: gmailBusy || (gmail.data && !gmail.data.configured),
+                  onClick: function () {
+                    setGmailBusy(true);
+                    MGA.api.connectGmail().then(function (result) {
+                      if (!result.data || !result.data.authorizationUrl) throw new Error('Google authorization URL was not returned.');
+                      window.location.assign(result.data.authorizationUrl);
+                    }).catch(function (e) {
+                      setGmailBusy(false);
+                      MG.ui.toast(MG.util.errMessage(e), 'err');
+                    });
+                  } }, gmailBusy ? 'Connecting…' : 'Connect Gmail'))));
   };
 })();
