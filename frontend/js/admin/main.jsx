@@ -32,6 +32,7 @@
       { id: 'support', label: 'Support', icon: 'ticket' },
       { id: 'roles', label: 'Admin Roles', icon: 'key' },
       { id: 'audit', label: 'Audit Logs', icon: 'history' },
+      { id: 'email', label: 'Email Alerts', icon: 'mail' },
       { id: 'settings', label: 'Settings', icon: 'settings' },
     ] },
   ];
@@ -42,7 +43,7 @@
     transactions: 'Transactions', payments: 'Payment Monitoring',
     currencies: 'Currency Management', security: 'Security Monitoring',
     reports: 'Reports', support: 'Support', roles: 'Admin Roles',
-    audit: 'Audit Logs', settings: 'Settings',
+    audit: 'Audit Logs', email: 'Email Alerts', settings: 'Settings',
   };
 
   function parseHash() {
