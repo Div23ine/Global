@@ -26,7 +26,7 @@
       setFilters(next);
     }
 
-    var meta = state.data ? state.data.meta || (state.data.meta = {}) : {};
+    var meta = state.meta || {};
 
     return h('div', { className: 'view-stack' },
       h('div', { className: 'section-head' }, h('div', null,
