@@ -1,10 +1,10 @@
 # PROJECT STATUS — Meridian Global Accounts
 
-Last updated: 2026-11-23 (issue #4 hardening + issue #5 audit & remediation
-passes complete; remediation content published to `origin/development` via the
-GitHub contents API; two dependency files remain local-only pending a real
-`git push` — see "Push (owner-authorized)" below. Nothing deployed or
-migrated.)
+Last updated: 2026-11-23 (SMS-OTP removal + email-OTP signup fix + second
+super admin + offshore-copy removal pass complete; published to
+`origin/development` via the GitHub contents API. The paired
+lockfile/workflow CI files remain local-only: GitHub rejects workflow-file
+writes for this token — see "Push" below. Nothing deployed or migrated.)
 
 ## Current state
 
@@ -23,9 +23,9 @@ or production cutover has happened since these changes.
 | Frontend | Cloudflare Pages, custom domain https://meridian.uk.com |
 | Backend API | Cloudflare Worker named global, custom domain https://api.meridian.uk.com |
 | Database | Supabase PostgreSQL |
-| Authentication | Supabase Auth (email magic-link sign-in + second email OTP; email/password registration with email + phone OTP) |
+| Authentication | Supabase Auth (email magic-link sign-in + second email OTP; email/password registration with email OTP — the SMS/phone OTP step was removed with the Twilio pass) |
 | Email notifications | Resend; Auth confirmation/recovery SMTP configured separately in Supabase |
-| SMS | Twilio for transactional notifications only; not an Auth OTP provider |
+| SMS | Removed — `twilio.service.ts` deleted, `notifyWithSms` gone, no SMS OTP anywhere (customer verification is email-only) |
 
 ## Issue #4 pass (2026-11-22/23): what changed on `development`
 
@@ -85,7 +85,7 @@ Local commits (NOT pushed — pushing requires explicit owner authorization):
 | Browser — customer app (local harness) | PASS — sign-in and registration render with all 8 required fields; weak-password / mismatch / ISO-code validation observed; mobile viewport no horizontal overflow; no console errors |
 | Browser — admin console (local harness) | PASS — sign-in renders after the JSX fix; magic-link form errors surface correctly; no console errors |
 | Visual vs prototype (public pages) | PASS — Design 02 identity preserved (badge, hero mockup, buttons, typography); EUR-first wording and NGN removal match the documented product decisions; "not a bank" disclaimer present |
-| Live Supabase Auth journeys (email OTP, SMS OTP, magic-link callback, TOTP) | BLOCKED — requires live Supabase (and SMS provider) credentials; environment intentionally has none |
+| Live Supabase Auth journeys (email OTP, magic-link callback, TOTP) | BLOCKED — requires live Supabase credentials; environment intentionally has none |
 | Live two-user RLS against the production Supabase project | BLOCKED — same credential requirement (two-user isolation IS covered by the embedded-Postgres integration tests) |
 | Production deployment / migration application | NOT PERFORMED — requires owner authorization |
 
@@ -184,7 +184,7 @@ then git push"). No deployment, no migration application, no production touch.
 | L4 render harness (admin views, transport stubbed — no service claims) | PASS — moderation card status-aware; suspend flow records `suspendUser(id, reason)`; short-reason guard blocks; delete double-confirm records `deleteUser(id)` and navigates back; refund form rejects invalid UUID, submits exact schema payload + idempotency key, closes on success; transactions Copy ID lands the UUID on the clipboard; toasts and confirm dialogs render (previously inert) |
 | Real admin.html / app.html loads | PASS — every script loads (incl. views-refunds.jsx), honest not-configured state, zero console errors |
 | zod 4 schema behaviour | PASS — all request schemas parse as before (route-level 400 contract unchanged; integration suite green) |
-| Live Supabase/Twilio/Cloudflare | BLOCKED — unchanged (owner credentials + authorization required) |
+| Live Supabase/Cloudflare | BLOCKED — unchanged (owner credentials + authorization required) |
 
 ## Push (owner-authorized)
 
@@ -218,8 +218,10 @@ live database.
    remaining local files (lockfile + workers.yml), then review the pushed
    commits on `origin/development`.
 2. Unchanged from the previous pass: deploy Worker + Pages (F-1 production
-   blank admin console), configure Twilio (F-4), register the normal-user test
-   account (F-6), migration rehearsal 0008–0014.
+   blank admin console), register the normal-user test
+   account (F-6 — closed by the 0016/0017 provisioning migrations), migration
+   rehearsal 0008–0014. (F-4 configure-Twilio is obsolete: the Twilio
+   integration was removed with the SMS OTP pass — nothing to configure.)
 3. F-10 (`unmatched_payments` dead table: build a resolution workflow or drop
    the table) and the www-522 (F-14) remain owner decisions — not executable
    without either a product decision or Cloudflare access.
@@ -337,7 +339,7 @@ returned HTTP 422 "Signups not allowed for otp") and the audit's open question
   migration is accepted because the migration itself is the trusted operator
   action; every runtime path (0009 trigger, requireAuth) still demands the
   confirmed address.
-- `workers.yml` kept the existing `branches: [main, development]` trigger
+- `workers.yml` kept the existing main/development branch trigger list
   (an earlier terminal render suggested corruption; byte-level `od -c` proved
   the file was already correct — no change made beyond `npm ci`).
 
@@ -350,7 +352,71 @@ returned HTTP 422 "Signups not allowed for otp") and the audit's open question
    then sign in at `/admin` with gospelu214@gmail.com — magic link should
    dispatch and the console should render (still also blocked by F-1 deploy
    in production; works against local/dev).
-2. Owner: deploy Worker + Pages (F-1), configure Twilio (F-4), rehearse
-   migrations 0008–0016 against a backup (F-2-era rehearsal, range extended).
+2. Owner: deploy Worker + Pages (F-1), rehearse
+   migrations 0008–0017 against a backup (F-2-era rehearsal, range extended).
+   (F-4 configure-Twilio is obsolete: removed with the SMS OTP pass.)
 3. Still open owner decisions: F-10 (unmatched_payments), F-14 (www-522),
    optional revocation of the previous super-admin holder.
+
+
+## SMS-OTP removal + second super admin pass (2026-11-23)
+
+### What changed
+
+- **Twilio fully removed:** `backend/src/services/twilio.service.ts` deleted;
+  `notifyWithSms` and the `alsoSms` flag removed from the admin notify route
+  (and from the admin console UI + `MG.api.notifyUser`); the `twilio` env
+  block, health check, `wrangler.toml`/`.env.example` secrets and the npm
+  dependency are gone (lockfile regenerated).
+- **No more SMS OTP:** customer signup now ends after the email OTP — the
+  phone-verification screen, `beginPhoneVerification`/`verifyPhoneOtp` and
+  the backend `verifySupabaseAccessToken` phone gate were removed. The phone
+  number stays as profile/contact data.
+- **Signup email delivers the OTP, not a confirm link:** the documented
+  Supabase "Confirm signup" template in `PASSWORDLESS_AUTH_SETUP.md` is now
+  OTP-only (no `{{ .ConfirmationURL }}`), matching the code-entry screen the
+  app shows after registration.
+- **Second super admin added:** migration
+  `0017_add_second_super_admin_raysallinone00` configures BOTH repository
+  addresses — `raysallinone00@gmail.com` (the original 0009 holder) and
+  `gospelu214@gmail.com` — under `app_settings.platform.admin_emails`,
+  rewrites the grant trigger to honour the list, provisions the raysallinone00
+  Auth identity/profile and re-asserts the gospelu214 grant. Five new
+  integration tests pin the two-admin state.
+- **Website copy:** every "not an offshore account / not offshore banking"
+  disclaimer removed from `frontend/` (about, terms, footer, home,
+  what-is-offshore page framing); phone/SMS verification wording updated to
+  email-only.
+- **CI pairing NOT publishable through the API:** the regenerated
+  `backend/package-lock.json` (zod 4.6.7, now without twilio) and the
+  `workers.yml` `npm ci` + lockfile-sync change are committed on the local
+  development clone but GitHub rejected the workflow-file write
+  (403 "Resource not accessible by integration" — tokens without the
+  workflow scope cannot modify `.github/workflows/*`). Both files ship with
+  this pass for the owner to push from any credentialed clone. CI impact:
+  the remote workflow still runs `npm install` (works with the drifted
+  lockfile), so CI stays green until the owner lands the pair.
+
+### Verification on this pass
+
+- `npm run typecheck` (tsc --noEmit) green after the Twilio/env/service removals.
+- Unit test suite green; full integration suite (embedded PostgreSQL, all
+  migrations 0001–0017) green including the new two-super-admin tests.
+- Frontend auth files syntax-checked (`node --check`) after the SMS step removal.
+
+## Exact next tasks (this pass)
+
+0. Owner: apply migration `0017` to the live Supabase project after `0016`
+   (both idempotent), then sign in at `/admin` with either
+   `raysallinone00@gmail.com` or `gospelu214@gmail.com` — magic link should
+   dispatch and the console should render.
+1. Owner: replace the Supabase "Confirm signup" email template with the
+   OTP-only version documented in `PASSWORDLESS_AUTH_SETUP.md` (dashboard
+   change — the email currently leads with a "confirm your email address"
+   link).
+2. Owner: deploy Worker + Pages (F-1) and rehearse migrations 0008–0017.
+3. Owner: push the two local-only CI files from any credentialed clone
+   (`backend/package-lock.json` regenerated without twilio + the
+   `.github/workflows/workers.yml` `npm ci` + lockfile-sync job) — the API
+   token cannot write workflow files.
+4. Still open owner decisions: F-10 (unmatched_payments), F-14 (www-522).
