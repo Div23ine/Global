@@ -175,17 +175,25 @@
       props.footer);
   };
 
-  /* legacy Table (backwards compat with old views) */
+  /* legacy Table (backwards compat with old views).
+     API list responses must be arrays; fail closed to an empty state if a
+     caller accidentally passes an envelope/object instead of rows. */
   MG.ui.Table = function (props) {
+    var columns = Array.isArray(props.columns) ? props.columns : [];
+    var rows = Array.isArray(props.rows) ? props.rows : [];
     return h('div', { className: 'table-wrap' },
       h('table', null,
-        h('thead', null, h('tr', null, props.columns.map(function (c, i) {
+        h('thead', null, h('tr', null, columns.map(function (c, i) {
           return h('th', { key: i, style: c.right ? { textAlign: 'right' } : null }, c.label);
         }))),
-        h('tbody', null, props.rows.length === 0
-          ? h('tr', null, h('td', { colSpan: props.columns.length },
+        h('tbody', null, rows.length === 0
+          ? h('tr', null, h('td', { colSpan: Math.max(columns.length, 1) },
               h(MG.ui.Empty, { title: props.emptyTitle || 'Nothing here yet', hint: props.emptyHint })))
-          : props.rows.map(function (row, i) { return props.renderRow(row, i); }))));
+          : rows.map(function (row, i) {
+              return typeof props.renderRow === 'function'
+                ? props.renderRow(row, i)
+                : h('tr', { key: i }, h('td', { colSpan: Math.max(columns.length, 1) }, ''));
+            }))));
   };
 
   /* ----------------------------------------------------------- empty state */
@@ -441,17 +449,31 @@
 
   /* ------------------------------------------------------------------ hooks */
   MG.ui.useAsync = function (fn, deps) {
-    var _a = useState({ loading: true, data: null, error: null });
+    var _a = useState({ loading: true, data: null, meta: {}, message: '', error: null });
     var state = _a[0], setState = _a[1];
     var fnRef = useRef(fn);
     fnRef.current = fn;
     useEffect(function () {
       var alive = true;
-      setState({ loading: true, data: null, error: null });
-      fnRef.current().then(function (data) {
-        if (alive) setState({ loading: false, data: data, error: null });
+      setState({ loading: true, data: null, meta: {}, message: '', error: null });
+      fnRef.current().then(function (result) {
+        if (!alive) return;
+        /* MG.http returns { data, meta, message }. Expose the payload as
+           state.data and keep pagination/response metadata alongside it.
+           Direct promise consumers continue receiving the original envelope. */
+        var isEnvelope = result && typeof result === 'object' &&
+          Object.prototype.hasOwnProperty.call(result, 'data') &&
+          (Object.prototype.hasOwnProperty.call(result, 'meta') ||
+           Object.prototype.hasOwnProperty.call(result, 'message'));
+        setState({
+          loading: false,
+          data: isEnvelope ? result.data : result,
+          meta: isEnvelope && result.meta && typeof result.meta === 'object' ? result.meta : {},
+          message: isEnvelope && result.message ? result.message : '',
+          error: null
+        });
       }).catch(function (err) {
-        if (alive) setState({ loading: false, data: null, error: err });
+        if (alive) setState({ loading: false, data: null, meta: {}, message: '', error: err });
       });
       return function () { alive = false; };
     }, deps || []);
