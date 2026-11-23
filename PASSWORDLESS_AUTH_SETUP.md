@@ -10,7 +10,7 @@ This branch implements two separate Supabase Auth flows:
 In the Meridian Supabase project:
 
 1. Open **Authentication → URL Configuration**.
-2. Set **SiteURL** to `https://meridian.uk.com`.
+2. Set **Site URL** to `https://meridian.uk.com`.
 3. Add `https://meridian.uk.com/**` to the redirect URL allow list. Add other production hostnames only when they are actually used.
 4. Open **Authentication → Email Templates**.
 
