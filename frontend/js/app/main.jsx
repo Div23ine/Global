@@ -36,15 +36,26 @@
   }
 
   function SignInView() {
-    var _e = useState(''); var email = _e[0]; var setEmail = _e[1];
+    var _e = useState(MG.auth.state.user ? MG.auth.state.user.email : ''); var email = _e[0]; var setEmail = _e[1];
     var _o = useState(''); var otp = _o[0]; var setOtp = _o[1];
-    var _s = useState('email'); var step = _s[0]; var setStep = _s[1]; // email | otp | mfa
+    var _s = useState(MG.auth.state.mfaRequired ? 'mfa' : 'email'); var step = _s[0]; var setStep = _s[1]; // email | otp | mfa
     var _b = useState(false); var busy = _b[0]; var setBusy = _b[1];
     var _x = useState(''); var error = _x[0]; var setError = _x[1];
     var _m = useState(''); var message = _m[0]; var setMessage = _m[1];
-    var _factor = useState(null); var factor = _factor[0]; var setFactor = _factor[1];
+    var _factor = useState(MG.auth.state.mfaFactorId || null); var factor = _factor[0]; var setFactor = _factor[1];
     var _challenge = useState(null); var challenge = _challenge[0]; var setChallenge = _challenge[1];
     var _mfa = useState(''); var mfaCode = _mfa[0]; var setMfaCode = _mfa[1];
+
+    useEffect(function () {
+      if (!MG.auth.state.mfaRequired || !factor) return;
+      setBusy(true);
+      MG.auth.challengeTotp(factor).then(function (result) {
+        if (result.error) throw result.error;
+        setChallenge(result.data.id);
+      }).catch(function (err) {
+        setError(err.message || 'Could not start authenticator verification.');
+      }).finally(function () { setBusy(false); });
+    }, []);
 
     function sendOtp(event) {
       if (event) event.preventDefault();
@@ -116,8 +127,8 @@
         step === 'otp' ? h(React.Fragment, null,
           h('form', { onSubmit: verifyOtp },
             h(AuthInput, { label: 'One-time code (OTP)', type: 'text', autoComplete: 'one-time-code',
-              value: otp, required: true, maxLength: 8,
-              onChange: function (event) { setOtp(event.target.value.replace(/\D/g, '').slice(0, 8)); } }),
+              value: otp, required: true, maxLength: 6,
+              onChange: function (event) { setOtp(event.target.value.replace(/\D/g, '').slice(0, 6)); } }),
             error ? h('p', { className: 'form-error', role: 'alert' }, error) : null,
             message ? h('p', { className: 'form-success', role: 'status' }, message) : null,
             h('button', { className: 'btn btn-primary btn-block', type: 'submit', disabled: busy },
@@ -126,8 +137,8 @@
             'Resend one-time code')) : null,
         step === 'mfa' ? h('form', { onSubmit: verifyMfa },
           h(AuthInput, { label: 'Authenticator code', type: 'text', autoComplete: 'one-time-code',
-            value: mfaCode, required: true, maxLength: 8,
-            onChange: function (event) { setMfaCode(event.target.value.replace(/\D/g, '').slice(0, 8)); } }),
+            value: mfaCode, required: true, maxLength: 6,
+            onChange: function (event) { setMfaCode(event.target.value.replace(/\D/g, '').slice(0, 6)); } }),
           error ? h('p', { className: 'form-error', role: 'alert' }, error) : null,
           h('button', { className: 'btn btn-primary btn-block', type: 'submit', disabled: busy },
             busy ? 'Verifying…' : 'Verify authenticator')) : null,
@@ -180,6 +191,7 @@
       MG.auth.verifyEmailOtp(form.email, emailOtp).then(function (result) {
         if (result.error) throw result.error;
         setMessage('Email verified. Your account is ready.');
+        MG.auth.completeCustomerLogin();
         location.hash = '#/overview';
       }).catch(function (err) { setError(err.message || 'Email verification failed.'); })
         .finally(function () { setBusy(false); });
@@ -212,8 +224,8 @@
     } else {
       content = h(React.Fragment, null,
         h('form', { onSubmit: verifyEmail },
-          h(AuthInput, { label: 'One-time code (OTP)', value: emailOtp, required: true, maxLength: 8, autoComplete: 'one-time-code',
-            onChange: function (event) { setEmailOtp(event.target.value.replace(/\D/g, '').slice(0, 8)); } }),
+          h(AuthInput, { label: 'One-time code (OTP)', value: emailOtp, required: true, maxLength: 6, autoComplete: 'one-time-code',
+            onChange: function (event) { setEmailOtp(event.target.value.replace(/\D/g, '').slice(0, 6)); } }),
           h('p', { className: 'muted' },
             'Enter the numeric one-time code from your email. Do not use a “confirm email address” link — this step requires the OTP only.'),
           error ? h('p', { className: 'form-error', role: 'alert' }, error) : null,

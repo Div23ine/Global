@@ -1,33 +1,19 @@
 # Meridian Global Accounts API — Cloudflare Workers
-# Docs: https://developers.cloudflare.com/workers/
-
-# Keep this name aligned with the existing Cloudflare dashboard Worker.
 name = "global"
 main = "src/worker.ts"
 compatibility_date = "2024-11-12"
-# worker.ts uses node:http.createServer() with cloudflare:node's httpServerHandler.
-# This server-side Node HTTP compatibility flag is required before the 2025-09-01
-# compatibility-date default; keep nodejs_compat for the other Node APIs.
 compatibility_flags = ["nodejs_compat", "enable_nodejs_http_modules", "enable_nodejs_http_server_modules"]
-
-# Production API hostname: api.meridian.uk.com
-# Attach this hostname to the "global" Worker as a Custom Domain in Cloudflare.
-# Do not add a competing CNAME record manually; Cloudflare creates the DNS record.
 
 [vars]
 NODE_ENV = "production"
 LOG_LEVEL = "info"
 PAYMENT_PROVIDER = "manual-bank-transfer"
 RESEND_FROM_NAME = "Meridian Global Accounts"
-# Keep this list synchronized with the public Pages origins used by customers/admins.
 CORS_ORIGIN = "https://meridian.uk.com,https://www.meridian.uk.com"
 
-# Cloudflare Workers Rate Limiting bindings. Each namespace ID must be unique
-# within this Cloudflare account. These are approximate per-location limits.
 [[ratelimits]]
 name = "GLOBAL_RATE_LIMITER"
 namespace_id = "675001"
-
 [ratelimits.simple]
 limit = 300
 period = 60
@@ -35,7 +21,6 @@ period = 60
 [[ratelimits]]
 name = "DEPOSIT_RATE_LIMITER"
 namespace_id = "675002"
-
 [ratelimits.simple]
 limit = 10
 period = 60
@@ -43,18 +28,16 @@ period = 60
 [[ratelimits]]
 name = "SUPPORT_RATE_LIMITER"
 namespace_id = "675003"
-
 [ratelimits.simple]
 limit = 5
 period = 60
 
-# Secrets (set with: npx wrangler secret put NAME)
-# SUPABASE_URL
-# SUPABASE_ANON_KEY
-# SUPABASE_SERVICE_ROLE_KEY
-# RESEND_API_KEY
-# RESEND_FROM_EMAIL
-# PAYMENT_WEBHOOK_SECRET
+[[ratelimits]]
+name = "AUTH_RATE_LIMITER"
+namespace_id = "675004"
+[ratelimits.simple]
+limit = 10
+period = 60
 
 [observability]
 enabled = true

@@ -1,52 +1,82 @@
-/* Supabase Auth client — the sole browser identity/session provider. */
+/* Meridian browser auth facade.
+ * Auth tokens exist only in Secure/HttpOnly cookies on the API host.
+ * Browser JS receives safe user data and a CSRF nonce, never a JWT.
+ */
 (function () {
-  var client = null;
-  var loading = null;
-  var subscription = null;
   var listeners = [];
-  // Keep the customer shell gated between email OTP success and completion of
-  // any enrolled TOTP challenge. Admin sign-in uses its own OTP flow.
-  var customerOtpPending = (function () {
-    try { return window.sessionStorage.getItem('mg_customer_otp_pending') === '1'; }
-    catch (e) { return false; }
-  })();
+  var refreshPromise = null;
+  var pendingSignup = null;
+  var customerOtpPending = false;
   var state = {
     ready: false,
     signedIn: false,
     user: null,
     session: null,
+    csrfToken: null,
+    mfaRequired: false,
+    mfaFactorId: null,
   };
 
-  function normalizedUser(user) {
-    if (!user) return null;
-    var meta = user.user_metadata || {};
-    var firstName = meta.first_name || '';
-    var lastName = meta.last_name || '';
-    return {
-      id: user.id,
-      email: user.email || '',
-      firstName: firstName,
-      lastName: lastName,
-      fullName: [firstName, lastName].filter(Boolean).join(' ') || meta.full_name || 'Customer',
-      phone: user.phone || meta.phone || null,
-      hasImage: Boolean(meta.avatar_url),
-      imageUrl: meta.avatar_url || '',
-    };
-  }
-
-  function publish(session, user) {
-    state.session = session || null;
-    state.signedIn = Boolean(session && user && !customerOtpPending);
-    state.user = normalizedUser(user || (session && session.user));
+  function publish(data) {
+    data = data || {};
+    if (data.csrfToken) state.csrfToken = data.csrfToken;
+    if (Object.prototype.hasOwnProperty.call(data, 'user')) state.user = data.user || null;
+    state.mfaRequired = Boolean(data.mfaRequired);
+    state.mfaFactorId = data.mfaFactorId || null;
+    state.session = null;
+    state.signedIn = Boolean(state.user && !customerOtpPending && !state.mfaRequired);
     state.ready = true;
     listeners.slice().forEach(function (listener) {
-      try { listener(state); } catch (e) { /* a view must not break auth */ }
+      try { listener(state); } catch (error) { /* isolate view listeners */ }
     });
   }
 
-  function requireClient() {
-    if (!client) throw new Error('Supabase Auth has not been initialized.');
-    return client;
+  function asResult(promise) {
+    return promise.then(function (result) {
+      return {
+        data: result && Object.prototype.hasOwnProperty.call(result, 'data') ? result.data : result,
+        error: null,
+      };
+    }).catch(function (error) { return { data: null, error: error }; });
+  }
+
+  function clearLegacyBrowserSessions() {
+    try {
+      [window.sessionStorage, window.localStorage].forEach(function (store) {
+        var remove = [];
+        for (var i = 0; i < store.length; i++) {
+          var key = store.key(i);
+          if (key && (
+            key.indexOf('sb-') === 0 ||
+            key.indexOf('supabase.auth') === 0 ||
+            key === 'mg-auth' ||
+            key === 'mg-auth-tab' ||
+            key === 'mg_pending_signup'
+          )) remove.push(key);
+        }
+        remove.forEach(function (key) { store.removeItem(key); });
+      });
+    } catch (error) { /* storage can be disabled in private browsing */ }
+  }
+
+  function ensureCsrf() {
+    if (state.csrfToken) return Promise.resolve(state.csrfToken);
+    return MG.http.get('/auth/csrf', { noRetryOn401: true }).then(function (result) {
+      var token = result.data && result.data.csrfToken;
+      if (!token) throw new Error('The secure session could not be initialized.');
+      state.csrfToken = token;
+      return token;
+    });
+  }
+
+  function requestOtp(email, shouldCreateUser, metadata) {
+    return ensureCsrf().then(function () {
+      return asResult(MG.http.post('/auth/otp', {
+        email: String(email || '').trim().toLowerCase(),
+        shouldCreateUser: shouldCreateUser === true,
+        ...(metadata ? { data: metadata } : {}),
+      }));
+    });
   }
 
   window.MG = window.MG || {};
@@ -55,306 +85,183 @@
 
     onChange: function (callback) {
       listeners.push(callback);
-      return function () {
-        listeners = listeners.filter(function (item) { return item !== callback; });
-      };
+      return function () { listeners = listeners.filter(function (item) { return item !== callback; }); };
     },
 
     load: function () {
-      if (loading) return loading;
-      if (state.ready && client) return Promise.resolve();
-      if (!MG.config.SUPABASE_URL || !MG.config.SUPABASE_ANON_KEY) {
-        return Promise.reject(new Error('SUPABASE_URL and SUPABASE_ANON_KEY are not configured.'));
-      }
-      if (!window.supabase || typeof window.supabase.createClient !== 'function') {
-        return Promise.reject(new Error('The Supabase browser SDK could not be loaded.'));
-      }
-
-      // Session is tab-scoped: sessionStorage only (not localStorage).
-      // Closing the tab ends the session; other tabs do not share it.
-      try {
-        var keysToRemove = [];
-        for (var i = 0; i < window.localStorage.length; i++) {
-          var k = window.localStorage.key(i);
-          if (k && (k.indexOf('sb-') === 0 || k.indexOf('supabase.auth') === 0 || k === 'mg-auth')) {
-            keysToRemove.push(k);
-          }
-        }
-        keysToRemove.forEach(function (key) { window.localStorage.removeItem(key); });
-      } catch (e) { /* private mode */ }
-
-      client = window.supabase.createClient(
-        MG.config.SUPABASE_URL,
-        MG.config.SUPABASE_ANON_KEY,
-        {
-          auth: {
-            persistSession: true,
-            storage: window.sessionStorage,
-            storageKey: 'mg-auth-tab',
-            autoRefreshToken: true,
-            detectSessionInUrl: true,
-            flowType: 'pkce',
-          },
-        }
-      );
-
-      var authEvents = client.auth.onAuthStateChange(function (_event, session) {
-        // Keep this callback synchronous; Supabase warns against awaiting other
-        // Supabase calls from inside onAuthStateChange.
-        publish(session, session && session.user);
-      });
-      subscription = authEvents.data && authEvents.data.subscription;
-
-      loading = client.auth.getSession().then(function (result) {
-        if (result.error) throw result.error;
-        var session = result.data.session;
-        if (!session) {
-          publish(null, null);
-          return;
-        }
-        return client.auth.getUser().then(function (userResult) {
-          if (userResult.error) throw userResult.error;
-          publish(session, userResult.data.user);
+      if (state.ready) return Promise.resolve();
+      clearLegacyBrowserSessions();
+      return ensureCsrf().then(function () {
+        return MG.http.get('/auth/session', { noRetryOn401: true }).catch(function (error) {
+          if (!error || error.status !== 401) throw error;
+          return MG.auth.refresh().then(function (refreshed) {
+            if (!refreshed) return null;
+            return MG.http.get('/auth/session', { noRetryOn401: true });
+          }).catch(function (refreshError) {
+            if (refreshError && refreshError.status === 401) return null;
+            throw refreshError;
+          });
         });
-      }).then(function () {
-        state.ready = true;
+      }).then(function (result) {
+        publish(result && result.data ? result.data : { user: null });
       }).catch(function (error) {
-        publish(null, null);
+        publish({ user: null });
+        if (error && error.status === 401) return;
         throw error;
-      });
-      return loading;
-    },
-
-    token: function () {
-      var current = requireClient();
-      return current.auth.getSession().then(function (result) {
-        if (result.error) throw result.error;
-        var session = result.data.session;
-        return session ? session.access_token : null;
       });
     },
 
     refresh: function () {
-      var current = requireClient();
-      return current.auth.refreshSession().then(function (result) {
-        if (result.error) {
-          publish(null, null);
-          throw result.error;
+      if (refreshPromise) return refreshPromise;
+      refreshPromise = ensureCsrf().then(function () {
+        return MG.http.post('/auth/refresh', {}, { noRetryOn401: true });
+      }).then(function (result) {
+        publish(result.data || {});
+        return true;
+      }).catch(function (error) {
+        if (error && error.status === 401) {
+          publish({ user: null, mfaRequired: false, mfaFactorId: null });
+          return false;
         }
-        var session = result.data.session;
-        publish(session, session && session.user);
-        return session ? session.access_token : null;
-      });
+        throw error;
+      }).finally(function () { refreshPromise = null; });
+      return refreshPromise;
     },
 
     signIn: function (email) {
-      var normalizedEmail = email.trim().toLowerCase();
       customerOtpPending = true;
-      try { window.sessionStorage.setItem('mg_customer_otp_pending', '1'); } catch (e) {}
-      return requireClient().auth.signInWithOtp({
-        email: normalizedEmail,
-        options: { shouldCreateUser: false },
-      }).then(function (result) {
-        if (result.error) {
-          customerOtpPending = false;
-          try { window.sessionStorage.removeItem('mg_customer_otp_pending'); } catch (e) {}
-        }
+      state.signedIn = false;
+      return requestOtp(email, false).then(function (result) {
+        if (result.error) customerOtpPending = false;
         return result;
       }).catch(function (error) {
         customerOtpPending = false;
-        try { window.sessionStorage.removeItem('mg_customer_otp_pending'); } catch (e) {}
         throw error;
       });
     },
 
     signInAdmin: function (email) {
-      var normalizedEmail = email.trim().toLowerCase();
-      return requireClient().auth.signInWithOtp({
-        email: normalizedEmail,
-        options: { shouldCreateUser: false },
-      });
+      return requestOtp(email, false);
     },
 
     verifyAdminOtp: function (email, token) {
-      var normalizedEmail = email.trim().toLowerCase();
-      var code = String(token).replace(/\s+/g, '');
-      if (!/^\d{6}$/.test(code)) {
-        return Promise.resolve({ data: null, error: new Error('Enter the six-digit email code.') });
-      }
-      return requireClient().auth.verifyOtp({
-        email: normalizedEmail,
-        token: code,
-        type: 'email',
-      });
+      return asResult(ensureCsrf().then(function () {
+        return MG.http.post('/auth/verify-otp', {
+          email: String(email || '').trim().toLowerCase(),
+          token: String(token || '').replace(/\s+/g, ''),
+        });
+      }).then(function (result) {
+        customerOtpPending = false;
+        publish(result.data);
+        return result.data;
+      }));
     },
 
     verifyEmailOtp: function (email, token) {
-      var normalized = email.trim().toLowerCase();
-      var code = String(token).replace(/\s+/g, '');
-      if (!/^\d{6}$/.test(code)) {
-        return Promise.resolve({ data: null, error: new Error('Enter the six-digit email code.') });
-      }
-      return requireClient().auth.verifyOtp({
-        email: normalized,
-        token: code,
-        type: 'email',
-      }).then(function (result) {
-        if (result.error) return result;
-        // After OTP succeeds on registration, set the password chosen on the form.
-        return MG.auth.completeSignUpPassword().then(function (pwResult) {
-          if (pwResult && pwResult.error) return pwResult;
-          return result;
+      var normalizedEmail = String(email || '').trim().toLowerCase();
+      var password = pendingSignup && pendingSignup.email === normalizedEmail
+        ? pendingSignup.password : undefined;
+      return asResult(ensureCsrf().then(function () {
+        return MG.http.post('/auth/verify-otp', {
+          email: normalizedEmail,
+          token: String(token || '').replace(/\s+/g, ''),
+          ...(password ? { password: password } : {}),
         });
-      });
+      }).then(function (result) {
+        if (pendingSignup && pendingSignup.email === normalizedEmail) pendingSignup = null;
+        publish(result.data);
+        return result.data;
+      }));
     },
 
-    /**
-     * Registration is OTP-first (no magic link):
-     * 1) beginSignUp → signInWithOtp(shouldCreateUser: true) + stash password locally
-     * 2) verifyEmailOtp → verifyOtp type email
-     * 3) completeSignUpPassword → updateUser({ password })
-     * Supabase "Magic Link or OTP" and "Confirm sign up" templates must show {{ .Token }}.
-     */
     beginSignUp: function (payload) {
-      var email = payload.email.trim().toLowerCase();
-      var password = payload.password;
-      var meta = {
-        full_name: payload.fullName.trim(),
+      var email = String(payload.email || '').trim().toLowerCase();
+      var metadata = {
+        full_name: String(payload.fullName || '').trim(),
         first_name: payload.firstName || '',
         last_name: payload.lastName || '',
         phone: payload.phone,
-        country: payload.country.trim(),
-        country_name: payload.country.trim(),
-        country_code: payload.countryCode.trim().toUpperCase(),
-        country_calling_code: payload.callingCode.trim(),
+        country: String(payload.country || '').trim(),
+        country_name: String(payload.country || '').trim(),
+        country_code: String(payload.countryCode || '').trim().toUpperCase(),
+        country_calling_code: String(payload.callingCode || '').trim(),
       };
-      try {
-        window.sessionStorage.setItem('mg_pending_signup', JSON.stringify({
-          email: email,
-          password: password,
-          meta: meta,
-        }));
-      } catch (e) { /* private mode */ }
-      return requireClient().auth.signInWithOtp({
-        email: email,
-        options: {
-          shouldCreateUser: true,
-          data: meta,
-        },
-      });
+      // Keep the chosen password in module memory only; never sessionStorage.
+      pendingSignup = { email: email, password: payload.password, meta: metadata };
+      customerOtpPending = true;
+      return requestOtp(email, true, metadata);
     },
-
-    /* Kept for compatibility — routes to beginSignUp */
-    signUp: function (payload) {
-      return MG.auth.beginSignUp(payload);
-    },
+    signUp: function (payload) { return MG.auth.beginSignUp(payload); },
 
     resendSignupOtp: function (email) {
       var normalized = String(email || '').trim().toLowerCase();
-      var pending = null;
-      try { pending = JSON.parse(window.sessionStorage.getItem('mg_pending_signup') || 'null'); } catch (e) {}
-      var meta = (pending && pending.email === normalized && pending.meta) ? pending.meta : undefined;
-      return requireClient().auth.signInWithOtp({
-        email: normalized,
-        options: {
-          shouldCreateUser: true,
-          data: meta,
-        },
-      });
+      return requestOtp(
+        normalized,
+        true,
+        pendingSignup && pendingSignup.email === normalized ? pendingSignup.meta : undefined,
+      );
     },
 
     completeSignUpPassword: function () {
-      var pending = null;
-      try { pending = JSON.parse(window.sessionStorage.getItem('mg_pending_signup') || 'null'); } catch (e) {}
-      if (!pending || !pending.password) {
-        return Promise.resolve({ data: { user: state.user }, error: null });
-      }
-      var currentEmail = (state.user && state.user.email || '').trim().toLowerCase();
-      if (pending.email && currentEmail && pending.email !== currentEmail) {
-        return Promise.resolve({ data: { user: state.user }, error: null });
-      }
-      return requireClient().auth.updateUser({ password: pending.password }).then(function (result) {
-        try { window.sessionStorage.removeItem('mg_pending_signup'); } catch (e) {}
-        return result;
-      });
+      // The API saves a registration password before it issues session cookies.
+      return Promise.resolve({ data: { user: state.user }, error: null });
     },
 
-    /* SMS/phone verification removed: customers verify by email OTP only. */
-
-    getMfaAssurance: function () {
-      return requireClient().auth.mfa.getAuthenticatorAssuranceLevel();
-    },
-
-    listMfaFactors: function () {
-      return requireClient().auth.mfa.listFactors();
-    },
-
-    enrollTotp: function () {
-      return requireClient().auth.mfa.enroll({
-        factorType: 'totp',
-        friendlyName: 'Meridian Global Accounts',
-      });
-    },
-
+    getMfaAssurance: function () { return asResult(MG.http.get('/auth/mfa/assurance')); },
+    listMfaFactors: function () { return asResult(MG.http.get('/auth/mfa/factors')); },
+    enrollTotp: function () { return asResult(MG.http.post('/auth/mfa/enroll', {})); },
     challengeTotp: function (factorId) {
-      return requireClient().auth.mfa.challenge({ factorId: factorId });
+      return asResult(MG.http.post('/auth/mfa/challenge', { factorId: factorId }));
     },
-
     verifyTotp: function (factorId, challengeId, code) {
-      return requireClient().auth.mfa.verify({
+      return asResult(MG.http.post('/auth/mfa/verify', {
         factorId: factorId,
         challengeId: challengeId,
-        code: String(code).replace(/\s+/g, ''),
-      });
+        code: String(code || '').replace(/\s+/g, ''),
+      }).then(function (result) {
+        if (result.data && result.data.csrfToken) state.csrfToken = result.data.csrfToken;
+        return result.data;
+      }));
     },
-
     unenrollTotp: function (factorId) {
-      return requireClient().auth.mfa.unenroll({ factorId: factorId });
+      return asResult(MG.http.post('/auth/mfa/unenroll', { factorId: factorId }).then(function (result) {
+        if (result.data && result.data.csrfToken) state.csrfToken = result.data.csrfToken;
+        return result.data;
+      }));
     },
 
     completeCustomerLogin: function () {
       customerOtpPending = false;
-      try { window.sessionStorage.removeItem('mg_customer_otp_pending'); } catch (e) {}
-      var session = state.session;
-      if (session && session.user) publish(session, session.user);
+      state.mfaRequired = false;
+      state.mfaFactorId = null;
+      state.signedIn = Boolean(state.user);
+      listeners.slice().forEach(function (listener) {
+        try { listener(state); } catch (error) { /* isolate listeners */ }
+      });
     },
 
     updatePassword: function (password) {
-      return requireClient().auth.updateUser({ password: password });
+      return asResult(MG.http.post('/auth/password', { password: password }));
     },
 
     signOut: function (options) {
       var scope = options && options.scope ? options.scope : 'local';
-      return requireClient().auth.signOut({ scope: scope }).then(function (result) {
-        if (!result.error && scope !== 'others') {
+      return asResult(MG.http.post('/auth/logout', { scope: scope }).then(function (result) {
+        if (scope !== 'others') {
           customerOtpPending = false;
-          try { window.sessionStorage.removeItem('mg_customer_otp_pending'); } catch (e) {}
-          publish(null, null);
+          pendingSignup = null;
+          publish({ user: null, mfaRequired: false, mfaFactorId: null });
+          state.csrfToken = null;
         }
-        return result;
-      });
+        return result.data;
+      }));
     },
-
-    getClient: function () { return requireClient(); },
 
     destroy: function () {
-      if (subscription) subscription.unsubscribe();
-      subscription = null;
-      client = null;
-      loading = null;
-      publish(null, null);
+      customerOtpPending = false;
+      pendingSignup = null;
+      publish({ user: null, mfaRequired: false, mfaFactorId: null });
+      state.csrfToken = null;
     },
   };
-
-  // Hard aliases — survive partial deploys / cache skew between HTML and JS.
-  if (typeof MG.auth.verifyAdminOtp !== 'function') {
-    MG.auth.verifyAdminOtp = function (email, token) {
-      return MG.auth.verifyEmailOtp(email, token);
-    };
-  }
-  if (typeof MG.auth.signInAdmin !== 'function') {
-    MG.auth.signInAdmin = function (email) {
-      return MG.auth.signIn(email);
-    };
-  }
 })();
