@@ -266,3 +266,91 @@ Final gates on the combined tree: typecheck 0, lint 0, Vitest 53/53, npm audit
 0 vulnerabilities, frontend check.sh 16/16. Local branch = origin/development
 + one commit (`chore: sync backend lockfile with zod 4.6.7 and switch CI to
 npm ci`) awaiting the owner's real `git push`.
+
+---
+
+# Super-admin provisioning pass (2026-11-23) — F-6 closed
+
+Owner instruction: "Provision gospelu214@gmail.com to be super admin and make
+sure that it's has an Auth identity." This closes audit finding F-6 (the
+intended administrator had no Supabase Auth account — admin magic-link requests
+returned HTTP 422 "Signups not allowed for otp") and the audit's open question
+"decide the intended admin explicitly" (0009 had seeded the placeholder
+`raysallinone00@gmail.com`).
+
+## What changed
+
+1. **`backend/migrations/0016_provision_super_admin_gospelu214.sql` (new)**
+   - re-points `app_settings.platform.admin_email` at `gospelu214@gmail.com`
+     (the 0009 trigger source of truth);
+   - guarantees a Supabase Auth identity for that exact email — created if
+     missing with the address already confirmed and NO password (admins are
+     magic-link only; `shouldCreateUser: false` in the frontend means the
+     identity must pre-exist, which is exactly why F-6 happened);
+   - links the identity to a canonical Meridian profile via the production
+     `bootstrap_supabase_profile()` path (legacy link or new profile +
+     default EUR account), which fires the 0009 super-admin trigger;
+   - asserts the `super_admin` grant end-state and profile `status='active'` —
+     a run that fails to provision fails the migration instead of pretending;
+   - fully idempotent; registers itself in `schema_migrations`.
+2. **`backend/tests/integration/database.test.ts`** — three new integration
+   tests (25 total in the file): provisioned state (identity + confirmed
+   email + linked active profile + `super_admin` row + configured email
+   setting), trigger re-fire idempotency (still exactly one row), and no role
+   for a confirmed identity with a different email.
+3. **`backend/package-lock.json` + `.github/workflows/workflows npm ci switch`**
+   (the paired CI reproducibility fix) — regenerated and committed LOCALLY
+   (commit `chore(ci): sync backend lockfile with zod 4.6.7 and switch CI to
+   npm ci`) but still NOT publishable through the contents API (234 kB exceeds
+   the reliable emission path; the same wall the previous pass hit). Both files
+   are delivered alongside this pass for the owner to commit from any
+   credentialed clone — they must land together or CI would fail.
+4. Docs: `PASSWORDLESS_AUTH_SETUP.md` (0009+0016 super-admin paragraph,
+   required-migration note), `CHANGELOG.md`, this file.
+
+## Verification (all fresh on this pass)
+
+- `npm ci` (fresh install from the regenerated lockfile): OK.
+- `npm run typecheck`: 0 errors. `npm run lint`: 0 findings.
+- `npm test`: **56/56** (integration 25 incl. the three new provisioning
+  tests, executed against real embedded PostgreSQL 18 with migrations
+  `0001`–`0016` applied in order).
+- `npm audit --omit=dev`: 0 vulnerabilities.
+- `frontend/check.sh`: 16/16 (no frontend files touched).
+- NOT RUN / BLOCKED (needs live credentials, per AGENTS.md stop conditions):
+  applying `0016` to the live Supabase project, the live admin magic-link
+  round-trip for gospelu214@gmail.com, Cloudflare deployment.
+
+## Decisions ledger (this pass)
+
+- The configured super-admin email is REPLACED (raysallinone00 → gospelu214)
+  per the owner's explicit instruction; no existing `admin_users` row is
+  revoked or deleted — the previous holder (if granted on the live project)
+  keeps access until revoked through the admin console. Non-destructive by
+  design; destructive revocation would need its own owner decision.
+- The Auth identity is created inside the migration via a guarded
+  `INSERT INTO auth.users` limited to columns that exist both in real
+  Supabase and the integration-test double; the equivalent operator
+  alternative (Supabase Auth admin API `admin.createUser`) is documented in
+  the migration header and PASSWORDLESS_AUTH_SETUP.md.
+- Confirming `email_confirmed_at` of an existing identity inside the
+  migration is accepted because the migration itself is the trusted operator
+  action; every runtime path (0009 trigger, requireAuth) still demands the
+  confirmed address.
+- `workers.yml` kept the existing `branches: [main, development]` trigger
+  (an earlier terminal render suggested corruption; byte-level `od -c` proved
+  the file was already correct — no change made beyond `npm ci`).
+
+## Exact next tasks
+
+0. Owner: publish the paired CI fix (`backend/package-lock.json` +
+   `.github/workflows/workers.yml` `npm ci` switch — files delivered with
+   this pass) from any credentialed clone; they must land together.
+1. Owner: apply migration `0016` to the live Supabase project (SQL editor),
+   then sign in at `/admin` with gospelu214@gmail.com — magic link should
+   dispatch and the console should render (still also blocked by F-1 deploy
+   in production; works against local/dev).
+2. Owner: deploy Worker + Pages (F-1), configure Twilio (F-4), rehearse
+   migrations 0008–0016 against a backup (F-2-era rehearsal, range extended).
+3. Still open owner decisions: F-10 (unmatched_payments), F-14 (www-522),
+   optional revocation of the previous super-admin holder.
