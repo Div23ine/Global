@@ -6,6 +6,7 @@ import { validate } from '../middleware/validate';
 import { supportLimiter } from '../middleware/rateLimit';
 import { getUserClient, getServiceClient } from '../services/supabase.service';
 import { markRead } from '../services/notifications.service';
+import { notifyAdminsByEmail } from '../services/admin-gmail.service';
 import { parsePagination, pageMeta } from '../utils/pagination';
 import { badRequest, ok } from '../utils/httpError';
 
@@ -78,6 +79,13 @@ supportRouter.post('/support/tickets', supportLimiter, validate(ticketSchema), a
       .from('support_messages')
       .insert({ ticket_id: ticket.id, sender: 'customer', body: req.body.message });
     if (msgErr) throw new Error(msgErr.message);
+    await notifyAdminsByEmail({
+      eventType: 'support.ticket_created', subject: 'New customer support request — ' + req.body.subject,
+      body: 'A customer submitted a support request requiring administrator attention.\\n\\nTicket ID: ' + ticket.id +
+        '\\nCategory: ' + req.body.category + '\\nSubject: ' + req.body.subject +
+        '\\n\\nMessage:\\n' + String(req.body.message).slice(0, 1500) +
+        '\\n\\nSign in to Meridian and open Support to respond.',
+    });
     res.status(201);
     res.json({ success: true, message: 'Support ticket created', data: ticket, meta: {} });
   } catch (err) { next(err); }
