@@ -34,8 +34,9 @@
     };
     window.addEventListener('error', function (e) {
       var root = document.getElementById('gl-app');
-      var booted = root && root.querySelector && root.querySelector('.shell, .auth-card, .auth-viewport, .auth-wrap');
-      if (!booted && e && e.message) window.__meridianBootError(e.error || e.message);
+      var booted = root && root.querySelector && root.querySelector('.shell, .auth-card, .auth-viewport, .auth-wrap, .page-frame, .view-stack');
+      if (booted) return; // runtime view errors must not replace the console with the boot panel
+      if (e && e.message) window.__meridianBootError(e.error || e.message);
     });
   </script>
 

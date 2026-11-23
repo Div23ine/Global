@@ -14,6 +14,21 @@
   var h = React.createElement;
   MGA.views = MGA.views || {};
 
+  /** Unwrap http envelope { data, meta } or raw arrays from useAsync. */
+  function adminList(payload) {
+    if (!payload) return [];
+    if (Array.isArray(payload)) return payload;
+    if (Array.isArray(payload.data)) return payload.data;
+    if (payload.data && Array.isArray(payload.data.items)) return payload.data.items;
+    if (payload.data && Array.isArray(payload.data.rows)) return payload.data.rows;
+    return [];
+  }
+  function adminMeta(payload) {
+    if (!payload || typeof payload !== 'object') return {};
+    return payload.meta || (payload.data && payload.data.meta) || {};
+  }
+
+
   /* ------------------------------------------------------------- currencies */
   MGA.views.currencies = function () {
     var _r = React.useState(0); var reload = _r[1];
@@ -601,10 +616,18 @@
     var state = MG.ui.useAsync(function () { return MGA.api.settings(); }, [_r[0]]);
     var _m = React.useState(null); var maintenance = _m[0]; var setMaintenance = _m[1];
     var _b = React.useState(false); var busy = _b[0]; var setBusy = _b[1];
+    // http.get returns { data, meta, message } — never treat the envelope as an array.
     React.useEffect(function () {
-      if (state.data && !maintenance) {
-        var found = (state.data || []).find(function (s) { return s.key === 'platform.maintenance_mode'; });
-        if (found) setMaintenance(found.value === true || found.value === 'true');
+      if (state.data && maintenance === null) {
+        var list = adminList(state.data);
+        var found = list.find(function (s) { return s && s.key === 'platform.maintenance_mode'; });
+        if (found) {
+          var v = found.value;
+          if (v && typeof v === 'object' && v.enabled != null) v = v.enabled;
+          setMaintenance(v === true || v === 'true' || v === '1');
+        } else {
+          setMaintenance(false);
+        }
       }
     }, [state.data]);
     if (state.loading) return h(MG.ui.PageSkeleton, { variant: 'page' });
