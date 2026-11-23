@@ -32,7 +32,7 @@ deposits stay `PENDING` and **no payment may ever be manufactured as successful*
 - Architecture: React 18 via CDN + Babel Standalone in HTML entry files (no
   Next.js, no frontend build step for the initial implementation); Node.js +
   TypeScript + Express backend on Cloudflare Workers; Supabase PostgreSQL and
-  Supabase Auth; Resend email notifications; Twilio transactional SMS; Cloudflare Pages.
+  Supabase Auth; Resend email notifications; Cloudflare Pages.
 
 ## 2. Repository map
 
@@ -211,8 +211,7 @@ cd prototype && python3 -m http.server 4174
 
 Backend (`backend/.env`, never committed; see `backend/.env.example`):
 `PORT`, `NODE_ENV`, `CORS_ORIGIN`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`,
-`SUPABASE_SERVICE_ROLE_KEY`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`,
-`TWILIO_FROM_NUMBER`, `RATE_LIMIT_*`, `LOG_LEVEL`.
+`SUPABASE_SERVICE_ROLE_KEY`, `RATE_LIMIT_*`, `LOG_LEVEL`.
 
 Frontend (`frontend/js/config.js`, non-secret values only):
 `API_BASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`. The Supabase anon/publishable
