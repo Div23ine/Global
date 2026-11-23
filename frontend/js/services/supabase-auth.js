@@ -127,18 +127,19 @@
     },
 
     signIn: function (email) {
+      // Pure email OTP — do not set emailRedirectTo (that produces magic-link emails).
       var normalizedEmail = email.trim().toLowerCase();
       try { window.localStorage.setItem('mg_customer_login_email', normalizedEmail); } catch (e) {}
       return requireClient().auth.signInWithOtp({
         email: normalizedEmail,
-        options: { shouldCreateUser: false, emailRedirectTo: window.location.origin + window.location.pathname + '?customer_login=1' },
+        options: { shouldCreateUser: false },
       });
     },
 
     signInAdmin: function (email) {
       return requireClient().auth.signInWithOtp({
         email: email.trim().toLowerCase(),
-        options: { shouldCreateUser: false, emailRedirectTo: window.location.origin + window.location.pathname },
+        options: { shouldCreateUser: false },
       });
     },
 
@@ -177,61 +178,94 @@
     verifyEmailOtp: function (email, token) {
       var normalized = email.trim().toLowerCase();
       var code = String(token).replace(/\s+/g, '');
-      return requireClient().auth.verifyOtp({
-        email: normalized,
-        token: code,
-        type: 'signup',
-      }).then(function (result) {
+      // signInWithOtp issues type "email"; confirm-signup path uses "signup".
+      function attempt(type) {
+        return requireClient().auth.verifyOtp({ email: normalized, token: code, type: type });
+      }
+      return attempt('email').then(function (result) {
         if (!result.error) return result;
-        // Fallback when the project issues a generic email OTP type.
-        return requireClient().auth.verifyOtp({
-          email: normalized,
-          token: code,
-          type: 'email',
+        return attempt('signup').then(function (r2) {
+          if (!r2.error) return r2;
+          return attempt('magiclink');
+        });
+      }).then(function (result) {
+        if (result.error) return result;
+        // After OTP succeeds on registration, set the password chosen on the form.
+        return MG.auth.completeSignUpPassword().then(function (pwResult) {
+          if (pwResult && pwResult.error) return pwResult;
+          return result;
         });
       });
     },
 
-    signUp: function (payload) {
-      // Password registration + email one-time code (OTP). Do not pass
-      // emailRedirectTo — that steers Supabase toward a "Confirm your email"
-      // magic-link message. The Confirm signup template must include
-      // {{ .Token }} so the customer receives a numeric OTP instead.
+    /**
+     * Registration is OTP-first (no magic link):
+     * 1) beginSignUp → signInWithOtp(shouldCreateUser: true) + stash password locally
+     * 2) verifyEmailOtp → verifyOtp type email
+     * 3) completeSignUpPassword → updateUser({ password })
+     * Supabase email templates for Magic Link AND Confirm sign up must show {{ .Token }}.
+     */
+    beginSignUp: function (payload) {
       var email = payload.email.trim().toLowerCase();
-      return requireClient().auth.signUp({
+      var password = payload.password;
+      var meta = {
+        full_name: payload.fullName.trim(),
+        first_name: payload.firstName || '',
+        last_name: payload.lastName || '',
+        phone: payload.phone,
+        country: payload.country.trim(),
+        country_name: payload.country.trim(),
+        country_code: payload.countryCode.trim().toUpperCase(),
+        country_calling_code: payload.callingCode.trim(),
+      };
+      try {
+        window.sessionStorage.setItem('mg_pending_signup', JSON.stringify({
+          email: email,
+          password: password,
+          meta: meta,
+        }));
+      } catch (e) { /* private mode */ }
+      return requireClient().auth.signInWithOtp({
         email: email,
-        password: payload.password,
         options: {
-          data: {
-            full_name: payload.fullName.trim(),
-            first_name: payload.firstName || '',
-            last_name: payload.lastName || '',
-            phone: payload.phone,
-            country: payload.country.trim(),
-            country_name: payload.country.trim(),
-            country_code: payload.countryCode.trim().toUpperCase(),
-            country_calling_code: payload.callingCode.trim(),
-          },
+          shouldCreateUser: true,
+          data: meta,
         },
-      }).then(function (result) {
-        if (result.error) return result;
-        // If the project still has a stale session path, ensure an OTP is issued.
-        var user = result.data && result.data.user;
-        var session = result.data && result.data.session;
-        if (user && !session) {
-          return requireClient().auth.resend({ type: 'signup', email: email }).then(function (resendResult) {
-            if (resendResult.error) return resendResult;
-            return result;
-          });
-        }
-        return result;
       });
     },
 
+    /* Kept for compatibility — routes to beginSignUp */
+    signUp: function (payload) {
+      return MG.auth.beginSignUp(payload);
+    },
+
     resendSignupOtp: function (email) {
-      return requireClient().auth.resend({
-        type: 'signup',
-        email: String(email || '').trim().toLowerCase(),
+      var normalized = String(email || '').trim().toLowerCase();
+      var pending = null;
+      try { pending = JSON.parse(window.sessionStorage.getItem('mg_pending_signup') || 'null'); } catch (e) {}
+      var meta = (pending && pending.email === normalized && pending.meta) ? pending.meta : undefined;
+      return requireClient().auth.signInWithOtp({
+        email: normalized,
+        options: {
+          shouldCreateUser: true,
+          data: meta,
+        },
+      });
+    },
+
+    completeSignUpPassword: function () {
+      var pending = null;
+      try { pending = JSON.parse(window.sessionStorage.getItem('mg_pending_signup') || 'null'); } catch (e) {}
+      if (!pending || !pending.password) {
+        return Promise.resolve({ data: { user: state.user }, error: null });
+      }
+      var currentEmail = (state.user && state.user.email || '').trim().toLowerCase();
+      if (pending.email && currentEmail && pending.email !== currentEmail) {
+        return Promise.resolve({ data: { user: state.user }, error: null });
+      }
+      return requireClient().auth.updateUser({ password: pending.password }).then(function (result) {
+        try { window.sessionStorage.removeItem('mg_pending_signup'); } catch (e) {}
+        return result;
       });
     },
 

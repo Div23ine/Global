@@ -1,29 +1,56 @@
-# Supabase email OTP (customer registration)
+# Supabase must send OTP codes (not magic links)
 
-Customer sign-up must send a **numeric one-time code**, not a “Confirm your email address” magic link.
+The app uses **email OTP only** for customer sign-up and sign-in.  
+Supabase still **generates both** a token and a link; **what the customer sees is controlled only by your email templates**.
 
-## Dashboard settings
+If the inbox still shows “Confirm your email” with a button/link, the template still uses `{{ .ConfirmationURL }}` and not `{{ .Token }}`.
 
-1. **Authentication → Providers → Email**
-   - Enable email confirmations.
-2. **Authentication → Email Templates → Confirm sign up**
-   - Subject: e.g. `Your Meridian verification code`
-   - Body must include the OTP token, for example:
+---
 
+## Required dashboard changes (do these now)
+
+### 1. Authentication → Providers → Email
+- Email provider **enabled**
+- **Confirm email** can stay ON
+
+### 2. Authentication → Email Templates → **Magic Link**
+This template is used by `signInWithOtp` (login **and** OTP registration).
+
+**Subject:** `Your Meridian one-time code`
+
+**Body (example):**
 ```html
 <h2>Your Meridian code</h2>
-<p>Enter this one-time code to activate your account:</p>
-<p style="font-size:24px;letter-spacing:4px"><strong>{{ .Token }}</strong></p>
-<p>This code expires shortly. If you did not request it, ignore this email.</p>
+<p>Enter this one-time code in the app:</p>
+<p style="font-size:28px;letter-spacing:6px;font-weight:700">{{ .Token }}</p>
+<p>This code expires in about an hour. If you did not request it, ignore this email.</p>
 ```
 
-   - Prefer **not** relying on `{{ .ConfirmationURL }}` for customer registration.
+**Remove** (or do not rely on) any button that uses `{{ .ConfirmationURL }}`.
 
-3. **Authentication → Rate Limits** — leave email OTP limits at defaults unless abuse appears.
+### 3. Authentication → Email Templates → **Confirm sign up**
+Same OTP body with `{{ .Token }}` only (no confirm button).
 
-## Application behaviour
+### 4. Save templates and retry registration
 
-- `MG.auth.signUp` registers with email/password and **does not** set `emailRedirectTo`.
-- The UI asks for the OTP and calls `verifyOtp` with type `signup` (fallback `email`).
-- `MG.auth.resendSignupOtp` resends the signup OTP.
-- SMS / Twilio is not used.
+---
+
+## App behaviour (after this fix)
+
+| Action | API |
+|--------|-----|
+| Register | `signInWithOtp({ shouldCreateUser: true })` → enter OTP → set password |
+| Sign in | `signInWithOtp({ shouldCreateUser: false })` → enter OTP |
+| Resend | same `signInWithOtp` again |
+
+No `emailRedirectTo` is passed, so the product flow never depends on opening a link.
+
+---
+
+## Verify
+
+1. Register a new address.
+2. Open the email — you must see a **6-digit code**, not a “Confirm your email” button.
+3. Enter the code in the app.
+
+If the email still has only a link, the Magic Link template was not saved with `{{ .Token }}`.

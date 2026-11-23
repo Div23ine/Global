@@ -37,35 +37,100 @@
 
   function SignInView() {
     var _e = useState(''); var email = _e[0]; var setEmail = _e[1];
-    var _s = useState(false); var sent = _s[0]; var setSent = _s[1];
+    var _o = useState(''); var otp = _o[0]; var setOtp = _o[1];
+    var _s = useState('email'); var step = _s[0]; var setStep = _s[1]; // email | otp | mfa
     var _b = useState(false); var busy = _b[0]; var setBusy = _b[1];
     var _x = useState(''); var error = _x[0]; var setError = _x[1];
     var _m = useState(''); var message = _m[0]; var setMessage = _m[1];
+    var _factor = useState(null); var factor = _factor[0]; var setFactor = _factor[1];
+    var _challenge = useState(null); var challenge = _challenge[0]; var setChallenge = _challenge[1];
+    var _mfa = useState(''); var mfaCode = _mfa[0]; var setMfaCode = _mfa[1];
 
-    function sendLink(event) {
+    function sendOtp(event) {
       if (event) event.preventDefault();
       setBusy(true); setError(''); setMessage('');
       MG.auth.signIn(email).then(function (result) {
         if (result.error) throw result.error;
-        setSent(true);
-        setMessage('A secure sign-in link has been sent to your email. Open it on this device to continue.');
-      }).catch(function (err) { setError(err.message || 'Could not send the sign-in link.'); })
+        setStep('otp');
+        setMessage('We sent a one-time code to ' + email.trim() + '. Enter that code — not a link.');
+      }).catch(function (err) { setError(err.message || 'Could not send the one-time code.'); })
         .finally(function () { setBusy(false); });
     }
+
+    function verifyOtp(event) {
+      event.preventDefault();
+      setBusy(true); setError(''); setMessage('');
+      MG.auth.verifyEmailOtp(email, otp).then(function (result) {
+        if (result.error) throw result.error;
+        return MG.auth.listMfaFactors().then(function (factorsResult) {
+          if (factorsResult.error) throw factorsResult.error;
+          var factors = (factorsResult.data && factorsResult.data.totp) || [];
+          var verified = factors.filter(function (f) { return f.status === 'verified'; })[0];
+          if (!verified) {
+            try { window.localStorage.removeItem('mg_customer_login_email'); } catch (e) {}
+            location.hash = '#/overview';
+            return;
+          }
+          setFactor(verified.id);
+          return MG.auth.challengeTotp(verified.id).then(function (challengeResult) {
+            if (challengeResult.error) throw challengeResult.error;
+            setChallenge(challengeResult.data.id);
+            setStep('mfa');
+            setMessage('Enter the code from your authenticator app.');
+          });
+        });
+      }).catch(function (err) { setError(err.message || 'Invalid or expired code.'); })
+        .finally(function () { setBusy(false); });
+    }
+
+    function verifyMfa(event) {
+      event.preventDefault();
+      setBusy(true); setError('');
+      MG.auth.verifyTotp(factor, challenge, mfaCode).then(function (result) {
+        if (result.error) throw result.error;
+        try { window.localStorage.removeItem('mg_customer_login_email'); } catch (e) {}
+        location.hash = '#/overview';
+      }).catch(function (err) { setError(err.message || 'Authenticator code is invalid.'); })
+        .finally(function () { setBusy(false); });
+    }
+
+    var title = step === 'mfa' ? 'Authenticator verification' : (step === 'otp' ? 'Enter one-time code' : 'Welcome back');
+    var blurb = step === 'mfa'
+      ? 'Multi-factor authentication is enabled. Enter the current authenticator code.'
+      : (step === 'otp'
+        ? (message || 'Enter the numeric code from your email.')
+        : 'Enter your registered email. We will send a one-time code (OTP) — not a magic link.');
 
     return h('div', { className: 'auth-wrap' },
       h('div', { className: 'auth-card' },
         h('p', { className: 'auth-brand' }, 'Meridian Global Accounts'),
-        h('h1', null, 'Welcome back'),
-        h('p', { className: 'muted' }, 'Enter your registered email. We will send you a secure sign-in link, followed by an email verification code.'),
-        h('form', { onSubmit: sendLink },
+        h('h1', null, title),
+        h('p', { className: 'muted' }, blurb),
+        step === 'email' ? h('form', { onSubmit: sendOtp },
           h(AuthInput, { label: 'Email address', type: 'email', autoComplete: 'email',
             value: email, required: true,
             onChange: function (event) { setEmail(event.target.value); } }),
           error ? h('p', { className: 'form-error', role: 'alert' }, error) : null,
-          message ? h('p', { className: 'form-success', role: 'status' }, message) : null,
           h('button', { className: 'btn btn-primary btn-block', type: 'submit', disabled: busy },
-            busy ? 'Please wait…' : (sent ? 'Resend sign-in link' : 'Continue with email'))),
+            busy ? 'Sending…' : 'Send one-time code')) : null,
+        step === 'otp' ? h(React.Fragment, null,
+          h('form', { onSubmit: verifyOtp },
+            h(AuthInput, { label: 'One-time code (OTP)', type: 'text', autoComplete: 'one-time-code',
+              value: otp, required: true, maxLength: 8,
+              onChange: function (event) { setOtp(event.target.value.replace(/\D/g, '').slice(0, 8)); } }),
+            error ? h('p', { className: 'form-error', role: 'alert' }, error) : null,
+            message ? h('p', { className: 'form-success', role: 'status' }, message) : null,
+            h('button', { className: 'btn btn-primary btn-block', type: 'submit', disabled: busy },
+              busy ? 'Verifying…' : 'Verify and sign in')),
+          h('button', { type: 'button', className: 'btn btn-ghost btn-block', disabled: busy, onClick: sendOtp },
+            'Resend one-time code')) : null,
+        step === 'mfa' ? h('form', { onSubmit: verifyMfa },
+          h(AuthInput, { label: 'Authenticator code', type: 'text', autoComplete: 'one-time-code',
+            value: mfaCode, required: true, maxLength: 8,
+            onChange: function (event) { setMfaCode(event.target.value.replace(/\D/g, '').slice(0, 8)); } }),
+          error ? h('p', { className: 'form-error', role: 'alert' }, error) : null,
+          h('button', { className: 'btn btn-primary btn-block', type: 'submit', disabled: busy },
+            busy ? 'Verifying…' : 'Verify authenticator')) : null,
         h('p', { className: 'muted auth-links' }, h('a', { href: '#/register' }, 'Create an account'))));
   }
 
@@ -476,15 +541,8 @@
       else authView = h(SignInView);
       return h('div', { className: 'auth-page-root' }, authView);
     }
+    // Sign-in is pure email OTP (no magic-link second factor).
 
-    // Customer magic-link callbacks must complete the second email OTP
-    // before the customer shell or protected views can render. Admin auth
-    // lives in admin.html and intentionally does not use this customer gate.
-    if (MG.auth.hasPendingSecondFactor()) {
-      document.body.classList.remove('app-shell', 'nav-open');
-      document.body.classList.add('auth-page');
-      return h('div', { className: 'auth-page-root' }, h(PostLinkOtpView));
-    }
 
     document.body.classList.remove('auth-page');
 
