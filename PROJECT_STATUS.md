@@ -241,3 +241,28 @@ live database.
 - F-10 (unmatched_payments) intentionally NOT touched: dropping a table is a
   destructive migration (AGENTS.md stop condition) and building a workflow is
   a product decision; recorded for the owner instead.
+
+---
+
+# Owner PR #6 verification + regression-test alignment (2026-11-23)
+
+The owner merged PR #6 (deposits.service atomicity fix + migration 0015
+production hardening) after the remediation push. Re-running the gates on the
+combined tree surfaced ONE red: the integration regression test still asserted
+the pre-0015 RLS helper contract (`anon_can_resolve_identity: true`).
+
+Resolution (agent altered NO RLS — the owner did, via their own PR):
+- Verified all nine helper-using policies are SELECT policies now altered
+  `TO authenticated`, so anon default-deny without evaluating the helper; the
+  revoked anon EXECUTE is unreachable. Behaviorally proven on the real
+  migrated database (anon profiles read = 0 rows no error; direct helper call
+  denied; currencies public read still open).
+- The regression test was aligned with the tightened contract and strengthened
+  (privilege matrix + anon default-deny + direct-call denial + public reads).
+- SECURITY_REVIEW.md: §5 helper bullet rewritten to the post-0015 contract;
+  §12 records this verification.
+
+Final gates on the combined tree: typecheck 0, lint 0, Vitest 53/53, npm audit
+0 vulnerabilities, frontend check.sh 16/16. Local branch = origin/development
++ one commit (`chore: sync backend lockfile with zod 4.6.7 and switch CI to
+npm ci`) awaiting the owner's real `git push`.
