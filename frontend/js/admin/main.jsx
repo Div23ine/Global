@@ -326,7 +326,17 @@
                 'Resend code'),
               h('button', { type: 'button', className: 'btn btn-ghost btn-block', disabled: busy,
                 onClick: function () { setStep('email'); setOtp(''); setError(''); setMessage(''); } },
-                'Use a different email')) : null)));
+                'Use a different email')) : null))));
   }
-  ReactDOM.createRoot(document.getElementById('gl-app')).render(h(AdminApp));
+  var mount = document.getElementById('gl-app');
+  if (!mount) {
+    if (window.__meridianBootError) window.__meridianBootError(new Error('Missing #gl-app mount node.'));
+  } else {
+    try {
+      ReactDOM.createRoot(mount).render(h(AdminApp));
+    } catch (err) {
+      if (window.__meridianBootError) window.__meridianBootError(err);
+      else throw err;
+    }
+  }
 })();

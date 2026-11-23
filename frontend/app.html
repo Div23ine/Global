@@ -10,32 +10,55 @@
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="assets/theme.css">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <style>
+    #boot-error { display:none; max-width:480px; margin:48px auto; padding:24px; font:14px/1.5 Inter,system-ui,sans-serif; border:1px solid #F5C2C0; background:#FEF3F2; border-radius:12px; color:#912018; }
+    #boot-error.show { display:block; }
+  </style>
 </head>
 <body data-page="app">
   <a class="skip-link" href="#gl-main">Skip to content</a>
-  <div id="gl-app" aria-live="polite"></div>
+  <div id="boot-error" role="alert"></div>
+  <div id="gl-app" aria-live="polite">
+    <div class="auth-wrap" id="boot-placeholder">
+      <div class="auth-card"><p class="muted">Loading Meridian…</p></div>
+    </div>
+  </div>
   <div id="gl-toasts" class="gl-toasts" aria-live="polite"></div>
   <div id="gl-modal" class="gl-modal-root" hidden></div>
 
-  <!-- Service + UI modules (classic scripts, load order matters) -->
+  <script>
+    window.__meridianBootError = function (err) {
+      var el = document.getElementById('boot-error');
+      if (!el) return;
+      el.className = 'show';
+      el.innerHTML = '<b>Could not start the application.</b><p style="margin:8px 0 0">' +
+        String((err && err.message) || err || 'Unknown error') +
+        '</p><p style="margin:8px 0 0;font-size:13px">Hard-refresh (Ctrl/Cmd+Shift+R). If this continues, contact support.</p>';
+      console.error(err);
+    };
+    window.addEventListener('error', function (e) {
+      if (e && e.message && /Babel|Script error|Unexpected/.test(e.message)) {
+        window.__meridianBootError(e.error || e.message);
+      }
+    });
+  </script>
+
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-  
-  <script src="js/config.js?v=20261122-supabase-runtime"></script>
+  <script src="js/config.js"></script>
   <script src="js/icons.js"></script>
   <script src="js/util.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="js/services/supabase-auth.js?v=20261123-email-otp"></script>
+  <script src="js/services/supabase-auth.js"></script>
   <script src="js/services/http.js"></script>
   <script src="js/services/api.js"></script>
+  <!-- type=text/babel external scripts: no query strings (Babel fetch breaks on ?v=) -->
   <script type="text/babel" data-presets="react" src="js/components/ui.jsx"></script>
-
-  <!-- Customer application views (Babel-transformed, shared global scope) -->
   <script type="text/babel" data-presets="react" src="js/app/views-banking.jsx"></script>
   <script type="text/babel" data-presets="react" src="js/app/views-records.jsx"></script>
   <script type="text/babel" data-presets="react" src="js/app/views-account.jsx"></script>
-  <script type="text/babel" data-presets="react" src="js/app/main.jsx?v=20261123-email-otp"></script>
+  <script type="text/babel" data-presets="react" src="js/app/main.jsx"></script>
 </body>
 </html>

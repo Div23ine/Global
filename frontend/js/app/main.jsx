@@ -468,5 +468,15 @@
     return h(Shell, { route: route, user: st.user, resolveView: resolveView });
   }
 
-  ReactDOM.createRoot(document.getElementById('gl-app')).render(h(App));
+  var mount = document.getElementById('gl-app');
+  if (!mount) {
+    if (window.__meridianBootError) window.__meridianBootError(new Error('Missing #gl-app mount node.'));
+  } else {
+    try {
+      ReactDOM.createRoot(mount).render(h(App));
+    } catch (err) {
+      if (window.__meridianBootError) window.__meridianBootError(err);
+      else throw err;
+    }
+  }
 })();
