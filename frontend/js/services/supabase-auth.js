@@ -120,7 +120,10 @@
         return true;
       }).catch(function (error) {
         if (error && error.status === 401) {
+          customerOtpPending = false;
+          pendingSignup = null;
           publish({ user: null, mfaRequired: false, mfaFactorId: null });
+          state.csrfToken = null;
           return false;
         }
         throw error;
