@@ -1,7 +1,9 @@
 /* ==========================================================================
    MERIDIAN ADMIN — Hong Kong International Fintech (Design 2)
-   admin views-ops.jsx — Currencies · Deposits · Refunds · Transactions ·
-   Payments · Security · Reports · Support · Roles · Audit · Settings
+   admin views-ops.jsx — Currencies · Deposits · Transactions · Payments ·
+   Security · Reports · Support · Roles · Audit · Settings
+
+   (Refunds moved to views-refunds.jsx — file-size ratchet.)
 
    Every view uses the prototype design: PageHead, StatCard with icons,
    DataTable with cell patterns, filter bars with segmented controls,
@@ -193,88 +195,6 @@
         h('button', { className: 'btn btn-ghost btn-sm', style: { marginTop: 12 }, onClick: function () { setSelected(null); } }, 'Close')) : null);
   };
 
-  /* --------------------------------------------------------------- refunds */
-  MGA.views.refunds = function () {
-    var _s = React.useState(''); var status = _s[0]; var setStatus = _s[1];
-    var _r = React.useState(0); var reload = _r[1];
-    var _sel = React.useState(null); var selected = _sel[0]; var setSelected = _sel[1];
-    var _amt = React.useState(''); var approvedAmount = _amt[0]; var setApprovedAmount = _amt[1];
-    var _notes = React.useState(''); var notes = _notes[0]; var setNotes = _notes[1];
-    var _busy = React.useState(false); var busy = _busy[0]; var setBusy = _busy[1];
-
-    var state = MG.ui.useAsync(function () { return MGA.api.refunds(1, status); }, [status, _r[0]]);
-
-    return h(React.Fragment, null,
-      h(MG.ui.PageHead, {
-        icon: 'receipt', title: 'Refund management',
-        sub: 'All refunds are internal. Approving credits the customer\u2019s Meridian balance.' }),
-
-      h(MG.ui.Notice, { tone: 'info', icon: 'info' },
-        h('p', null, 'No external bank payout is performed. All refunds credit the internal Meridian balance.')),
-
-      h('div', { className: 'filter-bar' },
-        h('div', { className: 'field' },
-          h('label', null, 'Status'),
-          h('select', { value: status, onChange: function (e) { setStatus(e.target.value); } },
-            h('option', { value: '' }, 'All statuses'),
-            h('option', { value: 'requested' }, 'Requested'),
-            h('option', { value: 'under_review' }, 'Under review'),
-            h('option', { value: 'approved' }, 'Approved'),
-            h('option', { value: 'completed' }, 'Completed'),
-            h('option', { value: 'rejected' }, 'Rejected')))),
-
-      state.loading ? h(MG.ui.PageSkeleton, { variant: 'list' })
-        : state.error ? h(MG.ui.ErrorPanel, { error: state.error, onRetry: function () { location.reload(); } })
-        : h(MG.ui.DataTable, {
-            rows: state.data || [],
-            rowKey: function (r) { return r.id; },
-            empty: h(MG.ui.Empty, { icon: 'receipt', title: 'No refunds', note: 'No refund requests match the current filter.' }),
-            columns: [
-              { th: 'Reference', td: function (r) { return h('code', null, r.reference); } },
-              { th: 'Original', td: function (r) { return r.original_reference; } },
-              { th: 'Requested', align: 'right', td: function (r) { return h('span', { className: 'td-amount' }, MG.util.money(r.requested_amount, r.currency_code)); } },
-              { th: 'Status', td: function (r) { return h(MG.ui.Badge, { status: r.status }); } },
-              { th: 'Created', td: function (r) { return h('span', { className: 'td-date' }, MG.util.date(r.created_at)); } },
-              { th: '', align: 'right', td: function (r) {
-                return h('button', { className: 'btn btn-ghost btn-sm', onClick: function () {
-                  setSelected(r); setApprovedAmount(String(r.requested_amount));
-                } }, h(MG.ui.Icon, { name: 'eye', size: 13 }), ' Review'); } },
-            ] }),
-
-      selected ? h(MG.ui.Card, { title: h('h3', { className: 'panel-title' }, 'Review refund \u2014 ', selected.reference) },
-        h('p', null, h('b', null, 'Original transaction: '), selected.original_reference,
-          ' (', MG.util.money(selected.original_amount, selected.currency_code), ')'),
-        h('p', null, h('b', null, 'Customer: '), selected.profile_id),
-        h('p', null, h('b', null, 'Reason: '), selected.reason),
-        h('p', null, h('b', null, 'Status: '), h(MG.ui.Badge, { status: selected.status })),
-        (['requested','under_review','approved'].indexOf(selected.status) >= 0) ? h(React.Fragment, null,
-          h('div', { className: 'field', style: { marginTop: 14 } },
-            h('label', null, 'Approved amount'),
-            h('input', { value: approvedAmount, onChange: function (e) { setApprovedAmount(e.target.value); } })),
-          h('div', { className: 'field' },
-            h('label', null, 'Notes'),
-            h('input', { value: notes, onChange: function (e) { setNotes(e.target.value); } })),
-          h('div', { className: 'btn-row' },
-            h('button', { className: 'btn btn-primary', disabled: busy, onClick: function () {
-              setBusy(true);
-              MGA.api.approveRefund(selected.id, approvedAmount || undefined, notes || undefined).then(function () {
-                MG.ui.toast('Refund approved \u2014 Meridian balance credited.', 'ok');
-                setSelected(null); setApprovedAmount(''); setNotes('');
-                reload(function (x) { return x + 1; });
-              }).catch(function (e) { MG.ui.toast(MG.util.errMessage(e), 'err'); })
-                .finally(function () { setBusy(false); });
-            } }, 'Approve and credit'),
-            h('button', { className: 'btn btn-ghost', disabled: busy, onClick: function () {
-              setBusy(true);
-              MGA.api.rejectRefund(selected.id, notes || 'Rejected').then(function () {
-                MG.ui.toast('Refund rejected.', 'ok');
-                setSelected(null); setNotes('');
-                reload(function (x) { return x + 1; });
-              }).catch(function (e) { MG.ui.toast(MG.util.errMessage(e), 'err'); })
-                .finally(function () { setBusy(false); });
-            } }, 'Reject'))) : null,
-        h('button', { className: 'btn btn-ghost btn-sm', style: { marginTop: 12 }, onClick: function () { setSelected(null); } }, 'Close')) : null);
-  };
 
   /* ----------------------------------------------------------- transactions */
   MGA.views.transactions = function () {
@@ -326,6 +246,17 @@
                   (t.direction === 'credit' ? '+' : '-') + MG.util.money(t.amount, t.currency_code)); } },
               { th: 'Status', td: function (t) { return h(MG.ui.Badge, { status: t.status }); } },
               { th: 'Date', td: function (t) { return h('span', { className: 'td-date' }, MG.util.date(t.created_at)); } },
+              { th: '', align: 'right', td: function (t) {
+                /* Bridges the refund workflow: the create-refund form needs the
+                   transaction UUID (audit F-3). */
+                return h('button', { className: 'btn btn-ghost btn-sm',
+                  title: 'Copy transaction UUID for a refund request',
+                  onClick: function (e) { e.stopPropagation(); MG.util.copyText(t.id).then(function () {
+                    MG.ui.toast('Transaction ID copied \u2014 paste it into a new refund request.', 'ok');
+                  }, function () {
+                    MG.ui.toast('Copy failed \u2014 copy the UUID manually: ' + t.id, 'err');
+                  }); } },
+                  h(MG.ui.Icon, { name: 'copy', size: 13 }), ' Copy ID'); } },
             ] }));
   };
 
@@ -425,8 +356,7 @@
                   location.reload();
                 }).catch(function (e) { setBusy(false); MG.ui.toast(MG.util.errMessage(e), 'err'); });
               } },
-              h(MG.ui.Icon, { name: 'snowflake', size: 15 }), ' Freeze account')))));
-  };
+              h(MG.ui.Icon, { name: 'snowflake', size: 15 }), ' Freeze account')))));  };
 
   /* ---------------------------------------------------------------- reports */
   MGA.views.reports = function () {

@@ -78,6 +78,38 @@
       setTimeout(function () { URL.revokeObjectURL(url); a.remove(); }, 400);
     },
 
+    /* Copy text to the clipboard; falls back to execCommand for insecure
+       contexts where the async Clipboard API is unavailable. */
+    copyText: function (text) {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        return navigator.clipboard.writeText(String(text)).catch(function () {
+          return MG.util.copyTextFallback(text);
+        });
+      }
+      return MG.util.copyTextFallback(text);
+    },
+
+    copyTextFallback: function (text) {
+      return new Promise(function (resolve, reject) {
+        var ta = document.createElement('textarea');
+        ta.value = String(text);
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.top = '0';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.select();
+        try {
+          var ok = document.execCommand('copy');
+          document.body.removeChild(ta);
+          ok ? resolve() : reject(new Error('copy command refused'));
+        } catch (e) {
+          document.body.removeChild(ta);
+          reject(e);
+        }
+      });
+    },
+
     toCsv: function (rows) {
       return rows.map(function (r) {
         return r.map(function (cell) {
