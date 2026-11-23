@@ -299,7 +299,7 @@ export async function reportPayment(
 
 export async function sendManualDepositBankDetails(
   adminId: string, depositId: string,
-  input: { bankName: string; accountNumber: string; narration?: string },
+  input: { bankName: string; accountName: string; accountNumber: string; narration?: string },
   ctx?: { ip?: string | null; userAgent?: string | null },
 ): Promise<{ reference: string; email: string; status: string }> {
   const db = getServiceClient();
@@ -319,7 +319,7 @@ export async function sendManualDepositBankDetails(
     to: profile.email, customerName: profile.full_name || profile.first_name || '',
     reference: dep.reference, amount: String(dep.requested_amount ?? dep.amount),
     currency: dep.currency_code, bankName: input.bankName.trim(),
-    accountNumber: input.accountNumber.trim(), narration,
+    accountName: input.accountName.trim(), accountNumber: input.accountNumber.trim(), narration,
   });
   if (!sent) throw invalidState('The bank-details email could not be sent. Check email delivery configuration and try again.');
 
@@ -330,7 +330,8 @@ export async function sendManualDepositBankDetails(
 
   const { error: notificationError } = await db.from('notifications').insert({
     profile_id: dep.profile_id, type: 'success', title: 'Bank details for your deposit',
-    body: 'Bank: ' + input.bankName.trim() + '. Account number: ' + input.accountNumber.trim() +
+    body: 'Bank: ' + input.bankName.trim() + '. Account name: ' + input.accountName.trim() +
+      '. Account number: ' + input.accountNumber.trim() +
       '. Amount: ' + String(dep.requested_amount ?? dep.amount) + ' ' + dep.currency_code +
       '. Transfer narration: ' + narration +
       '. Your balance will be credited after the payment is verified.',
@@ -338,7 +339,7 @@ export async function sendManualDepositBankDetails(
   if (notificationError) throw new Error(notificationError.message);
 
   await auditAllowed(adminId, 'deposit.send_bank_details', { type: 'deposit', id: dep.reference }, {
-    bankName: input.bankName.trim(), email: profile.email,
+    bankName: input.bankName.trim(), accountName: input.accountName.trim(), email: profile.email,
   }, { ip: ctx?.ip, userAgent: ctx?.userAgent });
   return { reference: dep.reference, email: profile.email, status: 'awaiting_payment' };
 }
