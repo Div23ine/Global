@@ -4,6 +4,9 @@
   var loading = null;
   var subscription = null;
   var listeners = [];
+  // Keep the customer shell gated between email OTP success and completion of
+  // any enrolled TOTP challenge. Admin sign-in uses its own OTP flow.
+  var customerOtpPending = false;
   var state = {
     ready: false,
     signedIn: false,
@@ -30,7 +33,7 @@
 
   function publish(session, user) {
     state.session = session || null;
-    state.signedIn = Boolean(session && user);
+    state.signedIn = Boolean(session && user && !customerOtpPending);
     state.user = normalizedUser(user || (session && session.user));
     state.ready = true;
     listeners.slice().forEach(function (listener) {
@@ -128,9 +131,16 @@
 
     signIn: function (email) {
       var normalizedEmail = email.trim().toLowerCase();
+      customerOtpPending = true;
       return requireClient().auth.signInWithOtp({
         email: normalizedEmail,
         options: { shouldCreateUser: false },
+      }).then(function (result) {
+        if (result.error) customerOtpPending = false;
+        return result;
+      }).catch(function (error) {
+        customerOtpPending = false;
+        throw error;
       });
     },
 
@@ -280,10 +290,9 @@
     },
 
     completeCustomerLogin: function () {
-      try { window.localStorage.removeItem('mg_customer_login_email'); } catch (e) {}
-      if (new URLSearchParams(window.location.search).has('customer_login')) {
-        window.history.replaceState(null, '', window.location.pathname);
-      }
+      customerOtpPending = false;
+      var session = state.session;
+      if (session && session.user) publish(session, session.user);
     },
 
     updatePassword: function (password) {
@@ -294,7 +303,7 @@
       var scope = options && options.scope ? options.scope : 'local';
       return requireClient().auth.signOut({ scope: scope }).then(function (result) {
         if (!result.error && scope !== 'others') {
-          try { window.localStorage.removeItem('mg_customer_login_email'); } catch (e) {}
+          customerOtpPending = false;
           publish(null, null);
         }
         return result;
