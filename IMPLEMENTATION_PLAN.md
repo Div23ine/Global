@@ -80,8 +80,9 @@ verification checkpoint and a commit.
 - [x] `POST /api/v1/webhooks/payments/:provider` — signature verification,
       idempotent processing: on `confirmed` → post ledger entry + update
       deposit + balance projection + notification (one DB transaction).
-- [x] `twilio.service.ts` — SMS notifications with rate limiting, retry with
-      backoff, delivery logging (no message bodies with codes logged).
+- [x] `twilio.service.ts` — removed together with the Twilio integration
+      (SMS delivery and the SMS OTP step taken out of the picture; customer
+      verification is email OTP only, notifications are in-app + Resend email).
 - Verification: unit + integration tests with a fake provider; duplicate
   webhook delivery test; concurrency test on balance projection.
 
@@ -131,7 +132,7 @@ verification checkpoint and a commit.
 
 - [x] `SECURITY_REVIEW.md` — STRIDE per surface, never-log list, findings.
 - [x] `DEPLOYMENT_GUIDE.md` — Cloudflare Pages/Workers, Supabase Auth/PostgreSQL,
-      Resend and Twilio setup runbooks; rollback procedures.
+      Resend setup runbook; rollback procedures.
 - [x] `CHANGELOG.md`, final `PROJECT_STATUS.md`.
 
 ## Out of scope for this stage (documented, not silently dropped)

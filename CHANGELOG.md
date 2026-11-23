@@ -5,6 +5,17 @@ this project follows semantic versioning at release time.
 
 ## [Unreleased]
 
+### Removed (SMS-OTP removal pass, 2026-11-23)
+- **Twilio is out of the picture.** `backend/src/services/twilio.service.ts` deleted; `notifyWithSms` and the `alsoSms` request flag removed from `POST /admin/users/:id/notify` (and the admin console "Also send by SMS" toggle); `twilio` env block, `/health` check, `wrangler.toml`/`.env.example` secrets and the npm dependency removed (lockfile regenerated without it). No SMS is sent anywhere and no SMS OTP step exists: customer registration ends after the email OTP (phone-verification screen, `beginPhoneVerification`/`verifyPhoneOtp` and the backend phone-verification gate all removed; the phone number remains profile contact data).
+
+### Changed (SMS-OTP removal pass, 2026-11-23)
+- Signup email now documents an OTP-only "Confirm signup" template (no `{{ .ConfirmationURL }}` link) so the customer receives the six-digit code the app asks for, instead of a "confirm your email address" link; `PASSWORDLESS_AUTH_SETUP.md` updated accordingly (phone provider step removed).
+- Website copy: every "not an offshore account / not offshore banking services" disclaimer removed from the frontend (about, terms, home, footer, what-is-offshore page framing); verification wording now email-only.
+- `.github/workflows/workers.yml`: `npm ci` + lockfile-sync job landed with the regenerated lockfile (zod 4.6.7, twilio removed) and the branch trigger restored to the correct main-and-development list.
+
+### Added (second super admin pass, 2026-11-23)
+- Migration `0017_add_second_super_admin_raysallinone00`: configures BOTH repository super-admin addresses — `raysallinone00@gmail.com` (the original 0009 holder) and `gospelu214@gmail.com` — as `app_settings.platform.admin_emails`, rewrites the grant trigger to honour the list (legacy single-key fallback preserved), provisions the raysallinone00 confirmed Auth identity + linked profile, and idempotently re-asserts the gospelu214 grant. Five integration tests pin the two-admin state.
+
 ### Added (super-admin provisioning pass, 2026-11-23)
 - Migration `0016_provision_super_admin_gospelu214`: points the configured super-admin email at `gospelu214@gmail.com`, guarantees a confirmed Supabase Auth identity for that address (magic-link capable, no password — admin sign-in uses `shouldCreateUser: false`), links it to a canonical profile through the production bootstrap path and asserts the `super_admin` grant end-state; resolves audit finding F-6. Three integration regression tests pin the provisioned state, trigger idempotency and no role leakage to other emails.
 

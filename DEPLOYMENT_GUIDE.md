@@ -9,9 +9,9 @@
 | Database | Supabase PostgreSQL |
 | Authentication | Supabase Auth |
 | Email | Supabase Auth SMTP for confirmation/recovery; Resend for platform notifications |
-| SMS | Twilio for transactional notifications only |
 
-Clerk and the Oracle VM are not part of the target architecture.
+Clerk and the Oracle VM are not part of the target architecture. SMS delivery
+(Twilio) was removed from the target architecture together with the SMS OTP step.
 
 ## 1. Supabase project and database
 
@@ -109,9 +109,6 @@ Configure optional integrations only when they are enabled:
 ```bash
 npx wrangler secret put RESEND_API_KEY
 npx wrangler secret put RESEND_FROM_EMAIL
-npx wrangler secret put TWILIO_ACCOUNT_SID
-npx wrangler secret put TWILIO_AUTH_TOKEN
-npx wrangler secret put TWILIO_FROM_NUMBER
 npx wrangler secret put PAYMENT_WEBHOOK_SECRET
 ```
 
@@ -194,12 +191,12 @@ curl -i https://api.meridian.uk.com/api/v1/health
 ```
 
 A 200 response confirms the Worker handles the health request. It does not,
-by itself, prove authenticated API access, RLS isolation, SMTP delivery, SMS
-delivery or payment-provider callbacks. Test with real test users: signup,
+by itself, prove authenticated API access, RLS isolation, SMTP delivery or
+payment-provider callbacks. Test with real test users: signup,
 email confirmation, login, profile bootstrap, customer-owned reads, denied
 cross-customer reads, admin role checks and password recovery.
 
-## 6. Resend and Twilio
+## 6. Resend
 
 Resend sends platform notifications such as assigned bank details and deposit
 or refund status. Configure and verify the sending domain, then add
@@ -209,8 +206,8 @@ Supabase Auth confirmation and password-reset emails use the SMTP provider
 configured in the Supabase Auth settings; they do not automatically use the
 Resend API integration.
 
-Twilio is optional for transactional SMS. It is not used as an Auth OTP provider
-in the current email/password design.
+Transactional SMS and the Twilio integration were removed: customer
+verification is email OTP only.
 
 ## 7. Rollback and explicit authorization
 
