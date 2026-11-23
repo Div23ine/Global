@@ -6,7 +6,7 @@
 import type { NextFunction, Request, Response } from 'express';
 import { verifySupabaseAccessToken } from '../services/supabase-auth.service';
 import { getServiceClient } from '../services/supabase.service';
-import { readAuthCookies, assertCsrf } from '../services/session-cookie.service';
+import { readAuthCookies, assertCsrf, assertTrustedOrigin } from '../services/session-cookie.service';
 import { forbidden, unauthenticated } from '../utils/httpError';
 import { auditDenied } from '../services/audit.service';
 
@@ -46,15 +46,33 @@ function authentication(enforceAal2: boolean) {
   return async function requireAuthMode(req: Request, _res: Response, next: NextFunction): Promise<void> {
     try {
       const cookies = readAuthCookies(req);
-      if (!cookies.accessToken) throw unauthenticated();
+      const cookieMode = Boolean(cookies.accessToken);
+      let accessToken = cookies.accessToken;
 
-      // Cookie-authenticated state changes require an allowed Origin and a
-      // CSRF nonce echoed in a custom request header.
-      if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method.toUpperCase())) assertCsrf(req);
+      // TEMPORARY rollout bridge: the Pages deployment is blocked by the
+      // repository's Cloudflare API-token permissions. Accept the previous
+      // bearer transport only from an allowlisted frontend Origin so the
+      // currently deployed legacy Pages app keeps working. The new BFF client
+      // never sends bearer tokens. Remove this branch immediately after Pages
+      // publishes the HttpOnly-cookie client.
+      if (!accessToken) {
+        const authorization = req.headers.authorization || '';
+        const bearer = /^Bearer\\s+([^\\s]+)$/i.exec(authorization);
+        if (!bearer) throw unauthenticated();
+        assertTrustedOrigin(req);
+        accessToken = bearer[1];
+      }
+
+      // Cookie-authenticated state changes require an Origin check and a
+      // double-submit CSRF nonce. Legacy bearer requests are Origin-bound
+      // until the Pages deployment is completed.
+      if (cookieMode && !['GET', 'HEAD', 'OPTIONS'].includes(req.method.toUpperCase())) {
+        assertCsrf(req);
+      }
 
       let claims: { sub: string; email?: string };
       try {
-        claims = await verifier('Bearer ' + cookies.accessToken, { enforceAal2 });
+        claims = await verifier('Bearer ' + accessToken, { enforceAal2 });
       } catch {
         throw unauthenticated();
       }
@@ -87,7 +105,7 @@ function authentication(enforceAal2: boolean) {
         userId: String(profile.id),
         supabaseUserId: claims.sub,
         email: claims.email ?? profile.email ?? null,
-        supabaseJwt: cookies.accessToken,
+        supabaseJwt: accessToken,
       };
       next();
     } catch (error) {
