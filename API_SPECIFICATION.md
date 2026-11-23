@@ -31,7 +31,7 @@ create records accept `Idempotency-Key`; replays return the original result.
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| GET | `/health` | none | `{ status, uptime, version, checks: { database, auth, twilio } }` |
+| GET | `/health` | none | `{ status, uptime, version, checks: { database, auth } }` |
 
 ## Profile
 
