@@ -106,3 +106,77 @@ opaque profile IDs and event types.
 - Typecheck, lint, integration test execution, browser testing, migration
   rehearsal and live Supabase Auth verification have not yet been run after
   these changes. No production deployment or database migration was performed.
+## 8. Permission and deposit state-machine hardening (2026-11-23, issue #4 pass)
+
+STRIDE review of the surfaces changed in this pass. Owner for all follow-ups:
+repository/project owner.
+
+| Threat | Decision | Mitigation, owner and code pointer |
+|---|---|---|
+| Spoofing — read-only admin roles invoke money movement | Mitigated | assign-bank, verify-credit, deposit rejection, receiving-bank writes and refund create/approve/reject now require deposits.manage / refunds.manage server-side (previously deposits.read, which the compliance and finance_readonly roles hold). Route-permission contract test introspects the real router stack. Owner: backend. backend/src/routes/admin.routes.ts, backend/src/middleware/auth.ts, backend/tests/unit/admin-permissions.test.ts. |
+| Tampering — deposit ledger rewind via status rewrite | Mitigated | Migration 0014 restores the deposit transition guard that 0006 had dropped; terminal states (completed, cancelled, rejected) accept no outgoing transitions and completed_at is defaulted on terminal entry. Regression test locks terminal-state finality. Owner: database/backend. backend/migrations/0014_restore_deposit_state_machine.sql, backend/tests/integration/database.test.ts. |
+| Repudiation — audit trail bypass through new deposit states | Accepted (unchanged surface) | All money-movement mutations still flow exclusively through service-layer functions that call audit-logged atomic RPCs (admin_credit_deposit_payment, process_internal_refund); the trigger only adds a lower-level guard. Owner: backend. backend/src/services/deposits.service.ts. |
+| Information disclosure — unknown endpoints answered 401 | Mitigated | Router-level auth gates are scoped to their real path prefixes; unmatched /api/v1 paths now return 404 NOT_FOUND while the same routes keep the same requireAuth/requireAdmin gates. Owner: backend. backend/src/routes/*.routes.ts. |
+| Denial of service — fresh-database bootstrap failure | Mitigated | Migration 0008 is now a no-op on databases without the rls_auto_enable event-trigger function, so migration replay and the integration suite run everywhere. Owner: database. backend/migrations/0008_restrict_event_trigger_function.sql. |
+| Elevation of privilege — placeholder receiving banks mistaken for real instructions | Accepted with controls | Migration 0013 seeds one clearly-labeled placeholder receiving account per supported currency only when the currency has no active receiving account; account_number/iban/swift_bic stay NULL and production databases with verified details are untouched. Owner: platform operator. backend/migrations/0013_seed_receiving_banks.sql. |
+
+## 9. Verification status (2026-11-23 update)
+
+- Backend: npm ci green (lockfile regenerated), typecheck clean, ESLint clean,
+  Vitest 41/41 green including the real-database integration suite (which had
+  been silently skipped since migration 0008 broke fresh-database replay).
+- Frontend: node --check / esbuild parse green for every classic script and
+  JSX module; admin console renders in a real browser with no console errors.
+- Local runtime: API boots, /api/v1/health returns 200, /api/v1/public-config
+  returns honest SERVICE_NOT_CONFIGURED without secrets, protected routes
+  return 401, unknown /api/v1 paths return 404.
+- Browser (local harness): customer sign-in and registration render with all
+  required fields; client-side validation (password length, mismatch, ISO
+  country code) verified; admin sign-in renders; mobile viewport shows no
+  horizontal overflow.
+- Still blocked: live Supabase Auth journeys (email OTP, SMS OTP, magic-link
+  callback, TOTP), live two-user RLS verification against the production
+  project, and any deployment verification. They require the Supabase,
+  Twilio and Cloudflare credentials that are intentionally absent from this
+  environment. No production deployment, migration application or
+  authentication cutover was performed.
+
+## 10. Post-audit remediation pass (2026-11-23, issue #5 follow-up)
+
+STRIDE review of the surfaces changed while fixing the audit findings F-3,
+F-7, F-8, F-17 and the newly discovered shared-UI hook defect. Owner for all
+follow-ups: repository/project owner.
+
+| Threat | Decision | Mitigation, owner and code pointer |
+|---|---|---|
+| Tampering — partial profile patches corrupt full_name (F-7) | Mitigated | PATCH /profile (and the admin PATCH /admin/users/:id path, now sharing one helper) recomputes full_name from the STORED parts plus the patched parts, so a firstName-only patch can no longer erase the stored last name and a lastName-only patch can no longer leave full_name stale. Unit suite pins both corruptions as regressions. Owner: backend. backend/src/utils/name.ts, backend/src/routes/profile.routes.ts, backend/src/routes/admin.routes.ts, backend/tests/unit/name.test.ts. |
+| Repudiation — moderation actions unreachable from the console invite unlogged API misuse (F-3) | Mitigated | Suspend/ban/unban/delete and refund creation now have console controls; every action still goes through the existing server-side permission gates (users.ban / users.delete / refunds.manage) and audit logging — the UI adds reachability, never authority. Frontend render test (stubbed transport) verified calls, reason validation and the double-confirm for irreversible delete. Owner: frontend. frontend/js/admin/views-core.jsx, frontend/js/admin/views-refunds.jsx. |
+| DoS — disallowed CORS origin triggered a 500 + error log entry (F-8) | Mitigated | Origin callback now denies cleanly (cb(null, false): no CORS headers, no error). Browser-side denial is unchanged; the spurious INTERNAL response and log noise are gone. Supertest contract locks allowed-origin headers, denial without headers and the never-500 property. Owner: backend. backend/src/app.ts, backend/tests/unit/cors.test.ts. |
+| DoS — zod GHSA-mrhx-c7xc-m3w5 (memory exhaustion on oversized constrained collections) | Mitigated | zod upgraded 3.23.8 → 4.6.7 (npm audit clean, 0 vulnerabilities). All schemas are simple object/union/enum surfaces — no v4-breaking API in use; typecheck, lint and the full 53-test suite passed on the upgraded library. In-place mitigations (256 kb body cap, global rate limit) remain. Owner: backend. backend/package.json, backend/package-lock.json. |
+| Tampering/DoS — shared UI components never re-rendered on state updates (new finding during L4 verification) | Mitigated | ui.jsx used `var x = useState(v)[0]; var setX = useState(v)[1];` — TWO hook calls reading/writing different slots, leaving ConfirmProvider dialogs, ToastHost toasts, RestrictedPanel feedback, useFetch/useDebounced permanently inert. Fixed to single-call pairs. Render test confirmed dialogs and toasts now function; both apps (customer + admin) load with zero console errors. Owner: frontend. frontend/js/components/ui.jsx. |
+| Elevation of privilege — clipboard copy of transaction UUID | Accepted | Read-only convenience for the refund workflow; clipboard content is the transaction id the admin can already see; writeText is not exposed to other tabs. No credential or secret ever copied. Owner: frontend. frontend/js/util.js (MG.util.copyText with execCommand fallback). |
+
+## 11. Verification status (2026-11-23 remediation pass)
+
+- Backend: typecheck 0 errors, ESLint 0 findings, Vitest 53/53 (was 41/41 —
+  added 7 full_name and 5 CORS contract tests) including the real-PostgreSQL
+  integration suite; `npm audit` now reports 0 vulnerabilities (zod
+  GHSA-mrhx-c7xc-m3w5 resolved).
+- Local runtime L2: API boots; /api/v1/health 200; PATCH /profile
+  unauthenticated → 401; disallowed-origin preflight/actual requests return
+  without CORS headers and never 500.
+- Frontend L0: check.sh green for all 16 modules (node --check + esbuild
+  parse), including the new views-refunds.jsx.
+- Frontend L4 (scratch render harness with the transport stubbed to
+  fixtures — no service claims): user-view moderation card renders with
+  status-aware controls; suspend with reason, short-reason guard, irreversible
+  delete double-confirm (consequences list) and navigation all verified with
+  the expected MGA.api calls recorded; refunds view create-form validates the
+  transaction UUID and amount, submits an idempotency key and closes on
+  success; transactions view Copy ID puts the UUID on the clipboard; confirm
+  dialogs and toasts now actually render (they were silently dead before the
+  ui.jsx hook fix). The real admin.html and app.html load every script and
+  reach their honest not-configured states with zero console errors.
+- Still blocked (unchanged): live Supabase/Twilio journeys, production
+  migration rehearsal, Cloudflare deployment — all require owner credentials
+  and explicit authorization.

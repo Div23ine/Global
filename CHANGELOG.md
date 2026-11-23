@@ -5,6 +5,16 @@ this project follows semantic versioning at release time.
 
 ## [Unreleased]
 
+### Fixed (post-audit remediation pass, 2026-11-23)
+- `PATCH /profile` no longer corrupts `full_name`: partial name patches are merged with the stored parts through a shared `computeFullName` helper (customer and admin paths); regression-tested (audit F-7).
+- CORS denies disallowed origins cleanly (no CORS headers, no spurious HTTP 500); supertest contract added (audit F-8).
+- Admin console gained moderation and refund controls: account-status card (suspend with reason, ban, reactivate, irreversible delete with consequences confirmation) on the user detail view; refund-request creation form (transaction UUID, amount, reason, notes, idempotency-keyed) on Refund Management; "Copy ID" action on Transactions rows (audit F-3).
+- Shared `ui.jsx` hook wiring repaired: `useState(v)[0]`/`useState(v)[1]` twin-call pattern left ConfirmProvider dialogs, ToastHost toasts, RestrictedPanel feedback, useFetch and useDebounced permanently inert — replaced with single-call pairs; confirm dialogs and toasts now actually render.
+- `MG.util.copyText` clipboard helper with execCommand fallback for insecure contexts.
+
+### Security
+- zod upgraded 3.23.8 → 4.6.7 (GHSA-mrhx-c7xc-m3w5, high — memory exhaustion on oversized constrained collections); `npm audit` clean; full suite green on the new major.
+
 ### Changed
 - Production frontend uses https://meridian.uk.com and API requests use https://api.meridian.uk.com/api/v1.
 - Worker CORS allowlist is configured for the production root domain and www alias; deployment guide and project status document the Cloudflare Pages/Worker custom-domain setup.
