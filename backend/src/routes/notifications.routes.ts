@@ -1,7 +1,7 @@
 /** Notifications and support tickets (customer side). */
 import { Router } from 'express';
 import { z } from 'zod';
-import { requireAuth, subjectUserId, actorUserId, rejectIfTakeover } from '../middleware/auth';
+import { requireAuth, subjectUserId, rejectIfTakeover } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { supportLimiter } from '../middleware/rateLimit';
 import { getUserClient, getServiceClient } from '../services/supabase.service';

@@ -2,7 +2,7 @@
 import { Router } from 'express';
 import type { Request } from 'express';
 import { z } from 'zod';
-import { requireAuth, subjectUserId, actorUserId, rejectIfTakeover } from '../middleware/auth';
+import { requireAuth, subjectUserId, rejectIfTakeover } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { depositLimiter } from '../middleware/rateLimit';
 import { getServiceClient } from '../services/supabase.service';

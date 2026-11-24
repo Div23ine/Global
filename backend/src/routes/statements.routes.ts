@@ -1,7 +1,7 @@
 /** Statements: list, generate (idempotent upsert), download (text). */
 import { Router } from 'express';
 import { z } from 'zod';
-import { requireAuth, subjectUserId, actorUserId, rejectIfTakeover } from '../middleware/auth';
+import { requireAuth, subjectUserId } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { getServiceClient } from '../services/supabase.service';
 import { generateStatement, renderStatementText } from '../services/statement.service';
