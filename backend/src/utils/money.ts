@@ -2,6 +2,7 @@
  * Money helpers. All arithmetic on numeric strings/numbers uses cent-safe
  * paths; formatting is EUR-first (European default presentation currency).
  */
+import { badRequest } from './httpError';
 
 export type Money = string; // numeric(19,4) as string from Postgres
 
@@ -54,11 +55,12 @@ export function isNonNegative(a: Money): boolean {
 export function parseAmount(input: string | number): Money {
   const s = String(input).trim().replace(',', '.');
   if (!/^\d+(\.\d{1,4})?$/.test(s)) {
-    throw new Error('Amount must be a positive number with at most 4 decimals');
+    // ApiError so malformed amounts surface as HTTP 400, not a generic 500.
+    throw badRequest('Amount must be a positive number with at most 4 decimals');
   }
   const parsed = fromUnits(toUnits(s));
   if (!isPositive(parsed)) {
-    throw new Error('Amount must be greater than zero');
+    throw badRequest('Amount must be greater than zero');
   }
   return parsed;
 }
