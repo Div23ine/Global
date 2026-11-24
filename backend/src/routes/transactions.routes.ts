@@ -4,6 +4,7 @@ import { requireAuth, subjectUserId } from '../middleware/auth';
 import { getServiceClient, getUserClient } from '../services/supabase.service';
 import { parsePagination, pageMeta } from '../utils/pagination';
 import { badRequest, notFound, ok } from '../utils/httpError';
+import { ilikeOr } from '../utils/postgrest';
 
 export const transactionsRouter = Router();
 
@@ -17,8 +18,8 @@ transactionsRouter.get('/transactions', async (req, res, next) => {
     let query = db.from('transactions').select('*', { count: 'exact' }).eq('profile_id', subjectUserId(req));
     const q = req.query as Record<string, string>;
 
-    const search = String(q.search ?? '').slice(0, 60);
-    if (search) query = query.or(`reference.ilike.%${search}%,description.ilike.%${search}%`);
+    const txnSearch = ilikeOr(['reference', 'description'], String(q.search ?? ''));
+    if (txnSearch) query = query.or(txnSearch);
     const currency = String(q.currency ?? '').toUpperCase();
     if (/^[A-Z]{3}$/.test(currency)) query = query.eq('currency_code', currency);
     const status = String(q.status ?? '');
