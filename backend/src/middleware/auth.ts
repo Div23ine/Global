@@ -137,9 +137,12 @@ function authentication(enforceAal2: boolean) {
         const method = req.method.toUpperCase();
         const safeMethod = ['GET', 'HEAD', 'OPTIONS'].includes(method);
         const originalPath = req.originalUrl || req.path;
+        const isAdminRoute = /\/admin(?:\/|[/?]|$)/.test(originalPath);
         const isEndTakeover = method === 'POST' && /\/admin\/takeover\/end(?:[/?]|$)/.test(originalPath);
         const isBasicProfileEdit = method === 'PATCH' && /\/profile(?:[/?]|$)/.test(originalPath);
-        if (!safeMethod && !isEndTakeover && !isBasicProfileEdit) {
+        // No administrator API is usable through the customer application
+        // while a takeover is active, except the dedicated end-session route.
+        if ((isAdminRoute && !isEndTakeover) || (!safeMethod && !isEndTakeover && !isBasicProfileEdit)) {
           await auditDenied(
             req.auth.userId,
             'takeover.block.mutation',
