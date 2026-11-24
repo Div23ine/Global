@@ -81,19 +81,21 @@ async function endActiveForAdmin(
 ): Promise<void> {
   const db = getServiceClient();
   const now = new Date().toISOString();
-  const { data: active } = await db
+  const { data: active, error: activeError } = await db
     .from('admin_takeover_sessions')
     .select('id, target_profile_id')
     .eq('admin_profile_id', adminUserId)
     .eq('status', 'active');
+  if (activeError) throw new Error(activeError.message);
   if (!active?.length) return;
   for (const row of active) {
-    await db.from('admin_takeover_sessions').update({
+    const { error: updateError } = await db.from('admin_takeover_sessions').update({
       status: 'ended',
       ended_at: now,
       ended_ip: ctx.ip ?? null,
       ended_ua: ctx.userAgent ?? null,
-    }).eq('id', row.id);
+    }).eq('id', row.id).eq('status', 'active');
+    if (updateError) throw new Error(updateError.message);
     await auditAllowed(
       adminUserId,
       'takeover.end',
@@ -258,10 +260,17 @@ export async function getActiveTakeover(adminUserId: string): Promise<TakeoverSe
   if (error) throw new Error(error.message);
   if (!data) return null;
   if (new Date(data.expires_at).getTime() <= Date.now()) {
-    await db.from('admin_takeover_sessions').update({
+    const { error: expireError } = await db.from('admin_takeover_sessions').update({
       status: 'expired',
       ended_at: new Date().toISOString(),
-    }).eq('id', data.id);
+    }).eq('id', data.id).eq('status', 'active');
+    if (expireError) throw new Error(expireError.message);
+    await auditAllowed(
+      adminUserId,
+      'takeover.expire',
+      { type: 'takeover_session', id: data.id },
+      { targetUserId: data.target_profile_id, reason: 'session_ttl_elapsed' },
+    );
     return null;
   }
 

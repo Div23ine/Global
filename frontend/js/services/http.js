@@ -99,8 +99,12 @@
     patch: function (path, body, opts) { return request('PATCH', path, body, opts); },
     del: function (path, opts) { return request('DELETE', path, undefined, opts); },
     download: function (path) {
+      var headers = { Accept: 'text/plain' };
+      if (document.body && document.body.getAttribute('data-page') === 'app') {
+        headers['X-Meridian-Customer-Context'] = '1';
+      }
       return fetch(MG.config.API_BASE_URL + path, {
-        headers: { Accept: 'text/plain' },
+        headers: headers,
         credentials: 'include',
         cache: 'no-store',
       }).then(function (response) {
