@@ -201,6 +201,19 @@ export async function resolveTakeoverFromToken(
   if (!token) return null;
   const tokenHash = hashToken(token);
   const db = getServiceClient();
+
+  // Re-check the administrator's current role and permission on every
+  // request. Removing an admin or revoking takeover.manage must terminate
+  // their ability to use an already-issued takeover cookie immediately.
+  const { data: admin, error: adminError } = await db
+    .from('admin_users')
+    .select('profile_id, admin_roles(permissions)')
+    .eq('profile_id', adminUserId)
+    .maybeSingle();
+  if (adminError) throw new Error(adminError.message);
+  const role = admin?.admin_roles as unknown as { permissions: string[] } | null;
+  if (!admin || !(role?.permissions ?? []).includes('takeover.manage')) return null;
+
   const { data, error } = await db
     .from('admin_takeover_sessions')
     .select('*')
@@ -216,6 +229,12 @@ export async function resolveTakeoverFromToken(
       status: 'expired',
       ended_at: new Date().toISOString(),
     }).eq('id', data.id);
+    await auditAllowed(
+      adminUserId,
+      'takeover.expire',
+      { type: 'takeover_session', id: data.id },
+      { targetUserId: data.target_profile_id, reason: 'session_ttl_elapsed' },
+    );
     return null;
   }
 

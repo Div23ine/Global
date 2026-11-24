@@ -5,6 +5,10 @@
 
 BEGIN;
 
+ALTER TABLE public.admin_takeover_sessions ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.admin_takeover_sessions FROM PUBLIC, anon, authenticated;
+GRANT ALL ON public.admin_takeover_sessions TO service_role;
+
 CREATE TABLE IF NOT EXISTS public.admin_takeover_sessions (
   id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   admin_profile_id  text NOT NULL REFERENCES public.profiles(id),
