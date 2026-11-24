@@ -4,8 +4,11 @@ import { applyWorkerEnv, env } from '../../src/config/env';
 import {
   assertCsrf,
   clearSessionCookies,
+  clearTakeoverCookie,
   readAuthCookies,
+  readTakeoverToken,
   setSessionCookies,
+  setTakeoverCookie,
 } from '../../src/services/session-cookie.service';
 
 const originalNodeEnv = env.nodeEnv;
@@ -121,5 +124,44 @@ describe('production session cookie security', () => {
       expect(value).toContain('Path=/');
       expect(value).not.toMatch(/;\s*Domain=/i);
     }
+  });
+});
+
+
+describe('account takeover cookie security', () => {
+  it('stores only an opaque takeover token in a Secure, HttpOnly host-only cookie', () => {
+    productionMode();
+    const { response, cookies } = mockResponse();
+    setTakeoverCookie(response, 'opaque-random-token', 3600);
+
+    expect(cookies).toHaveLength(1);
+    expect(cookies[0]).toMatch(/^__Host-mg-takeover=/);
+    expect(cookies[0]).toContain('Path=/');
+    expect(cookies[0]).toContain('Secure');
+    expect(cookies[0]).toContain('HttpOnly');
+    expect(cookies[0]).toContain('SameSite=Lax');
+    expect(cookies[0]).toContain('Max-Age=3600');
+    expect(cookies[0]).not.toMatch(/;\\s*Domain=/i);
+  });
+
+  it('reads the opaque takeover token from the HttpOnly cookie request header', () => {
+    productionMode();
+    const req = {
+      headers: { cookie: '__Host-mg-takeover=opaque-token' },
+    } as unknown as Request;
+    expect(readTakeoverToken(req)).toBe('opaque-token');
+  });
+
+  it('expires the takeover cookie immediately when the administrator ends the session', () => {
+    productionMode();
+    const { response, cookies } = mockResponse();
+    clearTakeoverCookie(response);
+
+    expect(cookies).toHaveLength(1);
+    expect(cookies[0]).toMatch(/^__Host-mg-takeover=;/);
+    expect(cookies[0]).toContain('Max-Age=0');
+    expect(cookies[0]).toContain('Secure');
+    expect(cookies[0]).toContain('HttpOnly');
+    expect(cookies[0]).toContain('Path=/');
   });
 });
