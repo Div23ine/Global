@@ -9,6 +9,7 @@ NODE_ENV = "production"
 LOG_LEVEL = "info"
 PAYMENT_PROVIDER = "manual-bank-transfer"
 RESEND_FROM_NAME = "Meridian Global Accounts"
+RESEND_FROM_EMAIL = "bankdetails@info.meridian.uk.com"
 CORS_ORIGIN = "https://meridian.uk.com,https://www.meridian.uk.com"
 
 [[ratelimits]]
