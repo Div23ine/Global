@@ -5,10 +5,6 @@
 
 BEGIN;
 
-ALTER TABLE public.admin_takeover_sessions ENABLE ROW LEVEL SECURITY;
-REVOKE ALL ON public.admin_takeover_sessions FROM PUBLIC, anon, authenticated;
-GRANT ALL ON public.admin_takeover_sessions TO service_role;
-
 CREATE TABLE IF NOT EXISTS public.admin_takeover_sessions (
   id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   admin_profile_id  text NOT NULL REFERENCES public.profiles(id),
@@ -26,6 +22,10 @@ CREATE TABLE IF NOT EXISTS public.admin_takeover_sessions (
   ended_ua          text,
   CONSTRAINT admin_takeover_admin_ne_target CHECK (admin_profile_id <> target_profile_id)
 );
+
+ALTER TABLE public.admin_takeover_sessions ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.admin_takeover_sessions FROM PUBLIC, anon, authenticated;
+GRANT ALL ON public.admin_takeover_sessions TO service_role;
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_takeover_active_admin
   ON public.admin_takeover_sessions (admin_profile_id)
