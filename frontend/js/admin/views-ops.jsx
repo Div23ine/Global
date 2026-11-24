@@ -887,7 +887,7 @@
               h('li', null, h('b', null, 'Financial ops blocked. '),
                 'Deposits, activations, and support ticket creation are rejected server-side during takeover.'),
               h('li', null, h('b', null, 'Fully audited. '),
-                'Start, end, and blocked attempts are written to the audit log.')))));
+                'Start, end, and blocked attempts are written to the audit log.'))))));
   };
 
 
