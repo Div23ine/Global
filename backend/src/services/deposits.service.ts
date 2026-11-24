@@ -15,6 +15,14 @@ import { getServiceClient } from './supabase.service';
 import { auditAllowed } from './audit.service';
 import { badRequest, conflict, invalidState, notFound } from '../utils/httpError';
 import { parseAmount, type Money } from '../utils/money';
+import {
+  FIRST_DEPOSIT_INDICATIVE_RATES,
+  assertMeetsUsdFloor,
+  firstDepositPolicyRate,
+  minLocalFromUsd,
+  resolveRateForDeposit,
+  usdEquivalentOf,
+} from './fx.service';
 import { env } from '../config/env';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { emailManualDepositBankDetails, emailDepositCredited } from './resend.service';
@@ -58,40 +66,33 @@ const MIN_AMOUNT: Record<string, Money> = {
 };
 
 /**
- * Opening / first deposit floor — cross-border fee structure requires initial
- * funding of at least USD 20,000 equivalent before smaller top-ups are allowed.
- *
- * INDICATIVE_USD rates = units of local currency per 1 USD (ops policy table,
- * not live market quotes). Minimums are rounded up to 2 decimals so the floor
- * does not fall under $20,000 at these rates.
+ * Opening / first deposit floor — PRESERVED POLICY.
+ * Cross-border fee structure requires initial funding of at least
+ * USD 20,000 equivalent. Rates default to the historical indicative table
+ * (FIRST_DEPOSIT_INDICATIVE_RATES); optional DB rates may be used when present
+ * without changing the USD 20,000 floor.
  */
-const FIRST_DEPOSIT_MIN_USD = 20_000;
-/** Local currency units per 1 USD (indicative, policy). */
-const INDICATIVE_USD_RATES: Record<string, number> = {
-  USD: 1,
-  EUR: 0.95,   // ≈ $1 → €0.95  → min €19,000
-  GBP: 0.82,   // ≈ $1 → £0.82  → min £16,400
-  CHF: 0.90,   // ≈ $1 → CHF0.90 → min CHF18,000
-  PLN: 4.10,   // ≈ $1 → zł4.10  → min zł82,000
-};
+export const FIRST_DEPOSIT_MIN_USD = 20_000;
+/** Subsequent deposits (second and later) must meet this USD equivalent. */
+export const SUBSEQUENT_DEPOSIT_MIN_USD = 10_000;
 
-function firstDepositMin(currencyCode: string): Money | null {
-  const rate = INDICATIVE_USD_RATES[currencyCode];
-  if (rate == null || rate <= 0) return null;
-  // Round up to 2 decimal places (cent-safe for display currencies).
-  const raw = FIRST_DEPOSIT_MIN_USD * rate;
-  const cents = Math.ceil(raw * 100) / 100;
-  return cents.toFixed(4) as Money;
+function firstDepositMin(currencyCode: string, unitsPerUsd?: string | null): Money | null {
+  try {
+    const rate = firstDepositPolicyRate(currencyCode, unitsPerUsd);
+    return minLocalFromUsd(FIRST_DEPOSIT_MIN_USD, rate);
+  } catch {
+    return null;
+  }
 }
 
 function formatMinDisplay(min: Money, currencyCode: string): string {
   return `${Number(min).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencyCode}`;
 }
 
-const MAX_AMOUNT: Money = '250000.0000'; // raised so USD-equivalent first deposits in weaker units fit
+const MAX_AMOUNT: Money = '250000.0000';
 
 /** True when the customer has never had a deposit fully or partially credited. */
-async function isFirstDeposit(userId: string): Promise<boolean> {
+export async function isFirstDeposit(userId: string): Promise<boolean> {
   const db = getServiceClient();
   const { count, error } = await db
     .from('deposits')
@@ -130,21 +131,60 @@ export async function createDeposit(
   ctx?: { ip?: string | null; userAgent?: string | null },
 ): Promise<DepositRecord> {
   const amount = parseAmount(input.amount);
+  // Re-evaluate first-deposit classification at request time (authoritative).
   const first = await isFirstDeposit(userId);
-  const firstMin = first ? firstDepositMin(input.currencyCode) : null;
-  const regularMin = MIN_AMOUNT[input.currencyCode] ?? '1.0000';
-  const min = firstMin ?? regularMin;
 
-  if (Number(amount) < Number(min)) {
-    if (firstMin) {
+  let minPolicy: 'initial' | 'subsequent' = first ? 'initial' : 'subsequent';
+  let fxSnap: {
+    unitsPerUsd: string;
+    usdEquivalent: string;
+    source: string;
+    provider: string | null;
+    rateTimestamp: string;
+    retrievedAt: string;
+  } | null = null;
+
+  if (first) {
+    // PRESERVE existing first-payment rule (USD 20,000 equivalent).
+    const rate = firstDepositPolicyRate(
+      input.currencyCode,
+      FIRST_DEPOSIT_INDICATIVE_RATES[input.currencyCode],
+    );
+    const firstMin = minLocalFromUsd(FIRST_DEPOSIT_MIN_USD, rate);
+    if (Number(amount) < Number(firstMin)) {
       throw badRequest(
         `Your first deposit must be at least ${formatMinDisplay(firstMin, input.currencyCode)} ` +
-          `(USD 20,000 equivalent at indicative rates) to cover cross-border processing fees. ` +
-          `Subsequent deposits can be smaller.`,
+          `(USD 20,000 equivalent at indicative rates) to cover cross-border processing fees.`,
       );
     }
-    throw badRequest(`Minimum deposit for ${input.currencyCode} is ${min}.`);
+    const usdEquivalent = usdEquivalentOf(amount, rate);
+    fxSnap = {
+      unitsPerUsd: rate,
+      usdEquivalent,
+      source: 'manual',
+      provider: 'policy',
+      rateTimestamp: new Date().toISOString(),
+      retrievedAt: new Date().toISOString(),
+    };
+  } else {
+    // Subsequent deposits: USD 10,000 equivalent via server FX rates.
+    const resolved = await resolveRateForDeposit(input.currencyCode);
+    const { usdEquivalent } = assertMeetsUsdFloor(
+      amount,
+      resolved.unitsPerUsd,
+      SUBSEQUENT_DEPOSIT_MIN_USD,
+      input.currencyCode,
+    );
+    fxSnap = {
+      unitsPerUsd: resolved.unitsPerUsd,
+      usdEquivalent,
+      source: resolved.source,
+      provider: resolved.provider,
+      rateTimestamp: resolved.rateTimestamp,
+      retrievedAt: resolved.retrievedAt,
+    };
   }
+
   if (Number(amount) > Number(MAX_AMOUNT)) {
     throw badRequest('Deposit exceeds the maximum allowed amount.');
   }
@@ -200,6 +240,14 @@ export async function createDeposit(
       payment_notes: input.notes ?? null,
       idempotency_key: idempotencyKey ?? null,
       expires_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+      fx_base_currency: 'USD',
+      fx_units_per_usd: fxSnap?.unitsPerUsd ?? null,
+      fx_usd_equivalent: fxSnap?.usdEquivalent ?? null,
+      fx_rate_source: fxSnap?.source ?? null,
+      fx_provider: fxSnap?.provider ?? null,
+      fx_rate_timestamp: fxSnap?.rateTimestamp ?? null,
+      fx_retrieved_at: fxSnap?.retrievedAt ?? null,
+      min_policy: minPolicy,
     })
     .select('*')
     .single();

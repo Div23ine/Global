@@ -891,4 +891,104 @@
   };
 
 
+  /* ----------------------------------------------------------- exchange rates */
+  MGA.views.fx = function () {
+    var _r = React.useState(0); var reload = _r[1];
+    var state = MG.ui.useAsync(function () { return MGA.api.fxRates(); }, [_r[0]]);
+    var _busy = React.useState(null); var busy = _busy[0]; var setBusy = _busy[1];
+    var _edits = React.useState({}); var edits = _edits[0]; var setEdits = _edits[1];
+
+    var payload = state.data && state.data.data ? state.data.data : state.data;
+    var settings = (payload && payload.settings) || {};
+    var rates = (payload && payload.rates) || [];
+    if (!Array.isArray(rates)) rates = adminList(rates);
+
+    function setMode(mode) {
+      setBusy('mode');
+      MGA.api.fxSetMode(mode).then(function () {
+        MG.ui.toast('FX mode set to ' + mode + '.', 'ok');
+        setBusy(null);
+        reload(function (x) { return x + 1; });
+      }).catch(function (e) { setBusy(null); MG.ui.toast(MG.util.errMessage(e), 'err'); });
+    }
+
+    function saveRate(code) {
+      var val = edits[code];
+      if (val == null || val === '') { MG.ui.toast('Enter a positive rate.', 'err'); return; }
+      setBusy(code);
+      MGA.api.fxSetRate(code, val).then(function () {
+        MG.ui.toast(code + ' rate updated.', 'ok');
+        setBusy(null);
+        reload(function (x) { return x + 1; });
+      }).catch(function (e) { setBusy(null); MG.ui.toast(MG.util.errMessage(e), 'err'); });
+    }
+
+    function refreshLive() {
+      setBusy('refresh');
+      MGA.api.fxRefresh().then(function () {
+        MG.ui.toast('Live rates refreshed.', 'ok');
+        setBusy(null);
+        reload(function (x) { return x + 1; });
+      }).catch(function (e) { setBusy(null); MG.ui.toast(MG.util.errMessage(e), 'err'); });
+    }
+
+    if (state.loading) return h(MG.ui.PageSkeleton, { variant: 'page' });
+    if (state.error) return h(MG.ui.ErrorPanel, { error: state.error, onRetry: function () { location.reload(); } });
+
+    return h(React.Fragment, null,
+      h(MG.ui.PageHead, {
+        icon: 'coins',
+        title: 'Exchange rates',
+        sub: 'USD is the base currency. Rates are units of local currency per 1 USD. Used for subsequent deposit minimums (USD 10,000 equivalent).',
+      }),
+      h(MG.ui.Notice, { tone: settings.mode === 'live' ? 'info' : 'warn', icon: 'info' },
+        h('p', null,
+          h('b', null, 'Active mode: '), settings.mode || 'manual',
+          settings.last_refresh_at ? (' · last live refresh ' + MG.util.dateTime(settings.last_refresh_at)) : '',
+          settings.last_refresh_error ? h('span', { style: { color: '#b42318' } }, ' · error: ' + settings.last_refresh_error) : null)),
+      h('div', { className: 'btn-row', style: { marginBottom: 16 } },
+        h('button', { className: 'btn ' + (settings.mode === 'manual' ? 'btn-primary' : 'btn-ghost'), disabled: busy === 'mode',
+          onClick: function () { setMode('manual'); } }, 'Manual rates'),
+        h('button', { className: 'btn ' + (settings.mode === 'live' ? 'btn-primary' : 'btn-ghost'), disabled: busy === 'mode',
+          onClick: function () { setMode('live'); } }, 'Live rates (Frankfurter/ECB)'),
+        settings.mode === 'live'
+          ? h('button', { className: 'btn btn-primary', disabled: busy === 'refresh', onClick: refreshLive },
+              busy === 'refresh' ? 'Refreshing…' : 'Refresh live rates')
+          : null),
+      h(MG.ui.Card, { title: h('h3', { className: 'panel-title' }, 'Rates (local units per 1 USD)') },
+        h(MG.ui.Table, {
+          columns: [
+            { label: 'Currency' }, { label: 'Units / USD' }, { label: 'Source' },
+            { label: 'Provider' }, { label: 'Rate time' }, { label: '' },
+          ],
+          rows: rates,
+          renderRow: function (row) {
+            var code = row.currency_code;
+            return h('tr', { key: code },
+              h('td', null, h('b', null, code)),
+              h('td', null,
+                settings.mode === 'manual'
+                  ? h('input', {
+                      className: 'input',
+                      style: { width: 140 },
+                      value: edits[code] != null ? edits[code] : String(row.units_per_usd),
+                      onChange: function (e) {
+                        var n = Object.assign({}, edits); n[code] = e.target.value; setEdits(n);
+                      },
+                    })
+                  : String(row.units_per_usd)),
+              h('td', null, row.source),
+              h('td', null, row.provider || '—'),
+              h('td', null, MG.util.dateTime(row.rate_timestamp)),
+              h('td', null,
+                settings.mode === 'manual' && code !== 'USD'
+                  ? h('button', { className: 'btn btn-sm btn-primary', disabled: busy === code, onClick: function () { saveRate(code); } },
+                      busy === code ? 'Saving…' : 'Save')
+                  : null));
+          },
+        })),
+      h(MG.ui.Notice, { tone: 'warn', icon: 'alert' },
+        h('p', null, 'First initial deposits still use the preserved USD 20,000 policy rates. Subsequent deposits require USD 10,000 equivalent at these rates. Stale live rates block subsequent deposit creation until refreshed.')));
+  };
+
 })();

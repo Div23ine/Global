@@ -12,7 +12,16 @@ import {
   createDeposit,
   reportPayment,
   verifyProviderSignature,
+  isFirstDeposit,
+  FIRST_DEPOSIT_MIN_USD,
+  SUBSEQUENT_DEPOSIT_MIN_USD,
 } from '../services/deposits.service';
+import {
+  firstDepositPolicyRate,
+  minLocalFromUsd,
+  resolveRateForDeposit,
+  FIRST_DEPOSIT_INDICATIVE_RATES,
+} from '../services/fx.service';
 import { parsePagination, pageMeta } from '../utils/pagination';
 import { badRequest, ok } from '../utils/httpError';
 import { logger } from '../utils/logger';
@@ -69,6 +78,44 @@ depositsRouter.get('/deposits', requireAuth, async (req, res, next) => {
       .range(p.offset, p.offset + p.pageSize - 1);
     if (error) throw new Error(error.message);
     ok(res, data ?? [], 'Deposits', pageMeta(p, count ?? 0));
+  } catch (err) { next(err); }
+});
+
+
+depositsRouter.get('/deposits/policy', requireAuth, async (req, res, next) => {
+  try {
+    const currency = String(req.query.currency || 'USD').toUpperCase();
+    const userId = subjectUserId(req);
+    const first = await isFirstDeposit(userId);
+
+    if (first) {
+      const rate = firstDepositPolicyRate(currency, FIRST_DEPOSIT_INDICATIVE_RATES[currency]);
+      const minLocal = minLocalFromUsd(FIRST_DEPOSIT_MIN_USD, rate);
+      ok(res, {
+        policy: 'initial',
+        currencyCode: currency,
+        usdFloor: FIRST_DEPOSIT_MIN_USD,
+        minLocal,
+        unitsPerUsd: rate,
+        rateSource: 'policy',
+        message: 'First deposit requires USD 20,000 equivalent.',
+      }, 'Deposit policy');
+      return;
+    }
+
+    const resolved = await resolveRateForDeposit(currency);
+    const minLocal = minLocalFromUsd(SUBSEQUENT_DEPOSIT_MIN_USD, resolved.unitsPerUsd);
+    ok(res, {
+      policy: 'subsequent',
+      currencyCode: currency,
+      usdFloor: SUBSEQUENT_DEPOSIT_MIN_USD,
+      minLocal,
+      unitsPerUsd: resolved.unitsPerUsd,
+      rateSource: resolved.source,
+      provider: resolved.provider,
+      rateTimestamp: resolved.rateTimestamp,
+      message: 'Subsequent deposits require USD 10,000 equivalent.',
+    }, 'Deposit policy');
   } catch (err) { next(err); }
 });
 

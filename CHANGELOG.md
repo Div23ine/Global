@@ -125,3 +125,12 @@ this project follows semantic versioning at release time.
   PROJECT_STATUS.md (decisions ledger).
 - Fifth currency: PLN (replaces NGN) to preserve the "five currencies"
   brand promise with European relevance.
+
+## 2026-11-24 — Deposit minimums & exchange rates
+
+- **Preserved** first initial deposit floor: **USD 20,000** equivalent (indicative policy rates).
+- **Added** subsequent deposit floor: **USD 10,000** equivalent using server-side FX rates.
+- FX admin: manual rates or live Frankfurter (ECB) refresh; `fx.manage` permission; audit on changes.
+- Deposit rows store FX eligibility snapshot (`fx_*`, `min_policy`).
+- Customer deposit UI loads `/deposits/policy` for rate, minimum and USD estimate.
+- Migration: `0022_exchange_rates_and_deposit_snapshots.sql` (not applied to production by this change).

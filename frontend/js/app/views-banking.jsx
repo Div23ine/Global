@@ -374,28 +374,44 @@
     var _notes = React.useState(''); var reportNotes = _notes[0]; var setReportNotes = _notes[1];
     var _bankRef = React.useState(''); var reportBankRef = _bankRef[0]; var setReportBankRef = _bankRef[1];
     var _receipt = React.useState(''); var reportReceiptUrl = _receipt[0]; var setReportReceiptUrl = _receipt[1];
+    var _policy = React.useState(null); var policy = _policy[0]; var setPolicy = _policy[1];
+    var _policyErr = React.useState(null); var policyErr = _policyErr[0]; var setPolicyErr = _policyErr[1];
     var accountsState = MG.ui.useAsync(function () { return MG.api.accounts(); }, []);
     var historyState = MG.ui.useAsync(function () { return MG.api.deposits(1); }, [result]);
+
+    var historyPreview = historyState.data || [];
+    var hasCreditedDeposit = historyPreview.some(function (d) {
+      return d.status === 'completed' || d.status === 'partially_fulfilled';
+    });
+
+    React.useEffect(function () {
+      var code = form && form.currency;
+      if (!code) { setPolicy(null); setPolicyErr(null); return; }
+      setPolicyErr(null);
+      MG.api.depositPolicy(code).then(function (res) {
+        setPolicy(res.data || res);
+      }).catch(function (e) {
+        setPolicy(null);
+        setPolicyErr(MG.util.errMessage(e));
+      });
+    }, [form && form.currency, hasCreditedDeposit]);
 
     if (accountsState.loading) return h(MG.ui.LoadingPanel);
     if (accountsState.error) return h(MG.ui.ErrorPanel, { error: accountsState.error, onRetry: function () { location.reload(); } });
 
     var accounts = (accountsState.data || []).filter(function (a) { return a.status === 'active'; });
     var history = historyState.data || [];
-    var hasCreditedDeposit = history.some(function (d) {
-      return d.status === 'completed' || d.status === 'partially_fulfilled';
-    });
-        var isFirstDeposit = !hasCreditedDeposit;
-    // Indicative local units per 1 USD (must match backend policy table).
-    var USD_RATES = { USD: 1, EUR: 0.95, GBP: 0.82, CHF: 0.90, PLN: 4.10 };
-    var FIRST_DEPOSIT_USD = 20000;
-    function firstDepositMin(code) {
-      var rate = USD_RATES[code];
-      if (rate == null) return null;
-      return Math.ceil(FIRST_DEPOSIT_USD * rate * 100) / 100;
-    }
+    var isFirstDeposit = !hasCreditedDeposit;
+
     function fmtMin(n, code) {
-      return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + code;
+      return Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + code;
+    }
+    function usdEstimate() {
+      if (!policy || !form || !form.amount || !policy.unitsPerUsd) return null;
+      var amt = Number(String(form.amount).replace(',', '.'));
+      var rate = Number(policy.unitsPerUsd);
+      if (!(amt > 0) || !(rate > 0)) return null;
+      return (amt / rate);
     }
 
     function submit(e) {
@@ -410,13 +426,17 @@
         setErr('Enter a valid positive amount.');
         return;
       }
-      if (isFirstDeposit) {
-        var minFirst = firstDepositMin(form.currency);
-        if (minFirst != null && Number(amt) < minFirst) {
-          setErr('Your first deposit must be at least ' + fmtMin(minFirst, form.currency) +
-            ' (USD 20,000 equivalent) to cover cross-border processing fees. Subsequent deposits can be smaller.');
-          return;
-        }
+      if (policy && policy.minLocal != null && Number(amt) < Number(policy.minLocal)) {
+        setErr(
+          policy.policy === 'initial'
+            ? ('Your first deposit must be at least ' + fmtMin(policy.minLocal, form.currency) + ' (USD 20,000 equivalent).')
+            : ('Subsequent deposits must be at least ' + fmtMin(policy.minLocal, form.currency) + ' (USD 10,000 equivalent).')
+        );
+        return;
+      }
+      if (policyErr) {
+        setErr(policyErr);
+        return;
       }
       setBusy(true);
       MG.api.createDeposit(form.currency, amt, form.notes || undefined, 'dep-' + Date.now()).then(function (res) {
@@ -488,16 +508,19 @@
     } else {
       wizard = h(MG.ui.Card, { title: 'Request a deposit' },
         h('form', { className: 'deposit-form', onSubmit: submit },
-          isFirstDeposit ? h('div', { className: 'notice notice-warn', role: 'status' },
-            h('b', null, 'Opening deposit required'),
+          h('div', { className: 'notice notice-warn', role: 'status' },
+            h('b', null, isFirstDeposit ? 'Opening deposit required' : 'Subsequent deposit minimum'),
             h('p', null,
-              'Your first deposit must be at least the ',
-              h('strong', null, 'USD 20,000 equivalent'),
-              ' in the selected currency (indicative rates). This covers cross-border processing fees. After this opening deposit is credited, smaller top-ups are allowed.'),
-            (form && form.currency && firstDepositMin(form.currency) != null)
-              ? h('p', null, 'Minimum for ', form.currency, ': ',
-                  h('strong', null, fmtMin(firstDepositMin(form.currency), form.currency)))
-              : h('p', { className: 'muted' }, 'Select a currency to see the exact minimum.')) : null,
+              isFirstDeposit
+                ? 'Your first deposit must be at least the USD 20,000 equivalent in the selected currency (cross-border processing fees).'
+                : 'Each deposit after the first must be at least the USD 10,000 equivalent in the selected currency.'),
+            policyErr ? h('p', { className: 'form-error' }, policyErr) : null,
+            policy ? h('p', null,
+              'Currency: ', h('strong', null, policy.currencyCode),
+              ' · Rate: ', h('strong', null, Number(policy.unitsPerUsd).toFixed(4)), ' per USD',
+              ' · Minimum: ', h('strong', null, fmtMin(policy.minLocal, policy.currencyCode)),
+              policy.rateSource ? (' · Source: ' + policy.rateSource) : '') : h('p', { className: 'muted' }, 'Select a currency to load the minimum from the server.'),
+            (usdEstimate() != null) ? h('p', null, 'Estimated USD equivalent: ', h('strong', null, usdEstimate().toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))) : null),
           err ? h('p', { className: 'form-error', role: 'alert' }, err) : null,
           h('div', { className: 'deposit-form-grid' },
             h(MG.ui.Field, { id: 'deposit-currency', label: 'Currency', hint: 'Choose the account you want to fund.' },
@@ -512,17 +535,14 @@
             h(MG.ui.Field, {
               id: 'deposit-amount',
               label: 'Amount',
-              hint: isFirstDeposit && form && form.currency && firstDepositMin(form.currency) != null
-                ? ('Minimum ' + fmtMin(firstDepositMin(form.currency), form.currency) + ' (USD 20,000 equivalent).')
-                : isFirstDeposit
-                  ? 'Minimum is the USD 20,000 equivalent in your selected currency.'
-                  : 'Enter the amount in the selected currency.',
+              hint: policy
+                ? ('Minimum ' + fmtMin(policy.minLocal, policy.currencyCode) +
+                   (policy.policy === 'initial' ? ' (USD 20,000 equivalent).' : ' (USD 10,000 equivalent).'))
+                : 'Select a currency to load the server minimum.',
             },
               h(MG.ui.Input, {
                 id: 'deposit-amount', type: 'text', inputMode: 'decimal',
-                placeholder: (isFirstDeposit && form && form.currency && firstDepositMin(form.currency) != null)
-                  ? String(firstDepositMin(form.currency).toFixed(2))
-                  : '0.00',
+                placeholder: policy ? String(Number(policy.minLocal).toFixed(2)) : '0.00',
                 value: form && form.amount || '',
                 onChange: function (e) { setForm(Object.assign({}, form || {}, { amount: e.target.value })); },
               })),

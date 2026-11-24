@@ -20,6 +20,12 @@ import {
   TAKEOVER_TTL_SECONDS,
 } from '../services/takeover.service';
 import { setTakeoverCookie, clearTakeoverCookie } from '../services/session-cookie.service';
+import {
+  listRates,
+  setFxMode,
+  setManualRate,
+  refreshLiveRates,
+} from '../services/fx.service';
 import { validate } from '../middleware/validate';
 import { getServiceClient } from '../services/supabase.service';
 import {
@@ -785,6 +791,43 @@ adminRouter.get('/admin/takeover/history', requireAdmin('takeover.manage'), asyn
       expiresAt: r.expires_at,
       endedAt: r.ended_at,
     })), 'Takeover history');
+  } catch (err) { next(err); }
+});
+
+
+/* ------------------------------------------------------------------ FX rates */
+adminRouter.get('/admin/fx', requireAdmin('fx.manage'), async (_req, res, next) => {
+  try {
+    ok(res, await listRates(), 'Exchange rates');
+  } catch (err) { next(err); }
+});
+
+const fxModeSchema = z.object({ mode: z.enum(['manual', 'live']) }).strict();
+adminRouter.post('/admin/fx/mode', requireAdmin('fx.manage'), validate(fxModeSchema), async (req, res, next) => {
+  try {
+    const settings = await setFxMode(req.auth!.userId, req.body.mode, ctxOf(req));
+    ok(res, settings, 'FX mode updated');
+  } catch (err) { next(err); }
+});
+
+const fxRateSchema = z.object({
+  currencyCode: z.string().regex(/^[A-Z]{3}$/),
+  unitsPerUsd: z.union([z.string(), z.number()]),
+}).strict();
+adminRouter.put('/admin/fx/rates/:code', requireAdmin('fx.manage'), validate(z.object({
+  unitsPerUsd: z.union([z.string(), z.number()]),
+}).strict()), async (req, res, next) => {
+  try {
+    const code = String(req.params.code || '').toUpperCase();
+    const row = await setManualRate(req.auth!.userId, code, req.body.unitsPerUsd, ctxOf(req));
+    ok(res, row, 'Exchange rate updated');
+  } catch (err) { next(err); }
+});
+
+adminRouter.post('/admin/fx/refresh', requireAdmin('fx.manage'), async (req, res, next) => {
+  try {
+    const result = await refreshLiveRates(req.auth!.userId, ctxOf(req));
+    ok(res, result, 'Live rates refreshed');
   } catch (err) { next(err); }
 });
 

@@ -14,6 +14,9 @@
   }
 
   MG.api = {
+    depositPolicy: function (currency) {
+      return http.get('/deposits/policy' + qs({ currency: currency }));
+    },
     init: function () { http = MG.http; },
 
     /* ---- profile ---- */
@@ -130,6 +133,12 @@
     takeoverHistory: function (limit) {
       return http.get('/admin/takeover/history' + qs({ limit: limit || 50 }));
     },
+    fxRates: function () { return http.get('/admin/fx'); },
+    fxSetMode: function (mode) { return http.post('/admin/fx/mode', { mode: mode }); },
+    fxSetRate: function (code, unitsPerUsd) {
+      return http.put('/admin/fx/rates/' + encodeURIComponent(code), { unitsPerUsd: unitsPerUsd });
+    },
+    fxRefresh: function () { return http.post('/admin/fx/refresh'); },
     gmailStatus: function () { return http.get('/admin/email/gmail/status'); },
     connectGmail: function () { return http.post('/admin/email/gmail/connect'); },
     disconnectGmail: function () { return http.del('/admin/email/gmail'); },

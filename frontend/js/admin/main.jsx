@@ -34,6 +34,7 @@
       { id: 'roles', label: 'Admin Roles', icon: 'key' },
       { id: 'audit', label: 'Audit Logs', icon: 'history' },
       { id: 'email', label: 'Email Alerts', icon: 'mail' },
+      { id: 'fx', label: 'Exchange Rates', icon: 'coins' },
       { id: 'settings', label: 'Settings', icon: 'settings' },
     ] },
   ];
@@ -44,7 +45,7 @@
     transactions: 'Transactions', payments: 'Payment Monitoring',
     currencies: 'Currency Management', security: 'Security Monitoring',
     reports: 'Reports', support: 'Support', roles: 'Admin Roles',
-    takeover: 'Account Takeover', audit: 'Audit Logs', email: 'Email Alerts', settings: 'Settings',
+    takeover: 'Account Takeover', audit: 'Audit Logs', email: 'Email Alerts', fx: 'Exchange Rates', settings: 'Settings',
   };
 
   function parseHash() {
