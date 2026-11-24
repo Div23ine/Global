@@ -1,0 +1,44 @@
+name: Account takeover verification
+
+on:
+  push:
+    branches: [feat/admin-account-takeover]
+  pull_request:
+    branches: [development]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: account-takeover-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install backend dependencies
+        run: npm install
+
+      - name: Typecheck backend
+        run: npm run typecheck
+
+      - name: Run backend tests (including PostgreSQL migration integration tests)
+        run: npm test
+        timeout-minutes: 15
+
+      - name: Lint backend
+        run: npm run lint
