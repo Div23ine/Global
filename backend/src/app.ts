@@ -31,7 +31,7 @@ export function createApp(rateLimitBindings?: RateLimitBindings, cacheKv?: Cache
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: [
       'Content-Type', 'Authorization', 'Idempotency-Key',
-      'x-meridian-signature', 'x-meridian-csrf',
+      'x-meridian-signature', 'x-meridian-csrf', 'x-meridian-customer-context',
     ],
     maxAge: 600,
   }));

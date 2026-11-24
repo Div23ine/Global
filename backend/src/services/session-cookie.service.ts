@@ -118,3 +118,27 @@ export function ensureCsrfCookie(res: Response, existingToken?: string | null): 
   appendCookie(res, cookie(cookieNames().csrf, token, REFRESH_COOKIE_TTL));
   return token;
 }
+
+/* ---- Account takeover cookie (HttpOnly; never readable by page scripts) ---- */
+
+function takeoverCookieName(): string {
+  return env.isProduction ? '__Host-mg-takeover' : 'mg-takeover';
+}
+
+export function readTakeoverToken(req: Request): string | null {
+  const cookies = readCookies(req);
+  return cookies[takeoverCookieName()] || null;
+}
+
+/** Opaque takeover token cookie. Max-Age matches session TTL seconds. */
+export function setTakeoverCookie(res: Response, token: string, maxAgeSec: number): void {
+  res.setHeader('Cache-Control', 'no-store, private');
+  appendCookie(res, cookie(takeoverCookieName(), token, maxAgeSec));
+}
+
+export function clearTakeoverCookie(res: Response): void {
+  res.setHeader('Cache-Control', 'no-store, private');
+  const expiry = 'Path=/; SameSite=Lax; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT';
+  const secure = env.isProduction ? '; Secure' : '';
+  appendCookie(res, takeoverCookieName() + '=; ' + expiry + secure + '; HttpOnly');
+}

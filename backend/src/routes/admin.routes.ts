@@ -12,6 +12,14 @@ import { Router } from 'express';
 import { env } from '../config/env';
 import { z } from 'zod';
 import { requireAdmin, requireAuth } from '../middleware/auth';
+import {
+  startTakeover,
+  endTakeover,
+  getActiveTakeover,
+  listTakeoverHistory,
+  TAKEOVER_TTL_SECONDS,
+} from '../services/takeover.service';
+import { setTakeoverCookie, clearTakeoverCookie } from '../services/session-cookie.service';
 import { validate } from '../middleware/validate';
 import { getServiceClient } from '../services/supabase.service';
 import {
@@ -696,3 +704,87 @@ adminRouter.post('/admin/refunds/:id/reject', requireAdmin('refunds.manage'), va
     ok(res, refund, 'Refund rejected');
   } catch (err) { next(err); }
 });
+
+
+/* ------------------------------------------------------------------ account takeover */
+const takeoverStartSchema = z.object({
+  targetUserId: z.string().min(1).max(128),
+  reason: z.string().min(3).max(1000),
+}).strict();
+
+adminRouter.post('/admin/takeover/start', requireAdmin('takeover.manage'), validate(takeoverStartSchema), async (req, res, next) => {
+  try {
+    const { session, token } = await startTakeover(
+      req.auth!.userId,
+      req.body.targetUserId,
+      req.body.reason,
+      ctxOf(req),
+    );
+    setTakeoverCookie(res, token, TAKEOVER_TTL_SECONDS);
+    // Never return the raw token in the JSON body — cookie only.
+    ok(res, {
+      sessionId: session.id,
+      targetUserId: session.target_profile_id,
+      reason: session.reason,
+      startedAt: session.started_at,
+      expiresAt: session.expires_at,
+      status: session.status,
+    }, 'Takeover session started');
+  } catch (err) { next(err); }
+});
+
+adminRouter.post('/admin/takeover/end', requireAdmin('takeover.manage'), async (req, res, next) => {
+  try {
+    const sessionId = typeof req.body?.sessionId === 'string' ? req.body.sessionId : null;
+    const ended = await endTakeover(req.auth!.userId, sessionId, ctxOf(req));
+    clearTakeoverCookie(res);
+    ok(res, ended ? {
+      sessionId: ended.id,
+      targetUserId: ended.target_profile_id,
+      status: ended.status,
+      endedAt: ended.ended_at,
+    } : null, ended ? 'Takeover session ended' : 'No active takeover session');
+  } catch (err) { next(err); }
+});
+
+adminRouter.get('/admin/takeover/active', requireAdmin('takeover.manage'), async (req, res, next) => {
+  try {
+    const active = await getActiveTakeover(req.auth!.userId);
+    if (!active) {
+      ok(res, null, 'No active takeover');
+      return;
+    }
+    ok(res, {
+      sessionId: active.id,
+      targetUserId: active.target_profile_id,
+      targetEmail: active.target_email ?? null,
+      targetName: active.target_name ?? null,
+      reason: active.reason,
+      startedAt: active.started_at,
+      expiresAt: active.expires_at,
+      status: active.status,
+    }, 'Active takeover');
+  } catch (err) { next(err); }
+});
+
+adminRouter.get('/admin/takeover/history', requireAdmin('takeover.manage'), async (req, res, next) => {
+  try {
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50));
+    const rows = await listTakeoverHistory(limit);
+    ok(res, rows.map((r) => ({
+      sessionId: r.id,
+      adminUserId: r.admin_profile_id,
+      adminEmail: r.admin_email ?? null,
+      adminName: r.admin_name ?? null,
+      targetUserId: r.target_profile_id,
+      targetEmail: r.target_email ?? null,
+      targetName: r.target_name ?? null,
+      reason: r.reason,
+      status: r.status,
+      startedAt: r.started_at,
+      expiresAt: r.expires_at,
+      endedAt: r.ended_at,
+    })), 'Takeover history');
+  } catch (err) { next(err); }
+});
+

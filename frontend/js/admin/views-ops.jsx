@@ -728,4 +728,167 @@
                     });
                   } }, gmailBusy ? 'Connecting…' : 'Connect Gmail'))));
   };
+  /* -------------------------------------------------------- account takeover */
+  MGA.views.takeover = function () {
+    var _r = React.useState(0); var reload = _r[1];
+    var _q = React.useState(''); var q = _q[0]; var setQ = _q[1];
+    var usersState = MG.ui.useAsync(function () {
+      return MGA.api.users({ q: q || undefined, page: 1 });
+    }, [q, _r[0]]);
+    var activeState = MG.ui.useAsync(function () { return MGA.api.takeoverActive(); }, [_r[0]]);
+    var historyState = MG.ui.useAsync(function () { return MGA.api.takeoverHistory(40); }, [_r[0]]);
+    var _busy = React.useState(null); var busy = _busy[0]; var setBusy = _busy[1];
+    var _reason = React.useState(''); var reason = _reason[0]; var setReason = _reason[1];
+
+    var users = adminList(usersState.data);
+    var history = adminList(historyState.data);
+    var activePayload = activeState.data;
+    var active = null;
+    if (activePayload) {
+      if (activePayload.data && activePayload.data.sessionId) active = activePayload.data;
+      else if (activePayload.sessionId) active = activePayload;
+    }
+
+    function startTakeover(user) {
+      var r = (reason || '').trim();
+      if (r.length < 3) {
+        MG.ui.toast('Enter a reason of at least 3 characters.', 'err');
+        return;
+      }
+      if (!window.confirm(
+        'Start a support takeover for ' + (user.email || user.id) + '?\n\n' +
+        'You will open their customer interface. The customer is not notified. Financial actions remain blocked.'
+      )) return;
+      // Open a separate tab synchronously from the click so browser popup
+      // protection does not block it. The administrator dashboard stays open
+      // and can end the session; the customer tab has no takeover indicator.
+      var customerTab = window.open('about:blank', '_blank');
+      if (!customerTab) {
+        MG.ui.toast('Allow pop-ups for Meridian to open the customer application in a separate tab.', 'err');
+        return;
+      }
+      try { customerTab.opener = null; } catch (_) {}
+      setBusy('start');
+      MGA.api.takeoverStart(user.id, r).then(function () {
+        MG.ui.toast('Takeover started. Customer application opened in a separate tab.', 'ok');
+        setBusy(null);
+        customerTab.location.href = '/app#/overview';
+      }).catch(function (e) {
+        try { customerTab.close(); } catch (_) {}
+        setBusy(null);
+        MG.ui.toast(MG.util.errMessage(e), 'err');
+      });
+    }
+
+    function endTakeover() {
+      setBusy('end');
+      MGA.api.takeoverEnd(active && active.sessionId).then(function () {
+        MG.ui.toast('Takeover session ended.', 'ok');
+        setBusy(null);
+        reload(function (x) { return x + 1; });
+      }).catch(function (e) {
+        setBusy(null);
+        MG.ui.toast(MG.util.errMessage(e), 'err');
+      });
+    }
+
+    return h(React.Fragment, null,
+      h(MG.ui.PageHead, {
+        icon: 'eye',
+        title: 'Account takeover',
+        sub: 'Secure, audited support sessions. Customer credentials are never used. Financial operations stay blocked.',
+      }),
+      active
+        ? h(MG.ui.Notice, { tone: 'warn', icon: 'eye' },
+            h('p', null,
+              h('b', null, 'Active takeover'),
+              ' — target ',
+              h('code', null, active.targetEmail || active.targetUserId),
+              active.targetName ? (' (' + active.targetName + ')') : '',
+              '. Expires ', MG.util.dateTime(active.expiresAt), '.'),
+            h('div', { className: 'btn-row', style: { marginTop: 8 } },
+              h('a', { className: 'btn btn-primary btn-sm', href: '/app#/overview' }, 'Open customer application'),
+              h('button', {
+                className: 'btn btn-ghost btn-sm',
+                disabled: busy === 'end',
+                onClick: endTakeover,
+              }, busy === 'end' ? 'Ending…' : 'End takeover')))
+        : null,
+      h('div', { className: 'grid-side' },
+        h('div', { className: 'grid-side-main' },
+          h(MG.ui.Card, {
+            title: h('h3', { className: 'panel-title' },
+              h(MG.ui.Icon, { name: 'users', size: 15 }), ' Select customer'),
+            actions: h('div', { className: 'filter-bar' },
+              h('input', {
+                className: 'input',
+                placeholder: 'Search email or name…',
+                value: q,
+                onChange: function (e) { setQ(e.target.value); },
+              })),
+          },
+            h('div', { className: 'field', style: { marginBottom: 12 } },
+              h('label', null, 'Reason for this session (required)'),
+              h('input', {
+                className: 'input',
+                value: reason,
+                placeholder: 'e.g. customer reported missing deposit reference',
+                onChange: function (e) { setReason(e.target.value); },
+              })),
+            usersState.loading
+              ? h(MG.ui.Skeleton, { lines: 4 })
+              : users.length === 0
+                ? h(MG.ui.Empty, { title: 'No customers found', hint: 'Adjust the search query.' })
+                : h('ul', { className: 'feed-list' },
+                    users.map(function (u) {
+                      return h('li', { key: u.id, className: 'feed-item' },
+                        h('div', { className: 'feed-body' },
+                          h('b', null, u.full_name || u.email || u.id),
+                          h('p', { className: 'muted' }, u.email, ' · ', u.status || 'active')),
+                        h('button', {
+                          className: 'btn btn-primary btn-sm',
+                          disabled: busy === 'start',
+                          onClick: function () { startTakeover(u); },
+                        }, h(MG.ui.Icon, { name: 'eye', size: 13 }), ' Enter takeover'));
+                    })))),
+        h('div', { className: 'grid-side-aside' },
+          h(MG.ui.Card, {
+            title: h('h3', { className: 'panel-title' },
+              h(MG.ui.Icon, { name: 'history', size: 15 }), ' Takeover history'),
+          },
+            historyState.loading
+              ? h(MG.ui.Skeleton, { lines: 4 })
+              : history.length === 0
+                ? h(MG.ui.Empty, { title: 'No takeover sessions yet' })
+                : h('ul', { className: 'feed-list' },
+                    history.map(function (row) {
+                      return h('li', {
+                        key: row.sessionId || row.id,
+                        className: 'feed-item' + (row.status === 'active' ? ' feed-start' : ''),
+                      },
+                        h('div', { className: 'feed-body' },
+                          h('b', null, row.adminName || row.adminEmail || 'Admin'),
+                          h('p', null,
+                            row.status === 'active' ? 'started' : (row.status === 'ended' ? 'ended' : row.status),
+                            ' session for ',
+                            h('code', null, row.targetEmail || row.targetUserId)),
+                          h('small', { className: 'muted' },
+                            MG.util.dateTime(row.startedAt || row.started_at))));
+                    }))),
+          h(MG.ui.Card, {
+            title: h('h3', { className: 'panel-title' },
+              h(MG.ui.Icon, { name: 'shield-check', size: 15 }), ' Policy'),
+          },
+            h('ul', { className: 'policy-list' },
+              h('li', null, h('b', null, 'No customer notification. '),
+                'The customer interface shows no takeover banner, email, or in-app notice.'),
+              h('li', null, h('b', null, 'Admin identity preserved. '),
+                'Your credentials stay in force; customer passwords are never used.'),
+              h('li', null, h('b', null, 'Financial ops blocked. '),
+                'Deposits, activations, and support ticket creation are rejected server-side during takeover.'),
+              h('li', null, h('b', null, 'Fully audited. '),
+                'Start, end, and blocked attempts are written to the audit log.'))))));
+  };
+
+
 })();

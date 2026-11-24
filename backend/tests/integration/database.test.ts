@@ -603,16 +603,20 @@ describe('account close guard', () => {
 
 describe('receiving bank accounts seed', () => {
   it('seeds one active receiving account per supported currency', async () => {
+    // Migration 0018 intentionally sends all receiving-bank entries back
+    // through explicit admin approval. Fresh-database placeholders must exist
+    // for each currency, but none may be active or customer-assignable.
     const rows = await svc!.query(
-      `SELECT currency_code, count(*)::int AS n
+      `SELECT currency_code, count(*)::int AS n,
+              bool_and(status = 'pending' AND is_active = false) AS placeholders_pending
          FROM receiving_bank_accounts
-        WHERE is_active = true
         GROUP BY currency_code
         ORDER BY currency_code`,
     );
-    const byCode = Object.fromEntries(rows.rows.map((r) => [r.currency_code, r.n]));
+    const byCode = Object.fromEntries(rows.rows.map((r) => [r.currency_code, r]));
     for (const code of ['EUR', 'GBP', 'USD', 'CHF', 'PLN']) {
-      expect(byCode[code], `missing bank for ${code}`).toBeGreaterThanOrEqual(1);
+      expect(byCode[code]?.n, `missing bank placeholder for ${code}`).toBeGreaterThanOrEqual(1);
+      expect(byCode[code]?.placeholders_pending, `placeholder must await approval for ${code}`).toBe(true);
     }
   });
 });
@@ -644,9 +648,27 @@ describe('admin_credit_deposit_payment RPC', () => {
     );
     accountId = a2.rows[0].id as string;
 
-    const bank = await svc!.query(
-      `SELECT id FROM receiving_bank_accounts WHERE currency_code = 'EUR' AND is_active LIMIT 1`,
+    let bank = await svc!.query(
+      `SELECT id FROM receiving_bank_accounts
+        WHERE currency_code = 'EUR' AND status = 'approved' AND is_active = true
+        LIMIT 1`,
     );
+    if (bank.rows.length === 0) {
+      // Test-only verified account. Real production bank details are never
+      // fabricated by migrations; this fixture exists only in embedded PG.
+      bank = await svc!.query(
+        `INSERT INTO receiving_bank_accounts (
+           label, bank_name, beneficiary_name, account_number, country_code,
+           currency_code, transfer_instructions, is_active, status,
+           approved_by, approved_at
+         ) VALUES (
+           'TEST ONLY — approved fixture', 'Test Bank', 'Meridian Test Beneficiary',
+           'TEST-ACCOUNT-DO-NOT-USE', 'DE', 'EUR',
+           'Embedded PostgreSQL test fixture only.', true, 'approved',
+           'integration-test', now()
+         ) RETURNING id`,
+      );
+    }
     bankId = bank.rows[0].id as string;
   });
 

@@ -18,6 +18,12 @@
     opts = opts || {};
     var url = MG.config.API_BASE_URL + path;
     var headers = { Accept: 'application/json' };
+    // This marker is sent only by the customer application, never by the
+    // administrator dashboard. It keeps the admin tab fully functional while
+    // a separate customer tab is operating in takeover scope.
+    if (document.body && document.body.getAttribute('data-page') === 'app') {
+      headers['X-Meridian-Customer-Context'] = '1';
+    }
     if (body !== undefined) headers['Content-Type'] = 'application/json';
     if (!SAFE_METHODS[method] && MG.auth && MG.auth.state.csrfToken) {
       headers['X-Meridian-CSRF'] = MG.auth.state.csrfToken;
@@ -93,8 +99,12 @@
     patch: function (path, body, opts) { return request('PATCH', path, body, opts); },
     del: function (path, opts) { return request('DELETE', path, undefined, opts); },
     download: function (path) {
+      var headers = { Accept: 'text/plain' };
+      if (document.body && document.body.getAttribute('data-page') === 'app') {
+        headers['X-Meridian-Customer-Context'] = '1';
+      }
       return fetch(MG.config.API_BASE_URL + path, {
-        headers: { Accept: 'text/plain' },
+        headers: headers,
         credentials: 'include',
         cache: 'no-store',
       }).then(function (response) {

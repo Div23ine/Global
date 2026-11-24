@@ -1,7 +1,7 @@
 /** Statements: list, generate (idempotent upsert), download (text). */
 import { Router } from 'express';
 import { z } from 'zod';
-import { requireAuth } from '../middleware/auth';
+import { requireAuth, subjectUserId } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { getServiceClient } from '../services/supabase.service';
 import { generateStatement, renderStatementText } from '../services/statement.service';
@@ -17,7 +17,7 @@ statementsRouter.get('/statements', async (req, res, next) => {
     const { data: accounts } = await db
       .from('accounts')
       .select('id')
-      .eq('profile_id', req.auth!.userId);
+      .eq('profile_id', subjectUserId(req));
     const ids = (accounts ?? []).map((a: { id: string }) => a.id);
     if (ids.length === 0) { ok(res, [], 'Statements'); return; }
     const { data, error } = await db
@@ -39,7 +39,7 @@ const genSchema = z.object({
 statementsRouter.post('/statements/generate', validate(genSchema), async (req, res, next) => {
   try {
     const row = await generateStatement(
-      req.auth!.userId, req.body.accountId, req.body.periodStart, req.body.periodEnd,
+      subjectUserId(req), req.body.accountId, req.body.periodStart, req.body.periodEnd,
     );
     res.status(201);
     res.json({ success: true, message: 'Statement generated', data: row, meta: {} });
@@ -58,12 +58,12 @@ statementsRouter.get('/statements/:id/download', async (req, res, next) => {
       .select('id, profile_id, currency_code')
       .eq('id', stmt.account_id)
       .maybeSingle();
-    if (!account || account.profile_id !== req.auth!.userId) throw notFound('Statement not found.');
+    if (!account || account.profile_id !== subjectUserId(req)) throw notFound('Statement not found.');
 
     const { data: profile } = await db
       .from('profiles')
       .select('full_name, email')
-      .eq('id', req.auth!.userId)
+      .eq('id', subjectUserId(req))
       .maybeSingle();
 
     const { data: entries } = await db

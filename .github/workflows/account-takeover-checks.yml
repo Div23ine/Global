@@ -1,0 +1,69 @@
+name: Account takeover verification
+
+on:
+  push:
+    branches: [feat/admin-account-takeover]
+  pull_request:
+    branches: [development]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: account-takeover-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install backend dependencies
+        run: npm install
+
+      - name: Typecheck backend
+        run: npm run typecheck
+
+      - name: Run backend tests (including PostgreSQL migration integration tests)
+        run: npm test
+        timeout-minutes: 15
+
+      - name: Lint backend
+        run: npm run lint
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Parse changed frontend JavaScript and JSX
+        run: |
+          npx --yes esbuild@0.25.0 frontend/js/admin/main.jsx --outfile=/tmp/admin-main.js
+          npx --yes esbuild@0.25.0 frontend/js/admin/views-ops.jsx --outfile=/tmp/admin-views-ops.js
+          npx --yes esbuild@0.25.0 frontend/js/app/main.jsx --outfile=/tmp/customer-main.js
+          npx --yes esbuild@0.25.0 frontend/js/services/http.js --outfile=/tmp/http.js
+          npx --yes esbuild@0.25.0 frontend/js/services/api.js --outfile=/tmp/api.js
+
+      - name: Verify customer UI has no takeover control or warning
+        run: |
+          ! grep -q 'h(SupportSessionBar)' frontend/js/app/main.jsx
+          grep -q 'X-Meridian-Customer-Context' frontend/js/services/http.js
+          grep -q 'x-meridian-customer-context' backend/src/app.ts

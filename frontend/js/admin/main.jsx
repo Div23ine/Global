@@ -18,6 +18,7 @@
     ] },
     { group: 'Customers', items: [
       { id: 'users', label: 'User Management', icon: 'users' },
+      { id: 'takeover', label: 'Account Takeover', icon: 'eye' },
       { id: 'deposits', label: 'Deposit Management', icon: 'wallet' },
       { id: 'refunds', label: 'Refund Management', icon: 'receipt' },
     ] },
@@ -43,7 +44,7 @@
     transactions: 'Transactions', payments: 'Payment Monitoring',
     currencies: 'Currency Management', security: 'Security Monitoring',
     reports: 'Reports', support: 'Support', roles: 'Admin Roles',
-    audit: 'Audit Logs', email: 'Email Alerts', settings: 'Settings',
+    takeover: 'Account Takeover', audit: 'Audit Logs', email: 'Email Alerts', settings: 'Settings',
   };
 
   function parseHash() {

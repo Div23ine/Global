@@ -311,6 +311,51 @@
     return { view: parts[0] || 'overview', param: parts[1] || null };
   }
 
+  
+  /* Admin-only support session control. Real customers get 403 from the API
+     and never see this. There is no customer-facing takeover messaging. */
+  function SupportSessionBar() {
+    var _a = useState(null); var active = _a[0]; var setActive = _a[1];
+    var _b = useState(false); var busy = _b[0]; var setBusy = _b[1];
+    useEffect(function () {
+      if (!window.MGA || !MGA.api || !MGA.api.takeoverActive) return;
+      MGA.api.takeoverActive().then(function (res) {
+        var row = res && res.data ? res.data : null;
+        if (row && row.sessionId) setActive(row);
+      }).catch(function () { /* not an admin or no permission — stay silent */ });
+    }, []);
+    if (!active) return null;
+    return h('div', {
+      style: {
+        position: 'fixed', bottom: 16, right: 16, zIndex: 9999,
+        background: '#0B1C2C', color: '#E8EEF5', border: '1px solid #3EC7E6',
+        borderRadius: 10, padding: '10px 14px', boxShadow: '0 8px 24px rgba(0,0,0,.35)',
+        fontSize: 13, maxWidth: 320,
+      },
+    },
+      h('div', { style: { marginBottom: 6 } },
+        h('b', null, 'Admin support session'),
+        h('div', { style: { opacity: 0.8, marginTop: 2 } },
+          active.targetEmail || active.targetUserId)),
+      h('div', { style: { display: 'flex', gap: 8 } },
+        h('a', { href: '/admin#/takeover', className: 'btn btn-ghost btn-sm',
+          style: { color: '#E8EEF5' } }, 'Admin console'),
+        h('button', {
+          className: 'btn btn-primary btn-sm',
+          disabled: busy,
+          onClick: function () {
+            setBusy(true);
+            MGA.api.takeoverEnd(active.sessionId).then(function () {
+              setActive(null);
+              window.location.href = '/admin#/takeover';
+            }).catch(function (e) {
+              setBusy(false);
+              if (MG.util && MG.util.toast) MG.util.toast(MG.util.errMessage(e), 'err');
+            });
+          },
+        }, busy ? 'Ending…' : 'End session')));
+  }
+
   function Shell(props) {
     var route = props.route;
     var user = props.user;
@@ -495,7 +540,8 @@
       };
     }
 
-    return h(Shell, { route: route, user: st.user, resolveView: resolveView });
+    return h(React.Fragment, null,
+      h(Shell, { route: route, user: st.user, resolveView: resolveView }));
   }
 
   var mount = document.getElementById('gl-app');
