@@ -708,7 +708,7 @@ adminRouter.post('/admin/refunds/:id/reject', requireAdmin('refunds.manage'), va
 
 /* ------------------------------------------------------------------ account takeover */
 const takeoverStartSchema = z.object({
-  targetUserId: z.string().uuid(),
+  targetUserId: z.string().min(1).max(128),
   reason: z.string().min(3).max(1000),
 }).strict();
 

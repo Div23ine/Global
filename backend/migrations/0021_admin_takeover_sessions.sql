@@ -7,8 +7,8 @@ BEGIN;
 
 CREATE TABLE IF NOT EXISTS public.admin_takeover_sessions (
   id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  admin_profile_id  uuid NOT NULL REFERENCES public.profiles(id),
-  target_profile_id uuid NOT NULL REFERENCES public.profiles(id),
+  admin_profile_id  text NOT NULL REFERENCES public.profiles(id),
+  target_profile_id text NOT NULL REFERENCES public.profiles(id),
   token_hash        text NOT NULL,
   reason            text NOT NULL CHECK (char_length(trim(reason)) >= 3 AND char_length(reason) <= 1000),
   status            text NOT NULL DEFAULT 'active'

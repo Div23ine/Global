@@ -5,7 +5,7 @@ import { requireAuth, subjectUserId, actorUserId } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { getServiceClient, getUserClient } from '../services/supabase.service';
 import { auditAllowed } from '../services/audit.service';
-import { notFound, ok } from '../utils/httpError';
+import { forbidden, notFound, ok } from '../utils/httpError';
 import { computeFullName } from '../utils/name';
 
 export const profileRouter = Router();
@@ -39,6 +39,11 @@ const patchSchema = z.object({
 
 profileRouter.patch('/profile', validate(patchSchema), async (req, res, next) => {
   try {
+    // Takeover permits only basic contact/name corrections. Preferences and
+    // every other profile setting remain customer-controlled.
+    if (req.takeover && req.body.prefs !== undefined) {
+      throw forbidden('Only basic profile details may be updated during account takeover.');
+    }
     const db = getServiceClient();
     const patch: Record<string, unknown> = {};
     // full_name is recomputed from the STORED parts plus the patched parts, so

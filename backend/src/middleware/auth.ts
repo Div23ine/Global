@@ -6,7 +6,7 @@
 import type { NextFunction, Request, Response } from 'express';
 import { verifySupabaseAccessToken } from '../services/supabase-auth.service';
 import { getServiceClient } from '../services/supabase.service';
-import { readAuthCookies, readTakeoverToken, assertCsrf, assertTrustedOrigin } from '../services/session-cookie.service';
+import { readAuthCookies, readTakeoverToken, assertCsrf, assertTrustedOrigin, clearTakeoverCookie } from '../services/session-cookie.service';
 import { resolveTakeoverFromToken } from '../services/takeover.service';
 import { forbidden, unauthenticated } from '../utils/httpError';
 import { auditDenied } from '../services/audit.service';
@@ -53,7 +53,7 @@ export function setJwtVerifierForTests(value: VerifyJwt | null): void {
 }
 
 function authentication(enforceAal2: boolean) {
-  return async function requireAuthMode(req: Request, _res: Response, next: NextFunction): Promise<void> {
+  return async function requireAuthMode(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const cookies = readAuthCookies(req);
       const cookieMode = Boolean(cookies.accessToken);
@@ -117,16 +117,38 @@ function authentication(enforceAal2: boolean) {
         email: claims.email ?? profile.email ?? null,
         supabaseJwt: accessToken,
       };
-      // Optional account-takeover scope. Admin identity stays on req.auth;
-      // customer-route subject is req.takeover.targetUserId when set.
+      // Resolve takeover state fail-closed. A stale, forged, or unverifiable
+      // takeover cookie must never silently fall back to the administrator's
+      // ordinary customer API context.
       req.takeover = null;
-      try {
-        const takeoverToken = readTakeoverToken(req);
-        if (takeoverToken) {
-          req.takeover = await resolveTakeoverFromToken(String(profile.id), takeoverToken);
+      const takeoverToken = readTakeoverToken(req);
+      if (takeoverToken) {
+        const scope = await resolveTakeoverFromToken(String(profile.id), takeoverToken);
+        if (!scope) {
+          clearTakeoverCookie(res);
+          throw forbidden('The account takeover session is invalid or has expired. Return to the administrator console.');
         }
-      } catch {
-        req.takeover = null;
+        req.takeover = scope;
+
+        // During takeover, all state-changing requests are denied by default.
+        // The only exceptions are the explicitly permitted basic profile edit
+        // and the administrator's own end-session endpoint. This central gate
+        // covers routes that might otherwise forget a route-level guard.
+        const method = req.method.toUpperCase();
+        const safeMethod = ['GET', 'HEAD', 'OPTIONS'].includes(method);
+        const originalPath = req.originalUrl || req.path;
+        const isEndTakeover = method === 'POST' && /\\/admin\\/takeover\\/end(?:[/?]|$)/.test(originalPath);
+        const isBasicProfileEdit = method === 'PATCH' && /\\/profile(?:[/?]|$)/.test(originalPath);
+        if (!safeMethod && !isEndTakeover && !isBasicProfileEdit) {
+          await auditDenied(
+            req.auth.userId,
+            'takeover.block.mutation',
+            'Blocked state-changing request during account takeover: ' + method + ' ' + req.path,
+            { type: 'takeover_session', id: scope.sessionId },
+            { ip: req.ip, userAgent: req.get('user-agent') },
+          );
+          throw forbidden('State-changing actions are disabled during an account takeover session.');
+        }
       }
       next();
     } catch (error) {

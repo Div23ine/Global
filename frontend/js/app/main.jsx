@@ -541,8 +541,7 @@
     }
 
     return h(React.Fragment, null,
-      h(Shell, { route: route, user: st.user, resolveView: resolveView }),
-      h(SupportSessionBar));
+      h(Shell, { route: route, user: st.user, resolveView: resolveView }));
   }
 
   var mount = document.getElementById('gl-app');
