@@ -121,7 +121,11 @@ function authentication(enforceAal2: boolean) {
       // takeover cookie must never silently fall back to the administrator's
       // ordinary customer API context.
       req.takeover = null;
-      const takeoverToken = readTakeoverToken(req);
+      // Only the customer application opts into takeover scoping. The admin
+      // dashboard must keep using the administrator's ordinary context so it
+      // remains available in its own tab to inspect and end the session.
+      const takeoverRequested = req.get('x-meridian-customer-context') === '1';
+      const takeoverToken = takeoverRequested ? readTakeoverToken(req) : null;
       if (takeoverToken) {
         const scope = await resolveTakeoverFromToken(String(profile.id), takeoverToken);
         if (!scope) {

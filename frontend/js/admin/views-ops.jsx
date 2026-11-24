@@ -759,12 +759,22 @@
         'Start a support takeover for ' + (user.email || user.id) + '?\n\n' +
         'You will open their customer interface. The customer is not notified. Financial actions remain blocked.'
       )) return;
+      // Open a separate tab synchronously from the click so browser popup
+      // protection does not block it. The administrator dashboard stays open
+      // and can end the session; the customer tab has no takeover indicator.
+      var customerTab = window.open('about:blank', '_blank');
+      if (!customerTab) {
+        MG.ui.toast('Allow pop-ups for Meridian to open the customer application in a separate tab.', 'err');
+        return;
+      }
+      try { customerTab.opener = null; } catch (_) {}
       setBusy('start');
       MGA.api.takeoverStart(user.id, r).then(function () {
-        MG.ui.toast('Takeover started. Opening customer application…', 'ok');
+        MG.ui.toast('Takeover started. Customer application opened in a separate tab.', 'ok');
         setBusy(null);
-        window.location.href = '/app#/overview';
+        customerTab.location.href = '/app#/overview';
       }).catch(function (e) {
+        try { customerTab.close(); } catch (_) {}
         setBusy(null);
         MG.ui.toast(MG.util.errMessage(e), 'err');
       });

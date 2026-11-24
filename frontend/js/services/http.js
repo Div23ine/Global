@@ -18,6 +18,12 @@
     opts = opts || {};
     var url = MG.config.API_BASE_URL + path;
     var headers = { Accept: 'application/json' };
+    // This marker is sent only by the customer application, never by the
+    // administrator dashboard. It keeps the admin tab fully functional while
+    // a separate customer tab is operating in takeover scope.
+    if (document.body && document.body.getAttribute('data-page') === 'app') {
+      headers['X-Meridian-Customer-Context'] = '1';
+    }
     if (body !== undefined) headers['Content-Type'] = 'application/json';
     if (!SAFE_METHODS[method] && MG.auth && MG.auth.state.csrfToken) {
       headers['X-Meridian-CSRF'] = MG.auth.state.csrfToken;
