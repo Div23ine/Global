@@ -42,3 +42,28 @@ jobs:
 
       - name: Lint backend
         run: npm run lint
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Parse changed frontend JavaScript and JSX
+        run: |
+          npx --yes esbuild@0.25.0 frontend/js/admin/main.jsx --outfile=/tmp/admin-main.js
+          npx --yes esbuild@0.25.0 frontend/js/admin/views-ops.jsx --outfile=/tmp/admin-views-ops.js
+          npx --yes esbuild@0.25.0 frontend/js/app/main.jsx --outfile=/tmp/customer-main.js
+          npx --yes esbuild@0.25.0 frontend/js/services/http.js --outfile=/tmp/http.js
+          npx --yes esbuild@0.25.0 frontend/js/services/api.js --outfile=/tmp/api.js
+
+      - name: Verify customer UI has no takeover control or warning
+        run: |
+          ! grep -q 'h(SupportSessionBar)' frontend/js/app/main.jsx
+          grep -q 'X-Meridian-Customer-Context' frontend/js/services/http.js
+          grep -q 'x-meridian-customer-context' backend/src/app.ts
