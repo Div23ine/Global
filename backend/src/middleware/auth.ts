@@ -6,7 +6,8 @@
 import type { NextFunction, Request, Response } from 'express';
 import { verifySupabaseAccessToken } from '../services/supabase-auth.service';
 import { getServiceClient } from '../services/supabase.service';
-import { readAuthCookies, assertCsrf, assertTrustedOrigin } from '../services/session-cookie.service';
+import { readAuthCookies, readTakeoverToken, assertCsrf, assertTrustedOrigin } from '../services/session-cookie.service';
+import { resolveTakeoverFromToken } from '../services/takeover.service';
 import { forbidden, unauthenticated } from '../utils/httpError';
 import { auditDenied } from '../services/audit.service';
 
@@ -25,10 +26,19 @@ export interface AdminGateHandler {
   (req: Request, res: Response, next: NextFunction): Promise<void>;
   readonly requiredPermissions: readonly string[];
 }
+export interface TakeoverInfo {
+  sessionId: string;
+  adminUserId: string;
+  targetUserId: string;
+  reason: string;
+  expiresAt: string;
+}
 declare module 'express-serve-static-core' {
   interface Request {
     auth?: AuthInfo;
     admin?: AdminInfo;
+    /** Active account-takeover scope (admin identity remains in auth). */
+    takeover?: TakeoverInfo | null;
   }
 }
 export type VerifyJwtOptions = { enforceAal2?: boolean };
@@ -107,6 +117,17 @@ function authentication(enforceAal2: boolean) {
         email: claims.email ?? profile.email ?? null,
         supabaseJwt: accessToken,
       };
+      // Optional account-takeover scope. Admin identity stays on req.auth;
+      // customer-route subject is req.takeover.targetUserId when set.
+      req.takeover = null;
+      try {
+        const takeoverToken = readTakeoverToken(req);
+        if (takeoverToken) {
+          req.takeover = await resolveTakeoverFromToken(String(profile.id), takeoverToken);
+        }
+      } catch {
+        req.takeover = null;
+      }
       next();
     } catch (error) {
       next(error);
@@ -170,4 +191,48 @@ export function requireAdmin(...requiredPermissions: string[]): AdminGateHandler
   };
   handler.requiredPermissions = Object.freeze([...requiredPermissions]);
   return handler;
+}
+
+
+/** Profile id whose data customer routes should return (target during takeover). */
+export function subjectUserId(req: Request): string {
+  if (req.takeover?.targetUserId) return req.takeover.targetUserId;
+  if (!req.auth) throw unauthenticated();
+  return req.auth.userId;
+}
+
+/** Always the authenticated administrator/customer — never the takeover target. */
+export function actorUserId(req: Request): string {
+  if (!req.auth) throw unauthenticated();
+  return req.auth.userId;
+}
+
+/**
+ * Reject financial / privileged mutations while a takeover is active.
+ * Hide-buttons-only is not sufficient; this runs on the server.
+ */
+export function rejectIfTakeover(...blockedActions: string[]) {
+  return async function takeoverMutationGate(req: Request, _res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.takeover) {
+        next();
+        return;
+      }
+      const action = blockedActions[0] || `${req.method} ${req.path}`;
+      await auditDenied(
+        req.auth!.userId,
+        action,
+        'Blocked during account takeover (financial or privileged mutation)',
+        { type: 'takeover_session', id: req.takeover.sessionId },
+        {
+          role: req.admin?.roleId ?? null,
+          ip: req.ip,
+          userAgent: req.get('user-agent'),
+        },
+      );
+      throw forbidden('This action is not permitted during an account takeover session.');
+    } catch (error) {
+      next(error);
+    }
+  };
 }

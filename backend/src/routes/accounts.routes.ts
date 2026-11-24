@@ -1,7 +1,7 @@
 /** Customer accounts + currency activation. */
 import { Router } from 'express';
 import { z } from 'zod';
-import { requireAuth } from '../middleware/auth';
+import { requireAuth, subjectUserId, actorUserId, rejectIfTakeover } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { getServiceClient, getUserClient } from '../services/supabase.service';
 import { getOrLoadReference, type CacheKVBinding } from '../services/cache.service';
@@ -23,7 +23,7 @@ accountsRouter.get('/currencies', async (req, res, next) => {
         if (error) throw new Error(error.message);
         return data ?? [];
       }, cacheKv),
-      db.from('accounts').select('currency_code, status').eq('profile_id', req.auth!.userId),
+      db.from('accounts').select('currency_code, status').eq('profile_id', subjectUserId(req)),
     ]);
     if (accounts.error) throw new Error(accounts.error.message);
     const mine = new Set((accounts.data ?? []).map((a: { currency_code: string }) => a.currency_code));
@@ -38,11 +38,11 @@ accountsRouter.get('/currencies', async (req, res, next) => {
 
 accountsRouter.get('/accounts', async (req, res, next) => {
   try {
-    const db = getUserClient(req.auth!.supabaseJwt); // RLS-scoped read
+    const db = req.takeover ? getServiceClient() : getUserClient(req.auth!.supabaseJwt); // RLS or takeover
     const { data, error } = await db
       .from('accounts')
       .select('*, transactions(count)')
-      .eq('profile_id', req.auth!.userId)
+      .eq('profile_id', subjectUserId(req))
       .order('opened_at');
     if (error) throw new Error(error.message);
     ok(res, data ?? [], 'Accounts');
@@ -53,11 +53,11 @@ accountsRouter.get('/accounts/:currency', async (req, res, next) => {
   try {
     const code = String(req.params.currency).toUpperCase();
     if (!/^[A-Z]{3}$/.test(code)) throw badRequest('Invalid currency code.');
-    const db = getUserClient(req.auth!.supabaseJwt);
+    const db = req.takeover ? getServiceClient() : getUserClient(req.auth!.supabaseJwt);
     const { data: account, error } = await db
       .from('accounts')
       .select('*')
-      .eq('profile_id', req.auth!.userId)
+      .eq('profile_id', subjectUserId(req))
       .eq('currency_code', code)
       .maybeSingle();
     if (error) throw new Error(error.message);
@@ -75,11 +75,11 @@ accountsRouter.get('/accounts/:currency', async (req, res, next) => {
 
 const activateSchema = z.object({ currencyCode: z.string().regex(/^[A-Z]{3}$/) }).strict();
 
-accountsRouter.post('/accounts/activate', validate(activateSchema), async (req, res, next) => {
+accountsRouter.post('/accounts/activate', rejectIfTakeover('takeover.block.currency_activate'), validate(activateSchema), async (req, res, next) => {
   try {
     const db = getServiceClient();
     const { data, error } = await db.rpc('activate_currency', {
-      p_profile_id: req.auth!.userId,
+      p_profile_id: subjectUserId(req),
       p_currency: req.body.currencyCode,
     });
     if (error) {
@@ -89,14 +89,14 @@ accountsRouter.post('/accounts/activate', validate(activateSchema), async (req, 
       if (msg.includes('ALREADY_ACTIVE')) throw conflict('This currency account is already active.');
       throw new Error(msg);
     }
-    await auditAllowed(req.auth!.userId, 'currency.activate', { type: 'account', id: req.body.currencyCode },
+    await auditAllowed(actorUserId(req), 'currency.activate', { type: 'account', id: req.body.currencyCode },
       { currency: req.body.currencyCode }, { ip: req.ip, userAgent: req.get('user-agent') });
     res.status(201);
     res.json({ success: true, message: 'Currency account activated with a zero balance', data, meta: {} });
   } catch (err) { next(err); }
 });
 
-accountsRouter.post('/accounts/:currency/close', async (req, res, next) => {
+accountsRouter.post('/accounts/:currency/close', rejectIfTakeover('takeover.block.account_close'), async (req, res, next) => {
   try {
     const code = String(req.params.currency).toUpperCase();
     if (!/^[A-Z]{3}$/.test(code)) throw badRequest('Invalid currency code.');
@@ -104,7 +104,7 @@ accountsRouter.post('/accounts/:currency/close', async (req, res, next) => {
     const { data: account } = await db
       .from('accounts')
       .select('id, balance, status')
-      .eq('profile_id', req.auth!.userId)
+      .eq('profile_id', subjectUserId(req))
       .eq('currency_code', code)
       .maybeSingle();
     if (!account) throw notFound('Account not found.');
@@ -115,7 +115,7 @@ accountsRouter.post('/accounts/:currency/close', async (req, res, next) => {
       .update({ status: 'closed', closed_at: new Date().toISOString() })
       .eq('id', account.id);
     if (error) throw new Error(error.message);
-    await auditAllowed(req.auth!.userId, 'account.close', { type: 'account', id: code }, { currency: code },
+    await auditAllowed(actorUserId(req), 'account.close', { type: 'account', id: code }, { currency: code },
       { ip: req.ip, userAgent: req.get('user-agent') });
     ok(res, { closed: code }, 'Account closed');
   } catch (err) { next(err); }

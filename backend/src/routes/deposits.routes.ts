@@ -2,7 +2,7 @@
 import { Router } from 'express';
 import type { Request } from 'express';
 import { z } from 'zod';
-import { requireAuth } from '../middleware/auth';
+import { requireAuth, subjectUserId, actorUserId, rejectIfTakeover } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { depositLimiter } from '../middleware/rateLimit';
 import { getServiceClient } from '../services/supabase.service';
@@ -26,10 +26,10 @@ const createSchema = z.object({
   notes: z.string().max(500).optional(),
 }).strict();
 
-depositsRouter.post('/deposits', requireAuth, depositLimiter, validate(createSchema), async (req, res, next) => {
+depositsRouter.post('/deposits', requireAuth, rejectIfTakeover('takeover.block.deposit_create'), depositLimiter, validate(createSchema), async (req, res, next) => {
   try {
     const deposit = await createDeposit(
-      req.auth!.userId,
+      subjectUserId(req),
       { currencyCode: req.body.currencyCode, amount: req.body.amount, notes: req.body.notes },
       (req.headers['idempotency-key'] as string | undefined)?.slice(0, 120),
       { ip: req.ip, userAgent: req.get('user-agent') },
@@ -61,7 +61,7 @@ depositsRouter.get('/deposits', requireAuth, async (req, res, next) => {
     let query = db
       .from('deposits')
       .select('*, receiving_bank_accounts(bank_name, beneficiary_name, iban, account_number, swift_bic, country_code, currency_code, transfer_instructions)', { count: 'exact' })
-      .eq('profile_id', req.auth!.userId);
+      .eq('profile_id', subjectUserId(req));
     const status = String(req.query.status ?? '');
     if (status) query = query.eq('status', status);
     const { data, count, error } = await query
@@ -80,7 +80,7 @@ depositsRouter.get('/deposits/:reference', requireAuth, async (req, res, next) =
       .from('deposits')
       .select('*, receiving_bank_accounts(bank_name, beneficiary_name, iban, account_number, swift_bic, country_code, currency_code, transfer_instructions), deposit_payments(*)')
       .eq('reference', reference)
-      .eq('profile_id', req.auth!.userId)
+      .eq('profile_id', subjectUserId(req))
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!data) throw badRequest('Deposit not found.');
@@ -88,10 +88,10 @@ depositsRouter.get('/deposits/:reference', requireAuth, async (req, res, next) =
   } catch (err) { next(err); }
 });
 
-depositsRouter.post('/deposits/:reference/cancel', requireAuth, async (req, res, next) => {
+depositsRouter.post('/deposits/:reference/cancel', requireAuth, rejectIfTakeover('takeover.block.deposit_cancel'), async (req, res, next) => {
   try {
     const reference = String(req.params.reference);
-    const result = await cancelDeposit(req.auth!.userId, reference, {
+    const result = await cancelDeposit(subjectUserId(req), reference, {
       ip: req.ip, userAgent: req.get('user-agent'),
     });
     ok(res, result, 'Deposit cancelled');
@@ -104,11 +104,11 @@ const reportSchema = z.object({
   receiptUrl: z.string().url().max(500).optional(),
 }).strict();
 
-depositsRouter.post('/deposits/:reference/report-payment', requireAuth, validate(reportSchema), async (req, res, next) => {
+depositsRouter.post('/deposits/:reference/report-payment', requireAuth, rejectIfTakeover('takeover.block.deposit_report'), validate(reportSchema), async (req, res, next) => {
   try {
     const reference = String(req.params.reference);
     const deposit = await reportPayment(
-      req.auth!.userId,
+      subjectUserId(req),
       reference,
       { notes: req.body.notes, bankTransactionRef: req.body.bankTransactionRef, receiptUrl: req.body.receiptUrl },
       { ip: req.ip, userAgent: req.get('user-agent') },

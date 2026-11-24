@@ -1,7 +1,7 @@
 /** Customer transaction history (filters + pagination) and detail view. */
 import { Router } from 'express';
-import { requireAuth } from '../middleware/auth';
-import { getUserClient } from '../services/supabase.service';
+import { requireAuth, subjectUserId } from '../middleware/auth';
+import { getServiceClient, getUserClient } from '../services/supabase.service';
 import { parsePagination, pageMeta } from '../utils/pagination';
 import { badRequest, notFound, ok } from '../utils/httpError';
 
@@ -12,9 +12,9 @@ transactionsRouter.use('/transactions', requireAuth);
 transactionsRouter.get('/transactions', async (req, res, next) => {
   try {
     const p = parsePagination(req.query as Record<string, unknown>);
-    const db = getUserClient(req.auth!.supabaseJwt); // RLS-scoped read
+    const db = req.takeover ? getServiceClient() : getUserClient(req.auth!.supabaseJwt);
 
-    let query = db.from('transactions').select('*', { count: 'exact' }).eq('profile_id', req.auth!.userId);
+    let query = db.from('transactions').select('*', { count: 'exact' }).eq('profile_id', subjectUserId(req));
     const q = req.query as Record<string, string>;
 
     const search = String(q.search ?? '').slice(0, 60);
@@ -40,12 +40,12 @@ transactionsRouter.get('/transactions/:reference', async (req, res, next) => {
   try {
     const reference = String(req.params.reference);
     if (!/^TXN-\d{4}-\d{6}$/.test(reference)) throw badRequest('Invalid transaction reference.');
-    const db = getUserClient(req.auth!.supabaseJwt);
+    const db = req.takeover ? getServiceClient() : getUserClient(req.auth!.supabaseJwt);
     const { data, error } = await db
       .from('transactions')
       .select('*')
       .eq('reference', reference)
-      .eq('profile_id', req.auth!.userId)
+      .eq('profile_id', subjectUserId(req))
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!data) throw notFound('Transaction not found.');

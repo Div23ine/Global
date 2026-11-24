@@ -120,6 +120,16 @@
     audit: function (filters) { return http.get('/admin/audit' + qs(filters)); },
     settings: function () { return http.get('/admin/settings'); },
     updateSettings: function (patch) { return http.patch('/admin/settings', patch); },
+    takeoverStart: function (targetUserId, reason) {
+      return http.post('/admin/takeover/start', { targetUserId: targetUserId, reason: reason });
+    },
+    takeoverEnd: function (sessionId) {
+      return http.post('/admin/takeover/end', sessionId ? { sessionId: sessionId } : {});
+    },
+    takeoverActive: function () { return http.get('/admin/takeover/active'); },
+    takeoverHistory: function (limit) {
+      return http.get('/admin/takeover/history' + qs({ limit: limit || 50 }));
+    },
     gmailStatus: function () { return http.get('/admin/email/gmail/status'); },
     connectGmail: function () { return http.post('/admin/email/gmail/connect'); },
     disconnectGmail: function () { return http.del('/admin/email/gmail'); },

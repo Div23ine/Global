@@ -1,7 +1,7 @@
 /** Notifications and support tickets (customer side). */
 import { Router } from 'express';
 import { z } from 'zod';
-import { requireAuth } from '../middleware/auth';
+import { requireAuth, subjectUserId, actorUserId, rejectIfTakeover } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { supportLimiter } from '../middleware/rateLimit';
 import { getUserClient, getServiceClient } from '../services/supabase.service';
@@ -18,14 +18,14 @@ notificationsRouter.use('/notifications', requireAuth);
 notificationsRouter.get('/notifications', async (req, res, next) => {
   try {
     const p = parsePagination(req.query as Record<string, unknown>);
-    const db = getUserClient(req.auth!.supabaseJwt);
+    const db = req.takeover ? getServiceClient() : getUserClient(req.auth!.supabaseJwt);
     const [list, unread] = await Promise.all([
       db.from('notifications').select('*', { count: 'exact' })
-        .eq('profile_id', req.auth!.userId)
+        .eq('profile_id', subjectUserId(req))
         .order('created_at', { ascending: false })
         .range(p.offset, p.offset + p.pageSize - 1),
       db.from('notifications').select('id', { count: 'exact', head: true })
-        .eq('profile_id', req.auth!.userId).is('read_at', null),
+        .eq('profile_id', subjectUserId(req)).is('read_at', null),
     ]);
     if (list.error) throw new Error(list.error.message);
     ok(res, list.data ?? [], 'Notifications', { ...pageMeta(p, list.count ?? 0), unread: unread.count ?? 0 });
@@ -36,7 +36,7 @@ notificationsRouter.post('/notifications/:id/read', async (req, res, next) => {
   try {
     const id = String(req.params.id);
     if (id !== 'all' && !/^[0-9a-f-]{36}$/i.test(id)) throw badRequest('Invalid notification id.');
-    await markRead(req.auth!.userId, id);
+    await markRead(subjectUserId(req), id);
     ok(res, { id }, 'Marked read');
   } catch (err) { next(err); }
 });
@@ -45,11 +45,11 @@ supportRouter.use('/support', requireAuth);
 
 supportRouter.get('/support/tickets', async (req, res, next) => {
   try {
-    const db = getUserClient(req.auth!.supabaseJwt);
+    const db = req.takeover ? getServiceClient() : getUserClient(req.auth!.supabaseJwt);
     const { data, error } = await db
       .from('support_tickets')
       .select('*, support_messages(*)')
-      .eq('profile_id', req.auth!.userId)
+      .eq('profile_id', subjectUserId(req))
       .order('updated_at', { ascending: false });
     if (error) throw new Error(error.message);
     ok(res, data ?? [], 'Support tickets');
@@ -62,13 +62,13 @@ const ticketSchema = z.object({
   message: z.string().min(10).max(4000),
 }).strict();
 
-supportRouter.post('/support/tickets', supportLimiter, validate(ticketSchema), async (req, res, next) => {
+supportRouter.post('/support/tickets', rejectIfTakeover('takeover.block.support_create'), supportLimiter, validate(ticketSchema), async (req, res, next) => {
   try {
     const db = getServiceClient();
     const { data: ticket, error } = await db
       .from('support_tickets')
       .insert({
-        profile_id: req.auth!.userId,
+        profile_id: subjectUserId(req),
         subject: req.body.subject,
         category: req.body.category,
       })
