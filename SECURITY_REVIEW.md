@@ -284,3 +284,28 @@ Owner: repository/project owner. Code pointers: migration `0018_approved_receivi
 | Operational lockout — legacy receiving accounts become unavailable after migration | Accepted with rollout requirement | Migration 0018 marks legacy accounts pending/inactive; operators must review and re-approve each legitimate account before assigning new deposits. Existing deposit rows are not rewritten. Owner: platform operator. |
 
 Residual requirement: an administrator must independently verify the incoming transaction in the receiving bank's trusted statement/portal before invoking credit. A customer-supplied receipt, URL or reference is not proof of settlement. Owner: platform operator.
+
+
+## 17. Issue #8 audit pass (2026-11-24/25)
+
+Owner authorization: issue #8 (autonomous engineering + security assessment
+of the development branch). Code pointers: `fix/audit-issue8-hardening`
+commits d1af18a..ec90f93 and migration
+`backend/migrations/0023_rls_payment_tables.sql`.
+
+| Threat | Decision | Mitigation, owner and code pointer |
+|---|---|---|
+| Spoofing — forged provider webhooks | Mitigated | HMAC-SHA256 over `req.rawBody` (the exact provider-signed bytes) with timingSafeEqual; event types whitelisted to confirmed/failed; unknown events rejected 400 before any state change. `tests/unit/webhook-route.test.ts` pins accept/tamper/unknown/missing. Owner: backend. `backend/src/routes/deposits.routes.ts`. |
+| Spoofing — legacy bearer transport silently dead (double-escaped regex) | Mitigated | RFC 6750 regex restored; origin allowlist + full Supabase JWT verification unchanged. `tests/unit/bearer-bridge.test.ts` pins standard headers accepted, mangled headers rejected, untrusted origins denied. Owner: backend. `backend/src/middleware/auth.ts`. |
+| Tampering — FX rate manipulation by clients | Mitigated | Rates written only by `fx.manage` admins via the API (service-role client); deposit eligibility re-resolves server-side rates; per-request FX snapshots recorded. Migration 0023 denies anon/authenticated table access. Owner: backend/database. `backend/src/services/fx.service.ts`. |
+| Information disclosure — payment-operations tables client-readable | Mitigated by migration 0023 (must be applied to live) | RLS enabled with no policies + REVOKE ALL on the four 0006 payment tables; API access stays service-role-only with code-level authorization. Owner: database. `backend/migrations/0023_rls_payment_tables.sql`. |
+| Tampering — stale-read status races on deposits/refunds | Mitigated | Expected-status WHERE + affected-row check inside the UPDATE for cancelDeposit/reportPayment/approveAndProcessRefund; money paths stay transactional in the RPCs. Owner: backend. `backend/src/services/deposits.service.ts`, `backend/src/services/refunds.service.ts`. |
+| DoS — limiter key rotation via spoofed X-Forwarded-For | Mitigated | clientIp prefers CF-Connecting-IP (set at the Cloudflare edge, not client-suppliable) for limiter keys; report-payment behind depositLimiter. Owner: backend/platform. `backend/src/middleware/rateLimit.ts`. |
+| Tampering — PostgREST .or() grammar / LIKE wildcards in user search | Mitigated | ilikeOr() strips commas, parentheses, backslashes and wildcards before interpolation; row scoping stays ANDed outside the OR block. Owner: backend. `backend/src/utils/postgrest.ts`. |
+| Repudiation — financial operations | Mitigated | auditAllowed records every deposit/refund/FX mutation; post-credit notification inserts are best-effort after the ledger credit commits. Owner: backend. |
+| Elevation of privilege — admin permission matrix | Verified unchanged | admin-permissions contract test green; money-moving admin routes remain behind deposits.manage/refunds.manage; FX endpoints are behind fx.manage. Owner: backend. `tests/unit/admin-permissions.test.ts`. |
+
+Residual (owner actions): apply 0023 to the live Supabase project to close
+the live RLS gap; remove the temporary bearer bridge once Pages deploys the
+cookie client (§16 caveat stands); live journeys remain untested (no
+credentials in this environment).
