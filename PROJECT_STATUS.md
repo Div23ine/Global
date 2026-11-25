@@ -501,7 +501,7 @@ Implementation prepared for `development`:
 
 Verification update: GitHub Actions run 45202398265 passed backend typecheck and unit tests (7 test files, 36 tests) and deployed the Worker (version a8fb627c-1b42-473a-9850-db5f0c0e2462). The Pages deployment (run 45202176401) failed with Cloudflare API authentication error 10000; the current token can deploy Workers but lacks the required Pages permission. Production Supabase project Meridian (mcblvbjhfckjwfsqqknv) does not yet contain migration 0018; its receiving_bank_accounts table has no status/approval columns and currently contains zero rows. Migration 0018 has NOT been applied. The Worker is therefore ahead of the database schema: the new bank approval/deposit workflow cannot be used until the migration is applied. Frontend browser verification and migration rehearsal remain outstanding. Next: authorize/apply 0018, restore Cloudflare Pages token permissions, deploy Pages, then run end-to-end deposit tests.
 
-Decision: receiving-account approval is independent of deposit approval. Approving an account only enables it for future matching-currency requests; approving a deposit remains a separate operation after checking the actual receiving-bank transaction. Full account numbers are excluded from audit metadata.
+Decision: receiving-account approval is independent of deposit approval. Approving an account only enables it for future matching-currency requests; it never credits a customer. Customer deposit approval remains a separate operation after checking the actual receiving-bank transaction. Full account numbers are excluded from audit metadata.
 
 ---
 
