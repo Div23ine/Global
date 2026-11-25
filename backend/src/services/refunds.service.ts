@@ -159,7 +159,12 @@ export async function approveAndProcessRefund(
     ? parseAmount(approvedAmount)
     : parseAmount(refund.requested_amount);
 
-  await db
+  // Re-check the status inside the UPDATE: if a concurrent admin action moved
+  // the refund forward/backward, the stale read must not mark it approved.
+  // The credited money itself is guarded transactionally by
+  // process_internal_refund (lock + REFUND_NOT_APPROVED), this keeps the
+  // visible state consistent with that transaction.
+  const { data: approvedNow, error: updErr } = await db
     .from('refunds')
     .update({
       status: 'approved',
@@ -169,7 +174,14 @@ export async function approveAndProcessRefund(
       admin_notes: notes ?? refund.admin_notes,
       updated_at: new Date().toISOString(),
     })
-    .eq('id', refundId);
+    .eq('id', refundId)
+    .in('status', ['requested', 'under_review', 'approved'])
+    .select('id')
+    .maybeSingle();
+  if (updErr) throw new Error(updErr.message);
+  if (!approvedNow) {
+    throw invalidState(`Refund status "${refund.status}" changed — refresh and try again.`);
+  }
 
   const { data, error: rpcErr } = await db.rpc('process_internal_refund', {
     p_refund_id: refundId,

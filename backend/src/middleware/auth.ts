@@ -67,7 +67,9 @@ function authentication(enforceAal2: boolean) {
       // publishes the HttpOnly-cookie client.
       if (!accessToken) {
         const authorization = req.headers.authorization || '';
-        const bearer = /^Bearer\\s+([^\\s]+)$/i.exec(authorization);
+        // RFC 6750: "Bearer <token>". (The previous double-escaped literal
+        // never matched a real header and silently disabled this bridge.)
+        const bearer = /^Bearer\s+([^\s]+)$/i.exec(authorization);
         if (!bearer) throw unauthenticated();
         assertTrustedOrigin(req);
         accessToken = bearer[1];

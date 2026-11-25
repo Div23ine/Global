@@ -5,9 +5,9 @@
  */
 import { getServiceClient } from './supabase.service';
 import { auditAllowed } from './audit.service';
-import { badRequest, forbidden, invalidState, notFound } from '../utils/httpError';
+import { badRequest, invalidState } from '../utils/httpError';
 import type { Money } from '../utils/money';
-import { cmpMoney, parseAmount } from '../utils/money';
+import { cmpMoney } from '../utils/money';
 
 export type FxSource = 'manual' | 'live';
 export type FxMode = 'manual' | 'live';
@@ -96,10 +96,11 @@ export function usdEquivalentOf(localAmount: Money, unitsPerUsd: string): Money 
   const [ri, rf = ''] = unitsPerUsd.split('.');
   const rate8 = BigInt(ri + (rf + '00000000').slice(0, 8));
   if (rate8 === 0n) throw invalidState('Exchange rate is zero.');
-  // usd * 1e4 = (local * 1e4) * 1e8 / rate8 / 1e8 = amt4 * 1e8 / rate8 / 1e8
-  // usd4 = amt4 * 1e8 / rate8 / 1e8 * 1e4 wait:
-  // local = amt4/1e4, usd = local/rate = amt4/(1e4*rate8/1e8) = amt4 * 1e8 / (rate8 * 1e4)
-  const usd4 = (amt4 * (10n ** 8n)) / (rate8 * (10n ** 4n));
+  // local = amt4/1e4 and rate = rate8/1e8, so usd = local / rate
+  //   = amt4 * 1e8 / (1e4 * rate8). In 4-dp USD units (usd4 = usd * 1e4):
+  //   usd4 = amt4 * 1e8 / rate8. BigInt division truncates toward zero,
+  //   which is exactly the documented 4-dp truncation.
+  const usd4 = (amt4 * (10n ** 8n)) / rate8;
   const whole = usd4 / 10000n;
   const frac = (usd4 % 10000n).toString().padStart(4, '0');
   return `${whole}.${frac}` as Money;
@@ -240,7 +241,7 @@ export async function refreshLiveRates(adminId: string | null, ctx?: Ctx): Promi
     if (error) throw new Error(error.message);
   }
 
-  const { data: settingsRow, error: sErr } = await db.from('fx_settings').update({
+  const { error: sErr } = await db.from('fx_settings').update({
     last_refresh_at: now,
     last_refresh_error: null,
     updated_at: now,

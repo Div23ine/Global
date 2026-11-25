@@ -810,10 +810,6 @@ adminRouter.post('/admin/fx/mode', requireAdmin('fx.manage'), validate(fxModeSch
   } catch (err) { next(err); }
 });
 
-const fxRateSchema = z.object({
-  currencyCode: z.string().regex(/^[A-Z]{3}$/),
-  unitsPerUsd: z.union([z.string(), z.number()]),
-}).strict();
 adminRouter.put('/admin/fx/rates/:code', requireAdmin('fx.manage'), validate(z.object({
   unitsPerUsd: z.union([z.string(), z.number()]),
 }).strict()), async (req, res, next) => {
@@ -830,4 +826,3 @@ adminRouter.post('/admin/fx/refresh', requireAdmin('fx.manage'), async (req, res
     ok(res, result, 'Live rates refreshed');
   } catch (err) { next(err); }
 });
-

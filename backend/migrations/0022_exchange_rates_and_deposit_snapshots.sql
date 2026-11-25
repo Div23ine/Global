@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS public.exchange_rates (
   provider        text,
   rate_timestamp  timestamptz NOT NULL DEFAULT now(),
   updated_at      timestamptz NOT NULL DEFAULT now(),
-  updated_by      uuid REFERENCES public.profiles(id)
+  updated_by      text REFERENCES public.profiles(id)
 );
 
 CREATE TABLE IF NOT EXISTS public.fx_settings (
@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS public.fx_settings (
   last_refresh_at    timestamptz,
   last_refresh_error text,
   updated_at         timestamptz NOT NULL DEFAULT now(),
-  updated_by         uuid REFERENCES public.profiles(id)
+  updated_by         text REFERENCES public.profiles(id)
 );
 
 INSERT INTO public.fx_settings (id, mode, live_provider)

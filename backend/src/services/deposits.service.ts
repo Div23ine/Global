@@ -61,10 +61,6 @@ export interface DepositRecord {
   expires_at: string | null;
 }
 
-const MIN_AMOUNT: Record<string, Money> = {
-  EUR: '1.0000', GBP: '1.0000', USD: '1.0000', CHF: '1.0000', PLN: '5.0000',
-};
-
 /**
  * Opening / first deposit floor — PRESERVED POLICY.
  * Cross-border fee structure requires initial funding of at least
@@ -76,14 +72,17 @@ export const FIRST_DEPOSIT_MIN_USD = 20_000;
 /** Subsequent deposits (second and later) must meet this USD equivalent. */
 export const SUBSEQUENT_DEPOSIT_MIN_USD = 10_000;
 
-function firstDepositMin(currencyCode: string, unitsPerUsd?: string | null): Money | null {
-  try {
-    const rate = firstDepositPolicyRate(currencyCode, unitsPerUsd);
-    return minLocalFromUsd(FIRST_DEPOSIT_MIN_USD, rate);
-  } catch {
-    return null;
-  }
-}
+/** All deposit states allowed by the deposits.status CHECK (0006/0014). */
+export const DEPOSIT_STATUSES = [
+  'pending', 'pending_admin_action', 'awaiting_payment', 'payment_reported',
+  'under_verification', 'partially_fulfilled', 'completed', 'rejected',
+  'expired', 'unmatched_payment', 'failed', 'cancelled',
+] as const;
+/** Non-terminal states that make up the administrator deposit queue. */
+export const ACTIVE_DEPOSIT_STATUSES = [
+  'pending_admin_action', 'awaiting_payment', 'payment_reported',
+  'under_verification', 'partially_fulfilled', 'unmatched_payment',
+] as const;
 
 function formatMinDisplay(min: Money, currencyCode: string): string {
   return `${Number(min).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencyCode}`;
@@ -134,7 +133,7 @@ export async function createDeposit(
   // Re-evaluate first-deposit classification at request time (authoritative).
   const first = await isFirstDeposit(userId);
 
-  let minPolicy: 'initial' | 'subsequent' = first ? 'initial' : 'subsequent';
+  const minPolicy: 'initial' | 'subsequent' = first ? 'initial' : 'subsequent';
   let fxSnap: {
     unitsPerUsd: string;
     usdEquivalent: string;
@@ -297,12 +296,21 @@ export async function cancelDeposit(
     throw invalidState('Only deposits awaiting admin action or payment can be cancelled by the customer.');
   }
 
-  const { error: updErr } = await db
+  // Re-check the status inside the UPDATE so a concurrent transition (for
+  // example an administrator already verifying this deposit) cannot be
+  // overwritten by a stale read. Zero rows means the state moved.
+  const { data: cancelled, error: updErr } = await db
     .from('deposits')
     .update({ status: 'cancelled' })
     .eq('id', dep.id)
-    .eq('profile_id', userId);
+    .eq('profile_id', userId)
+    .in('status', ['pending_admin_action', 'awaiting_payment'])
+    .select('id')
+    .maybeSingle();
   if (updErr) throw new Error(updErr.message);
+  if (!cancelled) {
+    throw invalidState('This deposit is no longer cancellable. Refresh and try again.');
+  }
 
   await auditAllowed(userId, 'deposit.cancel', { type: 'deposit', id: reference }, undefined, {
     ip: ctx?.ip, userAgent: ctx?.userAgent,
@@ -340,9 +348,13 @@ export async function reportPayment(
       customer_bank_reference: payload.bankTransactionRef ?? dep.customer_bank_reference,
     })
     .eq('id', dep.id)
+    .in('status', ['awaiting_payment', 'payment_reported', 'partially_fulfilled'])
     .select('*')
-    .single();
+    .maybeSingle();
   if (updErr) throw new Error(updErr.message);
+  if (!updated) {
+    throw invalidState('This deposit is no longer awaiting payment. Refresh and try again.');
+  }
 
   await auditAllowed(userId, 'deposit.report_payment', { type: 'deposit', id: reference }, {
     notes: payload.notes, bankTransactionRef: payload.bankTransactionRef, hasReceipt: Boolean(payload.receiptUrl),
@@ -456,12 +468,16 @@ export async function verifyAndCreditPayment(
 
   const result = (data ?? {}) as Record<string, unknown>;
 
-  await db.from('notifications').insert({
-    profile_id: dep.profile_id,
-    type: 'success',
-    title: 'Deposit credited',
-    body: `Your deposit ${dep.reference} has been verified. ${result.credited_this_payment ?? amount} ${input.currencyCode} has been added to your Meridian balance.`,
-  });
+  // The ledger credit has committed. Notification delivery is best-effort:
+  // a failed insert must not turn a completed financial operation into a 500.
+  try {
+    await db.from('notifications').insert({
+      profile_id: dep.profile_id,
+      type: 'success',
+      title: 'Deposit credited',
+      body: `Your deposit ${dep.reference} has been verified. ${result.credited_this_payment ?? amount} ${input.currencyCode} has been added to your Meridian balance.`,
+    });
+  } catch { /* non-blocking: audited credit already committed */ }
 
   try {
     const { data: profile } = await db

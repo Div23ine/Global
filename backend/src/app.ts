@@ -28,7 +28,7 @@ export function createApp(rateLimitBindings?: RateLimitBindings, cacheKv?: Cache
       else callback(null, false);
     },
     credentials: true,
-    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: [
       'Content-Type', 'Authorization', 'Idempotency-Key',
       'x-meridian-signature', 'x-meridian-csrf', 'x-meridian-customer-context',

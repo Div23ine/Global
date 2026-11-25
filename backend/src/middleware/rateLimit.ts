@@ -16,6 +16,12 @@ interface LocalBucket { count: number; resetAt: number; }
 const localBuckets = new Map<string, LocalBucket>();
 
 function clientIp(req: Request): string {
+  // Cloudflare sets CF-Connecting-IP at the edge and clients cannot override
+  // it behind the Worker. Prefer it over req.ip: with trust proxy enabled the
+  // Express view of the address derives from X-Forwarded-For, whose entries a
+  // client can supply, which would let requesters rotate limiter keys.
+  const cf = req.get('cf-connecting-ip');
+  if (cf && /^[\d.:a-fA-F]+$/.test(cf.trim())) return cf.trim();
   return req.ip || req.socket.remoteAddress || 'unknown';
 }
 function middleware(

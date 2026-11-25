@@ -134,3 +134,21 @@ this project follows semantic versioning at release time.
 - Deposit rows store FX eligibility snapshot (`fx_*`, `min_policy`).
 - Customer deposit UI loads `/deposits/policy` for rate, minimum and USD estimate.
 - Migration: `0022_exchange_rates_and_deposit_snapshots.sql` (not applied to production by this change).
+
+
+## 2026-11-24/25 — Issue #8 engineering + security audit pass
+
+### Fixed
+- FX USD-equivalent math: `usdEquivalentOf` divided by an extra 1e4 — recorded `fx_usd_equivalent` snapshots were understated 10,000x. Formula now matches its documented contract (usd4 = amt4 * 1e8 / rate8).
+- Payment webhook: HMAC verified over `req.rawBody` (the exact provider-signed bytes) instead of a re-serialized Buffer; event types whitelisted to `confirmed|failed`; supertest regression suite added (`tests/unit/webhook-route.test.ts`).
+- Bearer rollout-bridge regex was double-escaped and never matched a real Authorization header — restored the RFC 6750 form; regression suite added (`tests/unit/bearer-bridge.test.ts`).
+- Migration 0022 FK: `exchange_rates`/`fx_settings` `updated_by` was uuid referencing `profiles.id` (text) — Postgres rejected the FK and every fresh database built from the migration history failed; now text like every sibling table.
+- Concurrent-transition guards: `cancelDeposit`, `reportPayment`, `approveAndProcessRefund` re-check the status inside the UPDATE (expected-status WHERE + affected-row check) so a concurrent admin action cannot be overwritten by a stale read.
+- Rate limiter keys prefer CF-Connecting-IP over XFF-derived `req.ip` (limiter-key rotation spoofing); report-payment now behind the deposit limiter.
+- Transaction/admin search terms sanitized through the new `ilikeOr()` helper (PostgREST `.or()` grammar and LIKE wildcards).
+- `parseAmount` throws an ApiError (HTTP 400) instead of a 500 on malformed amounts; CORS method list gained PUT (the FX rate endpoint is PUT).
+- Dead code removed (`MIN_AMOUNT`, `firstDepositMin`, unused imports, unused `fxRateSchema` in admin.routes.ts) — `tsc --noEmit` clean again; vitest now includes `tests/*.test.ts` so the FX and takeover suites actually run (12 files / 83 tests green).
+
+### Added
+- Migration `0023_rls_payment_tables.sql`: RLS + REVOKE on the 0006 payment tables (`receiving_bank_accounts`, `deposit_payments`, `unmatched_payments`, `refunds`) — they were never covered by 0003_rls and were client-readable on any Supabase project built from migrations. The API touches them only via the service-role client. Not applied to the live project by this change.
+- `DEPOSIT_STATUSES` / `ACTIVE_DEPOSIT_STATUSES` exported from deposits.service; post-credit notification inserts are best-effort so a completed financial operation cannot 500.

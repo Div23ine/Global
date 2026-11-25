@@ -151,7 +151,7 @@ const reportSchema = z.object({
   receiptUrl: z.string().url().max(500).optional(),
 }).strict();
 
-depositsRouter.post('/deposits/:reference/report-payment', requireAuth, rejectIfTakeover('takeover.block.deposit_report'), validate(reportSchema), async (req, res, next) => {
+depositsRouter.post('/deposits/:reference/report-payment', requireAuth, rejectIfTakeover('takeover.block.deposit_report'), depositLimiter, validate(reportSchema), async (req, res, next) => {
   try {
     const reference = String(req.params.reference);
     const deposit = await reportPayment(
@@ -168,15 +168,43 @@ paymentsWebhookRouter.post('/payments/:provider', async (req: Request, res, next
   try {
     const provider = String(req.params.provider);
     const signature = req.get('x-meridian-signature') ?? undefined;
-    const rawBody = typeof req.body === 'string' ? req.body : JSON.stringify(req.body ?? {});
+    // The provider signs the exact bytes it transmitted. express.raw() makes
+    // req.body a Buffer and app.ts stores the UTF-8 string as req.rawBody —
+    // verify and parse from those bytes only. Re-serializing req.body
+    // (JSON.stringify of a Buffer yields '{"type":"Buffer",...}') would HMAC
+    // different bytes than the provider signed and reject every valid webhook.
+    const rawBody =
+      (req as Request & { rawBody?: string }).rawBody ??
+      (typeof req.body === 'string' ? req.body : undefined);
+    if (!rawBody) {
+      res.status(400).json({ success: false, message: 'Missing request body' });
+      return;
+    }
     if (!verifyProviderSignature(provider, rawBody, signature)) {
       logger.warn({ provider }, 'Rejected payment webhook — invalid signature');
       res.status(401).json({ success: false, message: 'Invalid signature' });
       return;
     }
-    const body = typeof req.body === 'object' ? req.body : JSON.parse(rawBody);
+    let body: Record<string, unknown>;
+    try {
+      body = JSON.parse(rawBody) as Record<string, unknown>;
+    } catch {
+      res.status(400).json({ success: false, message: 'Malformed JSON body' });
+      return;
+    }
+    // Whitelist event types: only explicit terminal outcomes may drive the
+    // deposit state machine. Unknown or interim provider events must never be
+    // silently reinterpreted as a payment confirmation.
+    const type =
+      body.type === 'failed' ? ('failed' as const) :
+      body.type === 'confirmed' ? ('confirmed' as const) :
+      null;
+    if (!type) {
+      res.status(400).json({ success: false, message: 'Unsupported webhook event type' });
+      return;
+    }
     const event = {
-      type: body.type === 'failed' ? 'failed' as const : 'confirmed' as const,
+      type,
       reference: String(body.reference ?? ''),
       providerRef: String(body.providerRef ?? body.provider_ref ?? ''),
       reason: body.reason ? String(body.reason) : undefined,
