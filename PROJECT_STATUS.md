@@ -501,4 +501,82 @@ Implementation prepared for `development`:
 
 Verification update: GitHub Actions run 45202398265 passed backend typecheck and unit tests (7 test files, 36 tests) and deployed the Worker (version a8fb627c-1b42-473a-9850-db5f0c0e2462). The Pages deployment (run 45202176401) failed with Cloudflare API authentication error 10000; the current token can deploy Workers but lacks the required Pages permission. Production Supabase project Meridian (mcblvbjhfckjwfsqqknv) does not yet contain migration 0018; its receiving_bank_accounts table has no status/approval columns and currently contains zero rows. Migration 0018 has NOT been applied. The Worker is therefore ahead of the database schema: the new bank approval/deposit workflow cannot be used until the migration is applied. Frontend browser verification and migration rehearsal remain outstanding. Next: authorize/apply 0018, restore Cloudflare Pages token permissions, deploy Pages, then run end-to-end deposit tests.
 
-Decision: receiving-account approval is independent of deposit approval. Approving an account only enables it for future matching-currency requests; it never credits a customer. Customer deposit approval remains a separate operation after checking the actual receiving-bank transaction. Full account numbers are excluded from audit metadata.
+Decision: receiving-account approval is independent of deposit approval. Approving an account only enables it for future matching-currency requests; approving a deposit remains a separate operation after checking the actual receiving-bank transaction. Full account numbers are excluded from audit metadata.
+
+---
+
+# Issue #8 audit pass (2026-11-24/25) — engineering + security assessment
+
+Mode: `audit` → `fix`. Branch: `fix/audit-issue8-hardening` (off development
+813aa2d), delivered as a PR into `development`. No deploy, no live migration
+application, no production touch.
+
+## What the audit found and fixed (commits d1af18a..ec90f93)
+
+1. **FX USD-equivalent math (HIGH — financial integrity).**
+   `fx.service.ts usdEquivalentOf` divided by an extra 1e4: recorded
+   `fx_usd_equivalent` snapshots were understated 10,000x. Fixed to the
+   documented contract (usd4 = amt4 * 1e8 / rate8). Surfaced by running the
+   previously-dead FX suite after the vitest include fix.
+2. **Payment-webhook HMAC over re-serialized bytes (HIGH — spoofing).** The
+   webhook HMAC'd a re-serialized Buffer instead of `req.rawBody` (the bytes
+   the provider signed). Now verifies + parses rawBody and whitelists event
+   types to `confirmed|failed`. Regression: `tests/unit/webhook-route.test.ts`.
+3. **RLS gap on the payment tables (HIGH — information disclosure).** The
+   0006 payment tables (`receiving_bank_accounts`, `deposit_payments`,
+   `unmatched_payments`, `refunds`) were never covered by `0003_rls.sql` —
+   client-readable on any Supabase project built from migrations. New
+   migration `0023_rls_payment_tables.sql`: RLS + REVOKE (service-role only).
+4. **Migration 0022 FK defect (HIGH — database).** `exchange_rates`/
+   `fx_settings` `updated_by` was `uuid` referencing `profiles.id` (text) —
+   Postgres rejects the FK, so every fresh database built from the migration
+   history failed. Now text like every sibling table.
+5. **Bearer bridge regex dead (HIGH — auth).** The rollout-bridge regex was
+   double-escaped and never matched a real Authorization header, silently
+   disabling the documented legacy transport. Fixed to RFC 6750 form; origin
+   allowlist + JWT verification unchanged. Regression:
+   `tests/unit/bearer-bridge.test.ts`.
+6. **Stale-read status races (MEDIUM).** `cancelDeposit`, `reportPayment` and
+   `approveAndProcessRefund` now re-check status inside the UPDATE
+   (expected-status WHERE + affected-row check).
+7. **Limiter key spoofing via XFF (MEDIUM).** `rateLimit` prefers
+   CF-Connecting-IP; `report-payment` behind `depositLimiter`.
+8. **PostgREST `.or()` grammar in user search (MEDIUM).** New `ilikeOr()`
+   helper strips grammar chars + LIKE wildcards
+   (`backend/src/utils/postgrest.ts`).
+9. **parseAmount 500s (LOW).** Throws ApiError → HTTP 400.
+10. **CORS method list (LOW).** PUT allowed (the FX rate endpoint is PUT).
+11. **Dead test suites (QA).** vitest now includes `tests/*.test.ts` (FX +
+    takeover suites were never running).
+12. **Typecheck broken by dead code (QA).** Removed dead `MIN_AMOUNT`/
+    `firstDepositMin`, unused imports, and the unused `fxRateSchema` in
+    admin.routes.ts (TS6133) — `tsc --noEmit` is clean again.
+13. **Deposit status constants exported** (`DEPOSIT_STATUSES`,
+    `ACTIVE_DEPOSIT_STATUSES`); post-credit notification insert is
+    best-effort so a completed credit can no longer 500.
+
+## Verification (fresh clone of the audit branch, this session)
+
+| Check | Result |
+|---|---|
+| `npm run typecheck` | PASS — 0 errors (was failing TS6133 before the dead-code fix) |
+| `npm run lint` | PASS — 0 findings |
+| `npm test` | PASS — 12 files / 83 tests (incl. 30 real-embedded-Postgres integration tests; FX + takeover suites now running) |
+| `npm run build` | PASS — dist emit OK |
+| `npm audit --omit=dev` | PASS — 0 vulnerabilities |
+| `frontend/check.sh` | PASS — 16/16 modules |
+| Live Supabase / Cloudflare / browser E2E | BLOCKED — no owner credentials in this environment (unchanged) |
+
+`npm ci` on a fresh clone still fails on the documented lockfile drift
+(lockfile records zod 3.x trees; package.json declares 4.6.7) — the owner must
+land the regenerated lockfile + `workers.yml` pair; `npm install` works.
+
+## Exact next tasks
+
+0. Owner: review and merge the issue-#8 audit PR into `development`.
+1. Re-run the migration rehearsal 0001–0023 against a production-like backup
+   before applying to the live Supabase project (0022 changed in place before
+   any live application; 0023 is new).
+2. Unchanged owner decisions: F-10 (unmatched_payments), F-14 (www-522),
+   Pages deployment token, application of pending migrations to the live
+   project.
